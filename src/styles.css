@@ -40,3 +40,19 @@ nav{display:flex;flex-direction:column;gap:3px;margin-top:6px}nav button{height:
 .login-error{margin-top:10px;border-left:3px solid #9b4b3f;background:#f8ebe7;color:#8a4036;padding:9px 10px;font-size:10px}
 .demo-note{display:block;margin-top:14px;color:#8c8277;font-size:9px;line-height:1.5}
 @media(max-width:800px){.login-shell{grid-template-columns:1fr}.login-brand-panel{padding:42px 26px}.login-brand-panel h1{font-size:31px}.login-form-panel{padding:24px}.login-form{padding:28px 22px}}
+
+.build-tag{display:block!important;margin-top:4px!important;font-size:7px!important;letter-spacing:.16em!important;color:#a9b596!important}
+.login-version{display:block;margin:-16px 0 24px;font-size:8px;letter-spacing:.18em;color:#aeb99d}
+.page-heading{border-bottom:1px solid #d6c9b8;padding-bottom:18px}
+.kpi-card{background:#faf6ef}
+.panel{background:#faf6ef}
+.topbar{background:#f5eee3}
+.sidebar{background:#403226}
+nav button.active{background:#5c6d50;border-left-color:#b7c1a9}
+nav button:hover:not(:disabled){background:#4a3a2d}
+.status-strip{background:#f8f2e8}
+.rate-summary div{background:#faf6ef}
+.table-scroll table thead th{background:#eee5d8}
+tbody tr:hover{background:#f4ede3}
+.primary-action{background:#5d6f51;border-color:#5d6f51}
+.metric-line i{background:#667858}
