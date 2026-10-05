@@ -1,10 +1,19 @@
-import { alerts, kpis, performance, rateDays, roomPerformance } from '../data/mockData'
+import {
+  aggregateRateDays, buildAlerts, buildKpis, costs, generateRecommendations,
+  monthly, performance, roomPerformance,
+} from '../data/mockData'
+import type { DashboardData } from '../types'
 
-const delay = (ms = 180) => new Promise(resolve => setTimeout(resolve, ms))
+const delay = (ms = 220) => new Promise(resolve => setTimeout(resolve, ms))
 
 export const hotelService = {
-  async getDashboard() {
+  async getDashboard(): Promise<DashboardData> {
     await delay()
-    return { kpis, performance, roomPerformance, rateDays, alerts }
-  }
+    const recommendations = generateRecommendations()
+    return {
+      kpis: buildKpis(), performance, roomPerformance,
+      rateDays: aggregateRateDays(recommendations), recommendations,
+      monthly, costs, alerts: buildAlerts(recommendations), generatedAt: new Date().toISOString(),
+    }
+  },
 }

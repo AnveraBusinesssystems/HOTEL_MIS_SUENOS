@@ -1,5 +1,15 @@
 export type Role = 'Dueño' | 'Gerencia' | 'Administración' | 'Recepción' | 'Cocina' | 'Limpieza' | 'Alberca'
 
+export type RoomCode = 'NAY' | "NA'" | 'CHA' | 'KAA' | 'MUU'
+export type RateMetric = 'recommendedRate' | 'currentRate' | 'difference' | 'occupancy'
+
+export interface HotelSnapshot {
+  revenue: number
+  soldNights: number
+  availableNights: number
+  bookings: number
+}
+
 export interface KPI {
   id: string
   label: string
@@ -7,39 +17,75 @@ export interface KPI {
   previous: number
   format: 'mxn' | 'percent' | 'integer' | 'decimal'
   helper: string
+  comparisonMode?: 'relative' | 'points'
 }
 
 export interface DailyPerformance {
   date: string
   ingresos: number
   ocupacion: number
-  adr: number
-  revpar: number
 }
 
 export interface RoomPerformance {
-  code: 'NAY' | "NA'" | 'CHA' | 'KAA' | 'MUU'
+  code: RoomCode
   name: string
   rooms: number
-  soldNights: number
   occupancy: number
   adr: number
-  revenue: number
   revpar: number
   currentRate: number
+}
+
+export interface RoomTypeConfig {
+  code: RoomCode
+  name: string
+  rooms: number
+  baseRate: number
+  minRate: number
+  maxRate: number
+}
+
+export interface RMSRecommendation {
+  id: string
+  date: string
+  roomCode: RoomCode
+  roomName: string
+  capacity: number
+  occupied: number
+  available: number
+  occupancy: number
+  currentRate: number
+  recommendedRate: number
+  pickup7: number
+  demand: 'Baja' | 'Normal' | 'Alta' | 'Muy alta'
+  reason: string
 }
 
 export interface RateDay {
   date: string
   occupancy: number
+  occupied: number
   available: number
-  adr: number
-  currentRate: number
-  recommendedRate: number
-  arrivals: number
-  departures: number
-  minStay: number
-  status: 'Abierto' | 'Cerrado'
+}
+
+export interface MonthlySummary {
+  key: string
+  year: number
+  month: number
+  label: string
+  revenue: number
+  soldNights: number
+  availableNights: number
+  bookings: number
+  cancellations: number
+  costs: number
+  forecastRevenue: number
+  forecastOccupancy: number
+}
+
+export interface CostSummary {
+  registered: number
+  estimated: number
 }
 
 export interface Alert {
@@ -48,5 +94,18 @@ export interface Alert {
   title: string
   date: string
   message: string
-  action: string
+  recommendationId?: string
+  estimatedImpact?: number
+}
+
+export interface DashboardData {
+  kpis: KPI[]
+  performance: DailyPerformance[]
+  roomPerformance: RoomPerformance[]
+  rateDays: RateDay[]
+  recommendations: RMSRecommendation[]
+  monthly: MonthlySummary[]
+  costs: CostSummary
+  alerts: Alert[]
+  generatedAt: string
 }
