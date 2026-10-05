@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, Bell, BedDouble, CalendarDays, ChevronDown, DollarSign,
-  Gauge, Housekeeping, LayoutDashboard, Menu, ReceiptText, RefreshCw,
-  Settings, TrendingUp, Users, WalletCards
+  Gauge, Sparkles, LayoutDashboard, Menu, ReceiptText, RefreshCw,
+  Settings, Users, WalletCards
 } from 'lucide-react'
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer,
@@ -26,7 +26,7 @@ const menu = [
   ['Reservas', CalendarDays, false],
   ['Operación diaria', ReceiptText, false],
   ['Habitaciones', BedDouble, false],
-  ['Limpieza', Housekeeping, false],
+  ['Limpieza', Sparkles, false],
   ['Caja', WalletCards, false],
   ['Personal', Users, false],
   ['Configuración', Settings, false],
