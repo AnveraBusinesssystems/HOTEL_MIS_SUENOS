@@ -12,6 +12,7 @@ Frontend profesional para el sistema interno de Hotel Mis Sueños Holbox.
 - Calendario RMS para 14, 30, 90 o 180 días
 - Recomendación simulada por fecha y tipo de habitación
 - Detalle simple de tarifa, ocupación, disponibilidad y pickup
+- Preparación simulada de tarifas por fecha y habitación para una futura publicación en Cloudbeds
 - Datos y servicios mock desacoplados de la interfaz
 - Preparado para GitHub Pages
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { CloudUpload, X } from 'lucide-react'
 import type { DashboardData, RateMetric, RMSRecommendation, RoomCode } from '../types'
 import { longDate, money, percent, shortDate, toneForOccupancy } from '../utils'
 
@@ -15,6 +15,7 @@ export function RatesView({ data, initialRecommendationId, onNotify }: Props) {
   const [horizon, setHorizon] = useState(30)
   const [metric, setMetric] = useState<RateMetric>('recommendedRate')
   const [selected, setSelected] = useState<RMSRecommendation | null>(null)
+  const [publishOpen, setPublishOpen] = useState(false)
 
   useEffect(() => {
     const target = data.recommendations.find(item => item.id === initialRecommendationId)
@@ -38,7 +39,10 @@ export function RatesView({ data, initialRecommendationId, onNotify }: Props) {
   return <div className="page rms-page">
     <section className="page-heading">
       <div><p className="eyebrow">REVENUE MANAGEMENT</p><h1>RMS / Tarifas</h1><p>Vista simple de precio, ocupación y disponibilidad futura.</p></div>
-      <span className="simulation-label">DATOS DE DEMOSTRACIÓN</span>
+      <div className="page-heading-actions">
+        <span className="simulation-label">DATOS DE DEMOSTRACIÓN</span>
+        <button className="cloudbeds-action" onClick={() => setPublishOpen(true)}><CloudUpload size={15}/> Publicar en Cloudbeds</button>
+      </div>
     </section>
 
     <section className="rms-toolbar">
@@ -67,6 +71,7 @@ export function RatesView({ data, initialRecommendationId, onNotify }: Props) {
     </section>
 
     {selected && <SimpleRateDrawer row={selected} onClose={() => setSelected(null)} onNotify={onNotify}/>}
+    {publishOpen && <CloudbedsPublishDialog recommendations={data.recommendations} onClose={() => setPublishOpen(false)} onNotify={onNotify}/>}
   </div>
 }
 
@@ -100,5 +105,58 @@ function SimpleRateDrawer({ row, onClose, onNotify }: { row: RMSRecommendation; 
       <label className="field">Precio a utilizar<input type="number" step="10" value={rate} onChange={event => setRate(Number(event.target.value))}/></label>
       <footer><button onClick={onClose}>Cancelar</button><button className="primary-action" onClick={() => { onNotify(`Simulación: tarifa ${row.roomCode} en ${money(rate)}`); onClose() }}>Guardar simulación</button></footer>
     </aside>
+  </div>
+}
+
+function CloudbedsPublishDialog({ recommendations, onClose, onNotify }: {
+  recommendations: RMSRecommendation[]
+  onClose: () => void
+  onNotify: (message: string) => void
+}) {
+  const firstDate = recommendations[0]?.date ?? ''
+  const lastDate = recommendations.at(-1)?.date ?? ''
+  const defaultEnd = recommendations[29 * roomOrder.length]?.date ?? lastDate
+  const [startDate, setStartDate] = useState(firstDate)
+  const [endDate, setEndDate] = useState(defaultEnd)
+  const [rooms, setRooms] = useState<RoomCode[]>(roomOrder)
+
+  const selectedRates = useMemo(() => recommendations.filter(row => (
+    row.date >= startDate && row.date <= endDate && rooms.includes(row.roomCode)
+  )), [endDate, recommendations, rooms, startDate])
+  const invalidRange = !startDate || !endDate || startDate > endDate
+
+  const toggleRoom = (roomCode: RoomCode) => {
+    setRooms(current => current.includes(roomCode)
+      ? current.filter(code => code !== roomCode)
+      : [...current, roomCode])
+  }
+
+  return <div className="dialog-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+    <section className="publish-dialog" role="dialog" aria-modal="true" aria-labelledby="cloudbeds-title">
+      <header>
+        <div><span>CONEXIÓN FUTURA</span><h2 id="cloudbeds-title">Publicar tarifas en Cloudbeds</h2><p>Selecciona el periodo y los tipos de habitación que recibirán la tarifa recomendada.</p></div>
+        <button aria-label="Cerrar" onClick={onClose}><X size={18}/></button>
+      </header>
+      <div className="publish-notice"><CloudUpload size={16}/><p><b>Modo de simulación.</b> Todavía no se enviará información a Cloudbeds.</p></div>
+      <div className="publish-dates">
+        <label>Desde<input type="date" min={firstDate} max={lastDate} value={startDate} onChange={event => setStartDate(event.target.value)}/></label>
+        <label>Hasta<input type="date" min={firstDate} max={lastDate} value={endDate} onChange={event => setEndDate(event.target.value)}/></label>
+      </div>
+      <fieldset className="publish-rooms">
+        <legend>Tipos de habitación</legend>
+        {roomOrder.map(roomCode => {
+          const room = recommendations.find(row => row.roomCode === roomCode)
+          return <label key={roomCode}><input type="checkbox" checked={rooms.includes(roomCode)} onChange={() => toggleRoom(roomCode)}/><span><b>{roomCode}</b><small>{room?.roomName}</small></span></label>
+        })}
+      </fieldset>
+      <div className="publish-summary"><span>Tarifas preparadas</span><strong>{invalidRange ? 0 : selectedRates.length}</strong><small>Una tarifa por fecha y tipo de habitación seleccionado.</small></div>
+      <footer>
+        <button onClick={onClose}>Cancelar</button>
+        <button className="primary-action" disabled={invalidRange || rooms.length === 0} onClick={() => {
+          onNotify(`Simulación Cloudbeds preparada: ${selectedRates.length} tarifas`)
+          onClose()
+        }}><CloudUpload size={14}/> Simular publicación</button>
+      </footer>
+    </section>
   </div>
 }
