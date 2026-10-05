@@ -43,6 +43,7 @@ function App() {
   const [role,setRole] = useState<Role>('Dueño')
   const [collapsed,setCollapsed] = useState(false)
   const [loading,setLoading] = useState(true)
+  const [authenticated,setAuthenticated] = useState(() => localStorage.getItem('hms_demo_auth') === 'true')
 
   const load = async () => {
     setLoading(true)
@@ -54,6 +55,8 @@ function App() {
 
   const financialAccess = ['Dueño','Gerencia','Administración'].includes(role)
   const avgOccupancy = useMemo(() => data ? data.performance.reduce((a,b)=>a+b.ocupacion,0)/data.performance.length : 0,[data])
+
+  if (!authenticated) return <LoginScreen onLogin={()=>{ localStorage.setItem('hms_demo_auth','true'); setAuthenticated(true) }} />
 
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Cargando sistema operativo…</small></div>
 
@@ -86,6 +89,7 @@ function App() {
             <span className="updated">Actualizado · hace 1 min</span>
             <button className="icon-button" onClick={load} title="Actualizar datos"><RefreshCw size={16}/></button>
             <button className="icon-button"><Bell size={16}/><i>3</i></button>
+            <button className="logout-button" onClick={()=>{ localStorage.removeItem('hms_demo_auth'); setAuthenticated(false) }}>Salir</button>
             <select value={role} onChange={e=>setRole(e.target.value as Role)}>
               <option>Dueño</option><option>Gerencia</option><option>Administración</option><option>Recepción</option>
               <option>Cocina</option><option>Limpieza</option><option>Alberca</option>
@@ -203,6 +207,43 @@ function App() {
       </main>
     </div>
   )
+}
+
+function LoginScreen({onLogin}:{onLogin:()=>void}) {
+  const [password,setPassword] = useState('')
+  const [error,setError] = useState('')
+
+  const submit = (e:React.FormEvent) => {
+    e.preventDefault()
+    if (password === '1010') {
+      setError('')
+      onLogin()
+      return
+    }
+    setError('Contraseña incorrecta')
+  }
+
+  return <div className="login-shell">
+    <section className="login-brand-panel">
+      <div className="login-monogram">MS</div>
+      <p>ISLA HOLBOX · QUINTANA ROO</p>
+      <h1>Hotel Mis Sueños</h1>
+      <span>Sistema interno de operación y revenue management</span>
+      <div className="login-property-line"><b>17</b><small>habitaciones</small></div>
+    </section>
+    <section className="login-form-panel">
+      <form className="login-form" onSubmit={submit}>
+        <p className="eyebrow">ACCESO INTERNO</p>
+        <h2>Bienvenido</h2>
+        <p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p>
+        <label htmlFor="password">Contraseña</label>
+        <input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••" />
+        {error && <div className="login-error">{error}</div>}
+        <button type="submit">Entrar al sistema</button>
+        <small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small>
+      </form>
+    </section>
+  </div>
 }
 
 function RatesView({rateDays}:{rateDays:RateDay[]}) {
