@@ -65,7 +65,7 @@ function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">MS</div>
-          {!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span></div>}
+          {!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 0.2</small></div>}
         </div>
         <button className="collapse-btn" onClick={()=>setCollapsed(v=>!v)} aria-label="Contraer navegación"><Menu size={18}/></button>
         <nav>
@@ -225,7 +225,7 @@ function LoginScreen({onLogin}:{onLogin:()=>void}) {
 
   return <div className="login-shell">
     <section className="login-brand-panel">
-      <div className="login-monogram">MS</div>
+      <div className="login-monogram">MS</div><small className="login-version">BUILD 0.2</small>
       <p>ISLA HOLBOX · QUINTANA ROO</p>
       <h1>Hotel Mis Sueños</h1>
       <span>Sistema interno de operación y revenue management</span>
