@@ -5,16 +5,17 @@ import {
 } from 'lucide-react'
 import { IndicatorsView, SummaryView } from './components/DashboardViews'
 import { RatesView } from './components/RatesView'
+import { ReservationsView } from './components/ReservationsView'
 import { hotelService } from './services/hotelService'
 import type { DashboardData, Role } from './types'
 
-type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas'
+type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas'
 
 const menu = [
   ['Resumen', LayoutDashboard, true],
   ['Indicadores', Gauge, true],
   ['RMS / Tarifas', DollarSign, true],
-  ['Reservas', CalendarDays, false],
+  ['Reservas', CalendarDays, true],
   ['Operación diaria', ReceiptText, false],
   ['Habitaciones', BedDouble, false],
   ['Limpieza', Sparkles, false],
@@ -52,12 +53,16 @@ function App() {
     setActive('RMS / Tarifas')
   }
 
+  const updateReservations = (updater: (rows: DashboardData['reservations']) => DashboardData['reservations']) => {
+    setData(current => current ? { ...current, reservations: updater(current.reservations) } : current)
+  }
+
   if (!authenticated) return <LoginScreen onLogin={() => { localStorage.setItem('hms_demo_auth', 'true'); setAuthenticated(true) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">MS</div>{!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 0.4</small></div>}</div>
+      <div className="brand"><div className="brand-mark">MS</div>{!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 0.5</small></div>}</div>
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
       <nav>{menu.map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => enabled && setActive(label as ActivePage)}><Icon size={18}/>{!collapsed && <><span>{label}</span>{!enabled && <em>PRÓX.</em>}</>}</button>)}</nav>
       {!collapsed && <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>}
@@ -78,6 +83,7 @@ function App() {
       {active === 'Resumen' && <SummaryView data={data} role={role} onOpenRms={openRms}/>}
       {active === 'Indicadores' && <IndicatorsView data={data} role={role}/>}
       {active === 'RMS / Tarifas' && <RatesView data={data} initialRecommendationId={selectedRecommendationId} onNotify={setToast}/>}
+      {active === 'Reservas' && <ReservationsView reservations={data.reservations} onChange={updateReservations} onNotify={setToast}/>}
     </main>
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>
@@ -92,7 +98,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('Contraseña incorrecta')
   }
   return <div className="login-shell">
-    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 0.4</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
+    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 0.5</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
     <section className="login-form-panel"><form className="login-form" onSubmit={submit}><p className="eyebrow">ACCESO INTERNO</p><h2>Bienvenido</h2><p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p><label htmlFor="password">Contraseña</label><input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••"/>{error && <div className="login-error">{error}</div>}<button type="submit">Entrar al sistema</button><small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small></form></section>
   </div>
 }

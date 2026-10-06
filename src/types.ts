@@ -103,6 +103,36 @@ export interface RoomMonthlyPerformance {
   revenue: number
 }
 
+export type ReservationStatus = 'Confirmada' | 'Hospedado' | 'Salida' | 'Cancelada' | 'No show'
+export type ReservationChannel = 'Directa' | 'Booking.com' | 'Expedia' | 'Cloudbeds' | 'Walk-in'
+
+export interface ReservationNight {
+  date: string
+  rate: number
+}
+
+export interface Reservation {
+  id: string
+  subReservationId: string
+  guestName: string
+  email: string
+  phone: string
+  checkIn: string
+  checkOut: string
+  adults: number
+  children: number
+  roomType: RoomCode
+  roomNumber?: string
+  status: ReservationStatus
+  channel: ReservationChannel
+  total: number
+  paid: number
+  createdAt: string
+  notes: string
+  cleaningRequested: boolean
+  nights: ReservationNight[]
+}
+
 export interface CostSummary {
   registered: number
   estimated: number
@@ -126,6 +156,7 @@ export interface DashboardData {
   monthly: MonthlySummary[]
   expenses: ExpenseRecord[]
   roomMonthly: RoomMonthlyPerformance[]
+  reservations: Reservation[]
   costs: CostSummary
   alerts: Alert[]
   generatedAt: string

@@ -1,6 +1,6 @@
 import {
   aggregateRateDays, buildAlerts, costs, generateRecommendations,
-  expenses, monthly, performance, roomMonthly, roomPerformance,
+  expenses, monthly, performance, reservations, roomMonthly, roomPerformance,
 } from '../data/mockData'
 import type { DashboardData } from '../types'
 
@@ -13,7 +13,7 @@ export const hotelService = {
     return {
       performance, roomPerformance,
       rateDays: aggregateRateDays(recommendations), recommendations,
-      monthly, expenses, roomMonthly, costs,
+      monthly, expenses, roomMonthly, reservations, costs,
       alerts: buildAlerts(recommendations), generatedAt: new Date().toISOString(),
     }
   },
