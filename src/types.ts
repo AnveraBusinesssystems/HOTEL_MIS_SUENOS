@@ -133,6 +133,46 @@ export interface Reservation {
   nights: ReservationNight[]
 }
 
+export type OccupancyStatus = 'Libre' | 'Ocupada' | 'Salida prevista' | 'Bloqueada'
+export type CleaningStatus = 'Limpia' | 'Sucia' | 'En limpieza' | 'Por revisar'
+export type OperationTaskStatus = 'Pendiente' | 'En proceso' | 'Pausada' | 'Terminada'
+export type OperationTaskType = 'Limpieza de salida' | 'Limpieza de estancia' | 'Revisión' | 'Mantenimiento'
+
+export interface RoomState {
+  roomNumber: string
+  roomType: RoomCode
+  occupancy: OccupancyStatus
+  cleaning: CleaningStatus
+  currentReservationId?: string
+  nextReservationId?: string
+  blockReason?: string
+}
+
+export interface OperationTask {
+  id: string
+  date: string
+  roomNumber: string
+  roomType: RoomCode
+  type: OperationTaskType
+  status: OperationTaskStatus
+  priority: 'Crítica' | 'Alta' | 'Normal'
+  assignedTo?: string
+  requestedAt: string
+  startedAt?: string
+  completedAt?: string
+  deadline?: string
+  note: string
+  reservationId?: string
+}
+
+export interface OperationDay {
+  date: string
+  status: 'No iniciado' | 'Abierto' | 'Cerrado'
+  openedBy?: string
+  openedAt?: string
+  handoffNote?: string
+}
+
 export interface CostSummary {
   registered: number
   estimated: number
@@ -157,6 +197,9 @@ export interface DashboardData {
   expenses: ExpenseRecord[]
   roomMonthly: RoomMonthlyPerformance[]
   reservations: Reservation[]
+  roomStates: RoomState[]
+  operationTasks: OperationTask[]
+  operationDays: OperationDay[]
   costs: CostSummary
   alerts: Alert[]
   generatedAt: string

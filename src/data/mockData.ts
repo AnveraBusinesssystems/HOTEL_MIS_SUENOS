@@ -1,7 +1,8 @@
 import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
-  ExpenseCategory, ExpenseRecord, Reservation, RMSRecommendation, RateDay,
-  RoomMonthlyPerformance, RoomPerformance, RoomTypeConfig,
+  ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
+  RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
+  RoomTypeConfig,
 } from '../types'
 
 export const roomTypes: RoomTypeConfig[] = [
@@ -203,6 +204,46 @@ export const reservations: Reservation[] = [
   { id: 'CB-84742', subReservationId: 'CB-84742-1', guestName: 'Sofía Herrera', email: 'sofia.h@email.com', phone: '+52 998 772 3409', checkIn: '2026-10-12', checkOut: '2026-10-14', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA-05', status: 'Confirmada', channel: 'Directa', total: 3920, paid: 3920, createdAt: '2026-10-02', notes: '', cleaningRequested: false, nights: reservationNights('2026-10-12', [1880, 2040]) },
   { id: 'CB-84588', subReservationId: 'CB-84588-1', guestName: 'Roberto Silva', email: 'roberto.s@email.com', phone: '+52 33 1820 4901', checkIn: '2026-10-07', checkOut: '2026-10-10', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA-01', status: 'Cancelada', channel: 'Booking.com', total: 5790, paid: 0, createdAt: '2026-08-29', notes: 'Cancelación recibida por el canal.', cleaningRequested: false, nights: reservationNights('2026-10-07', [1830, 1830, 2130]) },
 ]
+
+export const roomStates: RoomState[] = [
+  { roomNumber: 'NAY-01', roomType: 'NAY', occupancy: 'Salida prevista', cleaning: 'Limpia', currentReservationId: 'CB-84351' },
+  { roomNumber: "NA'-01", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84719' },
+  { roomNumber: "NA'-02", roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', currentReservationId: 'CB-84492' },
+  { roomNumber: "NA'-03", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA-01', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA-02', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA-03', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Por revisar', nextReservationId: 'CB-84621' },
+  { roomNumber: 'CHA-04', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA-05', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84742' },
+  { roomNumber: 'CHA-06', roomType: 'CHA', occupancy: 'Bloqueada', cleaning: 'Sucia', blockReason: 'Revisión de aire acondicionado' },
+  { roomNumber: 'KAA-01', roomType: 'KAA', occupancy: 'Libre', cleaning: 'Sucia', currentReservationId: 'CB-84287' },
+  { roomNumber: 'KAA-02', roomType: 'KAA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU-01', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU-02', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU-03', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU-04', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84703' },
+  { roomNumber: 'MUU-05', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+]
+
+export const operationTasks: OperationTask[] = [
+  { id: 'OP-1001', date: '2026-10-06', roomNumber: 'CHA-03', roomType: 'CHA', type: 'Revisión', status: 'Pendiente', priority: 'Crítica', assignedTo: 'Recepción', requestedAt: '08:04', deadline: '14:30', note: 'Validar amenidades antes de la llegada.', reservationId: 'CB-84621' },
+  { id: 'OP-1002', date: '2026-10-06', roomNumber: 'KAA-01', roomType: 'KAA', type: 'Limpieza de salida', status: 'Pendiente', priority: 'Alta', assignedTo: 'María', requestedAt: '08:05', deadline: '13:30', note: 'Salida confirmada temprano.', reservationId: 'CB-84287' },
+  { id: 'OP-1003', date: '2026-10-06', roomNumber: "NA'-02", roomType: "NA'", type: 'Limpieza de estancia', status: 'Pendiente', priority: 'Normal', assignedTo: 'Elena', requestedAt: '09:15', deadline: '15:00', note: 'Solicitada por la huésped.', reservationId: 'CB-84492' },
+  { id: 'OP-1004', date: '2026-10-06', roomNumber: 'CHA-06', roomType: 'CHA', type: 'Mantenimiento', status: 'En proceso', priority: 'Alta', assignedTo: 'Gerencia', requestedAt: '07:50', startedAt: '08:20', note: 'Aire acondicionado no enfría correctamente.' },
+]
+
+export const operationDays: OperationDay[] = Array.from({ length: 21 }, (_, index) => {
+  const date = new Date('2026-10-06T12:00:00')
+  date.setDate(date.getDate() + index - 10)
+  const key = iso(date)
+  return {
+    date: key,
+    status: key < '2026-10-06' ? 'Cerrado' : 'No iniciado',
+    openedBy: key < '2026-10-06' ? 'Recepción' : undefined,
+    openedAt: key < '2026-10-06' ? '08:00' : undefined,
+    handoffNote: key === '2026-10-05' ? 'Pendiente revisar aire acondicionado de CHA-06.' : undefined,
+  }
+})
 
 export const costs: CostSummary = {
   registered: 236800,
