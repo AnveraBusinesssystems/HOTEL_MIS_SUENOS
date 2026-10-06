@@ -1,6 +1,6 @@
 import {
-  aggregateRateDays, buildAlerts, buildKpis, costs, generateRecommendations,
-  monthly, performance, roomPerformance,
+  aggregateRateDays, buildAlerts, costs, generateRecommendations,
+  expenses, monthly, performance, roomMonthly, roomPerformance,
 } from '../data/mockData'
 import type { DashboardData } from '../types'
 
@@ -11,9 +11,10 @@ export const hotelService = {
     await delay()
     const recommendations = generateRecommendations()
     return {
-      kpis: buildKpis(), performance, roomPerformance,
+      performance, roomPerformance,
       rateDays: aggregateRateDays(recommendations), recommendations,
-      monthly, costs, alerts: buildAlerts(recommendations), generatedAt: new Date().toISOString(),
+      monthly, expenses, roomMonthly, costs,
+      alerts: buildAlerts(recommendations), generatedAt: new Date().toISOString(),
     }
   },
 }

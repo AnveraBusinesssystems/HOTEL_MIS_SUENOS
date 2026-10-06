@@ -1,6 +1,7 @@
 import type {
-  Alert, CostSummary, DailyPerformance, HotelSnapshot, KPI, MonthlySummary,
-  RMSRecommendation, RateDay, RoomPerformance, RoomTypeConfig,
+  Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
+  ExpenseCategory, ExpenseRecord, RMSRecommendation, RateDay, RoomMonthlyPerformance,
+  RoomPerformance, RoomTypeConfig,
 } from '../types'
 
 export const roomTypes: RoomTypeConfig[] = [
@@ -25,21 +26,6 @@ const metrics = (snapshot: HotelSnapshot) => ({
   revpar: snapshot.revenue / snapshot.availableNights,
   averageStay: snapshot.soldNights / snapshot.bookings,
 })
-
-export function buildKpis(): KPI[] {
-  const a = metrics(current)
-  const b = metrics(previous)
-  return [
-    { id: 'revenue', label: 'Ingresos habitaciones', value: current.revenue, previous: previous.revenue, format: 'mxn', helper: 'Ingreso generado únicamente por hospedaje.' },
-    { id: 'occupancy', label: 'Ocupación', value: a.occupancy, previous: b.occupancy, format: 'percent', helper: 'Noches vendidas / noches disponibles.', comparisonMode: 'points' },
-    { id: 'adr', label: 'ADR', value: a.adr, previous: b.adr, format: 'mxn', helper: 'Ingresos habitaciones / noches vendidas.' },
-    { id: 'revpar', label: 'RevPAR', value: a.revpar, previous: b.revpar, format: 'mxn', helper: 'Ingresos habitaciones / noches disponibles.' },
-    { id: 'sold', label: 'Noches vendidas', value: current.soldNights, previous: previous.soldNights, format: 'integer', helper: 'Noches habitación vendidas en el periodo.' },
-    { id: 'available', label: 'Noches disponibles', value: current.availableNights, previous: previous.availableNights, format: 'integer', helper: 'Habitaciones disponibles × días.' },
-    { id: 'bookings', label: 'Reservas', value: current.bookings, previous: previous.bookings, format: 'integer', helper: 'Reservas confirmadas en el periodo.' },
-    { id: 'stay', label: 'Estancia promedio', value: a.averageStay, previous: b.averageStay, format: 'decimal', helper: 'Noches vendidas / número de reservas.' },
-  ]
-}
 
 export const performance: DailyPerformance[] = [
   { date: '01 Oct', ingresos: 13740, ocupacion: 58.8 },
@@ -150,6 +136,54 @@ export const monthly: MonthlySummary[] = generatedMonthly.map(row => {
     forecastRevenue: 421300, forecastOccupancy: 67.8,
   }
   return row
+})
+
+const expenseShares: Record<ExpenseCategory, number> = {
+  Personal: 0.35,
+  Lavandería: 0.09,
+  Cocina: 0.14,
+  Mantenimiento: 0.1,
+  Servicios: 0.13,
+  Comisiones: 0.12,
+  Otros: 0.07,
+}
+
+export const expenses: ExpenseRecord[] = monthly.flatMap(row => {
+  const categories = Object.entries(expenseShares) as [ExpenseCategory, number][]
+  const weighted = categories.map(([category, share], index) => ({
+    category,
+    weight: share * (1 + Math.sin((row.month + index * 2) * 0.83) * 0.06),
+  }))
+  const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0)
+  let assigned = 0
+  return weighted.map((item, index) => {
+    const amount = index === weighted.length - 1
+      ? row.costs - assigned
+      : Math.round(row.costs * item.weight / totalWeight)
+    assigned += amount
+    return { key: `${row.key}-${item.category}`, year: row.year, month: row.month, category: item.category, amount }
+  })
+})
+
+const roomRevenueShares = [0.11, 0.2, 0.31, 0.09, 0.29]
+const roomDemandBias = [1.04, 1.09, 1.01, 0.88, 1.02]
+
+export const roomMonthly: RoomMonthlyPerformance[] = monthly.flatMap(row => {
+  const days = new Date(row.year, row.month, 0).getDate()
+  return roomTypes.map((room, index) => {
+    const availableNights = room.rooms * days
+    const hotelOccupancy = row.soldNights / row.availableNights
+    const occupancy = clamp(hotelOccupancy * roomDemandBias[index] + Math.sin((row.month + index) * 1.3) * 0.025, 0.25, 0.96)
+    return {
+      key: `${row.key}-${room.code}`,
+      year: row.year,
+      month: row.month,
+      code: room.code,
+      soldNights: Math.round(availableNights * occupancy),
+      availableNights,
+      revenue: Math.round(row.revenue * roomRevenueShares[index]),
+    }
+  })
 })
 
 export const costs: CostSummary = {

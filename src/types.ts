@@ -83,6 +83,26 @@ export interface MonthlySummary {
   forecastOccupancy: number
 }
 
+export type ExpenseCategory = 'Personal' | 'Lavandería' | 'Cocina' | 'Mantenimiento' | 'Servicios' | 'Comisiones' | 'Otros'
+
+export interface ExpenseRecord {
+  key: string
+  year: number
+  month: number
+  category: ExpenseCategory
+  amount: number
+}
+
+export interface RoomMonthlyPerformance {
+  key: string
+  year: number
+  month: number
+  code: RoomCode
+  soldNights: number
+  availableNights: number
+  revenue: number
+}
+
 export interface CostSummary {
   registered: number
   estimated: number
@@ -99,12 +119,13 @@ export interface Alert {
 }
 
 export interface DashboardData {
-  kpis: KPI[]
   performance: DailyPerformance[]
   roomPerformance: RoomPerformance[]
   rateDays: RateDay[]
   recommendations: RMSRecommendation[]
   monthly: MonthlySummary[]
+  expenses: ExpenseRecord[]
+  roomMonthly: RoomMonthlyPerformance[]
   costs: CostSummary
   alerts: Alert[]
   generatedAt: string
