@@ -53,6 +53,21 @@ export function OperationsView(props: Props) {
     const active = container?.querySelector<HTMLElement>('button.active')
     if (container && active) container.scrollLeft = active.offsetLeft - container.clientWidth / 2 + active.clientWidth / 2
   }, [selectedDate])
+  useEffect(() => {
+    const checkoutCutoff = new Date(`${TODAY}T11:00:00-05:00`)
+    if (new Date() < checkoutCutoff) return
+    const checkoutRooms = reservations.filter(reservation => reservation.checkOut === TODAY && reservation.status === 'Hospedado' && reservation.roomNumber).map(reservation => reservation.roomNumber!)
+    if (!checkoutRooms.length) return
+    onRoomsChange(rows => rows.map(room => checkoutRooms.includes(room.roomNumber) && room.cleaning === 'Limpia' ? { ...room, cleaning: 'Sucia' } : room))
+    onTasksChange(rows => {
+      const additions = checkoutRooms.flatMap(roomNumber => {
+        if (rows.some(task => task.date === TODAY && task.roomNumber === roomNumber && ['Limpieza de salida', 'Limpieza general'].includes(task.type) && task.status !== 'Terminada')) return []
+        const room = rooms.find(item => item.roomNumber === roomNumber)
+        return room ? [{ id: `OP-AUTO-${roomNumber}`, date: TODAY, roomNumber, roomType: room.roomType, type: 'Limpieza de salida' as const, status: 'Pendiente' as const, priority: 'Alta' as const, assignedTo: 'Limpieza', requestedAt: '11:00', deadline: '15:00', note: 'Salida programada: habitación marcada como sucia automáticamente después de las 11:00.' }] : []
+      })
+      return additions.length ? [...rows, ...additions] : rows
+    })
+  }, [])
 
   const selectedDay = days.find(day => day.date === selectedDate) ?? { date: selectedDate, status: 'No iniciado' as const }
   const arrivals = reservations.filter(row => row.checkIn === selectedDate && row.status === 'Confirmada')
@@ -118,7 +133,7 @@ export function OperationsView(props: Props) {
     <section className="operation-controls"><div className="operation-tabs">{(['Hoy', 'Habitaciones', 'Limpieza'] as OperationTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : <Sparkles size={15}/>} {item}</button>)}</div><div className="day-actions"><button onClick={() => setSelectedDate(TODAY)}><RefreshCw size={14}/>Hoy</button>{selectedDay.status === 'No iniciado' && <button className="primary-action" onClick={openDay}><Play size={14}/>Abrir operación</button>}</div></section>
 
     {tab === 'Hoy' && <TodayView arrivals={arrivals} departures={departures} stays={stays} readyRooms={readyRooms.length} dirtyRooms={dirtyRooms.length} pendingBalance={pendingBalance} priorities={priorities} onPriority={runPriorityAction} tasks={selectedTasks} rooms={rooms}/>}
-    {tab === 'Habitaciones' && <RoomsView role={role} date={selectedDate} rooms={rooms} reservations={reservations} tasks={tasks} filter={roomFilter} setFilter={setRoomFilter} onReady={markRoomReady} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onNotify={onNotify}/>}
+    {tab === 'Habitaciones' && <RoomsView role={role} date={selectedDate} rooms={rooms} reservations={reservations} filter={roomFilter} setFilter={setRoomFilter} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onNotify={onNotify}/>}
     {tab === 'Limpieza' && <CleaningView date={selectedDate} tasks={selectedTasks} rooms={rooms} onTasksChange={onTasksChange} onRoomsChange={onRoomsChange} onNotify={onNotify}/>}
   </div>
 }
@@ -145,7 +160,7 @@ function AgendaColumn({ title, icon, reservations, empty }: { title: string; ico
   return <article className="panel agenda-column"><header><div><span>AGENDA</span><h2>{icon}{title}</h2></div><b>{reservations.length}</b></header><div>{reservations.map(row => <div className="agenda-item" key={row.id}><div><b>{row.roomNumber ?? 'Sin asignar'}</b><span>{row.guestName}</span></div><small>{row.status}</small></div>)}{!reservations.length && <p className="agenda-empty">{empty}</p>}</div></article>
 }
 
-function RoomsView({ role, date, rooms, reservations, tasks, filter, setFilter, onReady, onRoomsChange, onTasksChange, onNotify }: { role: Role; date: string; rooms: RoomState[]; reservations: Reservation[]; tasks: OperationTask[]; filter: string; setFilter: (value: any) => void; onReady: (room: string) => void; onRoomsChange: Props['onRoomsChange']; onTasksChange: Props['onTasksChange']; onNotify: (message: string) => void }) {
+function RoomsView({ role, date, rooms, reservations, filter, setFilter, onRoomsChange, onTasksChange, onNotify }: { role: Role; date: string; rooms: RoomState[]; reservations: Reservation[]; filter: string; setFilter: (value: any) => void; onRoomsChange: Props['onRoomsChange']; onTasksChange: Props['onTasksChange']; onNotify: (message: string) => void }) {
   const [issueRoom, setIssueRoom] = useState<RoomState>()
   const [issueType, setIssueType] = useState<RoomIssueType>('Falta control de TV')
   const visible = rooms.filter(room => filter === 'Todas' || filter === 'Atención' && (room.cleaning !== 'Limpia' || room.occupancy === 'Bloqueada') || filter === 'Listas' && readyLabel(room) === 'Lista' || filter === 'Ocupadas' && ['Ocupada', 'Salida prevista'].includes(room.occupancy) || filter === 'Bloqueadas' && room.occupancy === 'Bloqueada')
@@ -155,6 +170,11 @@ function RoomsView({ role, date, rooms, reservations, tasks, filter, setFilter, 
     const type: OperationTask['type'] = room.occupancy === 'Ocupada' ? 'Limpieza de estancia' : 'Limpieza general'
     onTasksChange(rows => rows.some(task => task.date === date && task.roomNumber === room.roomNumber && ['Limpieza de salida', 'Limpieza de estancia', 'Limpieza general'].includes(task.type) && task.status !== 'Terminada') ? rows : [...rows, { id: `OP-${Date.now()}`, date, roomNumber: room.roomNumber, roomType: room.roomType, type, status: 'Pendiente', priority: 'Normal', assignedTo: 'Limpieza', requestedAt: 'Ahora', deadline: 'Hoy', note: 'Habitación marcada como sucia desde Operación.' }])
     onNotify(`${room.roomNumber} fue enviada al plan de limpieza`)
+  }
+  const markClean = (room: RoomState) => {
+    onRoomsChange(rows => rows.map(item => item.roomNumber === room.roomNumber ? { ...item, cleaning: 'Limpia' } : item))
+    onTasksChange(rows => rows.map(task => task.date === date && task.roomNumber === room.roomNumber && ['Limpieza de salida', 'Limpieza de estancia', 'Limpieza general', 'Revisión'].includes(task.type) && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: 'Ahora' } : task))
+    onNotify(`${room.roomNumber} cambió a Limpia`)
   }
   const reportIssue = () => {
     if (!issueRoom) return
@@ -187,11 +207,9 @@ function RoomsView({ role, date, rooms, reservations, tasks, filter, setFilter, 
         {room.blockReason && <div className="room-block"><Wrench size={13}/>{room.blockReason}</div>}
         {!!issues.length && <div className="room-issues"><small>{issues.length} incidencia{issues.length > 1 ? 's' : ''}</small>{issues.map(issue => <div key={issue.id}><span>{issue.type}</span><button onClick={() => resolveIssue(room.roomNumber, issue.id, issue.taskId)} aria-label={`Resolver ${issue.type}`}><CheckCircle2 size={13}/></button></div>)}</div>}
         <footer className="room-card-actions">
-          {room.cleaning === 'Limpia' && room.occupancy !== 'Bloqueada' && <button onClick={() => markDirty(room)}>Marcar sucia</button>}
-          {room.cleaning === 'Por revisar' && <button onClick={() => onReady(room.roomNumber)}>Marcar lista</button>}
-          {room.cleaning === 'Sucia' && room.occupancy !== 'Bloqueada' && <button onClick={() => onNotify(`La tarea de ${room.roomNumber} está disponible en Limpieza`)}>Ver limpieza</button>}
-          {room.occupancy === 'Bloqueada' && <button onClick={() => onNotify(`Abriríamos la incidencia de ${room.roomNumber}`)}>Ver incidencia</button>}
-          <button className="report-issue" onClick={() => { setIssueRoom(room); setIssueType('Falta control de TV') }}><PackageOpen size={13}/>Reportar</button>
+          {room.cleaning === 'Limpia' && room.occupancy !== 'Bloqueada' && <button className="dirty-action" onClick={() => markDirty(room)}>Sucia</button>}
+          {room.cleaning !== 'Limpia' && room.occupancy !== 'Bloqueada' && <button className="clean-action" onClick={() => markClean(room)}>Limpiar</button>}
+          <button className="report-issue" onClick={() => { setIssueRoom(room); setIssueType('Falta control de TV') }}><PackageOpen size={13}/>Reportar problema</button>
         </footer>
       </article>
     })}</div>
