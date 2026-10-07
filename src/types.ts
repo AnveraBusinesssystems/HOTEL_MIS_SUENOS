@@ -167,10 +167,9 @@ export interface OperationTask {
 
 export interface OperationDay {
   date: string
-  status: 'No iniciado' | 'Abierto' | 'Cerrado'
+  status: 'No iniciado' | 'Abierto' | 'Registrado'
   openedBy?: string
   openedAt?: string
-  handoffNote?: string
 }
 
 export interface CostSummary {

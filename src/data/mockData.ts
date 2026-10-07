@@ -238,10 +238,9 @@ export const operationDays: OperationDay[] = Array.from({ length: 21 }, (_, inde
   const key = iso(date)
   return {
     date: key,
-    status: key < '2026-10-06' ? 'Cerrado' : 'No iniciado',
+    status: key < '2026-10-06' ? 'Registrado' : 'No iniciado',
     openedBy: key < '2026-10-06' ? 'Recepción' : undefined,
     openedAt: key < '2026-10-06' ? '08:00' : undefined,
-    handoffNote: key === '2026-10-05' ? 'Pendiente revisar aire acondicionado de CHA-06.' : undefined,
   }
 })
 

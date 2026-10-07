@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, BedDouble, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
-  ClipboardCheck, Clock3, LogIn, LogOut, MessageSquareText, Play, RefreshCw,
+  ClipboardCheck, Clock3, LogIn, LogOut, Play, RefreshCw,
   Sparkles, UserRound, Wrench,
 } from 'lucide-react'
 import type {
@@ -42,7 +42,6 @@ export function OperationsView(props: Props) {
   const { role, reservations, rooms, tasks, days, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onNotify } = props
   const [tab, setTab] = useState<OperationTab>(role === 'Limpieza' ? 'Limpieza' : 'Hoy')
   const [selectedDate, setSelectedDate] = useState(TODAY)
-  const [handoff, setHandoff] = useState('')
   const [roomFilter, setRoomFilter] = useState<'Todas' | 'Atención' | 'Listas' | 'Ocupadas' | 'Bloqueadas'>('Todas')
   const dateStripRef = useRef<HTMLElement>(null)
 
@@ -83,11 +82,6 @@ export function OperationsView(props: Props) {
     onNotify('Simulación: operación abierta y reservaciones actualizadas')
   }
 
-  const closeDay = () => {
-    onDaysChange(rows => rows.map(day => day.date === selectedDate ? { ...day, status: 'Cerrado', handoffNote: handoff } : day))
-    onNotify(`Simulación: turno cerrado con ${pendingTasks.length} pendientes conservados`)
-  }
-
   const confirmDeparture = (reservation: Reservation) => {
     onReservationsChange(rows => rows.map(row => row.id === reservation.id ? { ...row, status: 'Salida' } : row))
     if (reservation.roomNumber) {
@@ -121,14 +115,14 @@ export function OperationsView(props: Props) {
 
     <section className="operation-controls"><div className="operation-tabs">{(['Hoy', 'Habitaciones', 'Limpieza'] as OperationTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : <Sparkles size={15}/>} {item}</button>)}</div><div className="day-actions"><button onClick={() => setSelectedDate(TODAY)}><RefreshCw size={14}/>Hoy</button>{selectedDay.status === 'No iniciado' && <button className="primary-action" onClick={openDay}><Play size={14}/>Abrir operación</button>}</div></section>
 
-    {tab === 'Hoy' && <TodayView arrivals={arrivals} departures={departures} stays={stays} readyRooms={readyRooms.length} dirtyRooms={dirtyRooms.length} pendingBalance={pendingBalance} priorities={priorities} onPriority={runPriorityAction} tasks={selectedTasks} rooms={rooms} selectedDate={selectedDate} handoff={handoff} setHandoff={setHandoff} day={selectedDay} onCloseDay={closeDay}/>} 
-    {tab === 'Habitaciones' && <RoomsView rooms={rooms} reservations={reservations} filter={roomFilter} setFilter={setRoomFilter} onReady={markRoomReady} onNotify={onNotify}/>} 
-    {tab === 'Limpieza' && <CleaningView date={selectedDate} tasks={selectedTasks} rooms={rooms} onTasksChange={onTasksChange} onRoomsChange={onRoomsChange} onNotify={onNotify}/>} 
+    {tab === 'Hoy' && <TodayView arrivals={arrivals} departures={departures} stays={stays} readyRooms={readyRooms.length} dirtyRooms={dirtyRooms.length} pendingBalance={pendingBalance} priorities={priorities} onPriority={runPriorityAction} tasks={selectedTasks} rooms={rooms}/>}
+    {tab === 'Habitaciones' && <RoomsView rooms={rooms} reservations={reservations} filter={roomFilter} setFilter={setRoomFilter} onReady={markRoomReady} onNotify={onNotify}/>}
+    {tab === 'Limpieza' && <CleaningView date={selectedDate} tasks={selectedTasks} rooms={rooms} onTasksChange={onTasksChange} onRoomsChange={onRoomsChange} onNotify={onNotify}/>}
   </div>
 }
 
-function TodayView({ arrivals, departures, stays, readyRooms, dirtyRooms, pendingBalance, priorities, onPriority, tasks, rooms, selectedDate, handoff, setHandoff, day, onCloseDay }: {
-  arrivals: Reservation[]; departures: Reservation[]; stays: Reservation[]; readyRooms: number; dirtyRooms: number; pendingBalance: number; priorities: PriorityItem[]; onPriority: (item: PriorityItem) => void; tasks: OperationTask[]; rooms: RoomState[]; selectedDate: string; handoff: string; setHandoff: (value: string) => void; day: OperationDay; onCloseDay: () => void
+function TodayView({ arrivals, departures, stays, readyRooms, dirtyRooms, pendingBalance, priorities, onPriority, tasks, rooms }: {
+  arrivals: Reservation[]; departures: Reservation[]; stays: Reservation[]; readyRooms: number; dirtyRooms: number; pendingBalance: number; priorities: PriorityItem[]; onPriority: (item: PriorityItem) => void; tasks: OperationTask[]; rooms: RoomState[]
 }) {
   return <section className="operation-section">
     <div className="operation-summary"><article><span><LogIn size={14}/>Llegadas</span><strong>{arrivals.length}</strong><small>{arrivals.filter(row => !row.roomNumber).length} sin asignar</small></article><article><span><LogOut size={14}/>Salidas</span><strong>{departures.length}</strong><small>{departures.length} por confirmar</small></article><article><span><UserRound size={14}/>Hospedados</span><strong>{stays.length}</strong><small>En el hotel</small></article><article><span><CheckCircle2 size={14}/>Listas</span><strong>{readyRooms}</strong><small>Disponibles para entregar</small></article><article><span><Sparkles size={14}/>Limpieza</span><strong>{dirtyRooms}</strong><small>Requieren atención</small></article><article><span><Clock3 size={14}/>Saldo por cobrar</span><strong>{money(pendingBalance)}</strong><small>Llegadas y salidas</small></article></div>
@@ -137,7 +131,6 @@ function TodayView({ arrivals, departures, stays, readyRooms, dirtyRooms, pendin
       <article className="panel task-progress"><header><div><span>AVANCE DEL DÍA</span><h2>Tareas operativas</h2></div></header><div className="task-progress-body"><Progress label="Terminadas" value={tasks.filter(task => task.status === 'Terminada').length} total={tasks.length}/><Progress label="En proceso" value={tasks.filter(task => task.status === 'En proceso').length} total={tasks.length}/><Progress label="Pendientes" value={tasks.filter(task => task.status === 'Pendiente').length} total={tasks.length}/><div className="room-readiness"><div><span>Listas</span><b>{rooms.filter(room => room.occupancy === 'Libre' && room.cleaning === 'Limpia').length}</b></div><div><span>Por revisar</span><b>{rooms.filter(room => room.cleaning === 'Por revisar').length}</b></div><div><span>Bloqueadas</span><b>{rooms.filter(room => room.occupancy === 'Bloqueada').length}</b></div></div></div></article>
     </div>
     <section className="agenda-grid"><AgendaColumn title="Salidas" icon={<LogOut size={15}/>} reservations={departures} empty="Sin salidas pendientes"/><AgendaColumn title="Durante la estancia" icon={<Sparkles size={15}/>} reservations={stays.filter(row => row.cleaningRequested)} empty="Sin solicitudes pendientes"/><AgendaColumn title="Llegadas" icon={<LogIn size={15}/>} reservations={arrivals} empty="Sin llegadas"/></section>
-    <section className="handoff-panel"><div><span>ENTREGA DE TURNO · {shortDate(selectedDate)}</span><h2>Pendientes para el siguiente equipo</h2></div><textarea value={handoff} onChange={event => setHandoff(event.target.value)} placeholder="Habitaciones pendientes, huéspedes por llegar, mantenimiento o cualquier seguimiento…"/><button disabled={day.status !== 'Abierto'} onClick={onCloseDay}><MessageSquareText size={14}/>Cerrar y entregar turno</button></section>
   </section>
 }
 
