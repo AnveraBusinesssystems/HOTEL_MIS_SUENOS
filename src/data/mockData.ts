@@ -13,6 +13,14 @@ export const roomTypes: RoomTypeConfig[] = [
   { code: 'MUU', name: 'Queen balcón', rooms: 5, baseRate: 1850, minRate: 1450, maxRate: 2700 },
 ]
 
+export const roomNumbers = {
+  NAY: ['NAY17'],
+  "NA'": ['NA1', 'NA2', 'NA3'],
+  CHA: ['CHA4', 'CHA5', 'CHA6', 'CHA7', 'CHA8', 'CHA9'],
+  KAA: ['KA10', 'KA11'],
+  MUU: ['MUU12', 'MUU13', 'MUU14', 'MUU15', 'MUU16'],
+} satisfies Record<RoomTypeConfig['code'], string[]>
+
 const current: HotelSnapshot = {
   revenue: 486240, soldNights: 295, availableNights: 413, bookings: 143,
 }
@@ -194,43 +202,43 @@ const reservationNights = (start: string, rates: number[]) => rates.map((rate, i
 })
 
 export const reservations: Reservation[] = [
-  { id: 'CB-84621', subReservationId: 'CB-84621-1', guestName: 'Ana Torres', email: 'ana.torres@email.com', phone: '+52 998 241 3078', checkIn: '2026-10-06', checkOut: '2026-10-09', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA-03', status: 'Confirmada', channel: 'Booking.com', total: 5940, paid: 3000, createdAt: '2026-08-18', notes: 'Llegada aproximada a las 16:30.', cleaningRequested: false, nights: reservationNights('2026-10-06', [1880, 1880, 2180]) },
+  { id: 'CB-84621', subReservationId: 'CB-84621-1', guestName: 'Ana Torres', email: 'ana.torres@email.com', phone: '+52 998 241 3078', checkIn: '2026-10-06', checkOut: '2026-10-09', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA6', status: 'Confirmada', channel: 'Booking.com', total: 5940, paid: 3000, createdAt: '2026-08-18', notes: 'Llegada aproximada a las 16:30.', cleaningRequested: false, nights: reservationNights('2026-10-06', [1880, 1880, 2180]) },
   { id: 'CB-84644', subReservationId: 'CB-84644-1', guestName: 'Diego Ramírez', email: 'diego.r@email.com', phone: '+52 55 9081 2260', checkIn: '2026-10-06', checkOut: '2026-10-08', adults: 2, children: 0, roomType: 'MUU', status: 'Confirmada', channel: 'Directa', total: 4100, paid: 4100, createdAt: '2026-09-12', notes: 'Habitación tranquila si es posible.', cleaningRequested: false, nights: reservationNights('2026-10-06', [1950, 2150]) },
-  { id: 'CB-84492', subReservationId: 'CB-84492-1', guestName: 'Marta Ruiz', email: 'marta.ruiz@email.com', phone: '+34 611 204 388', checkIn: '2026-10-04', checkOut: '2026-10-08', adults: 2, children: 1, roomType: "NA'", roomNumber: "NA'-02", status: 'Hospedado', channel: 'Expedia', total: 8920, paid: 8920, createdAt: '2026-07-25', notes: 'Cuna solicitada y confirmada.', cleaningRequested: true, nights: reservationNights('2026-10-04', [2150, 2150, 2210, 2410]) },
-  { id: 'CB-84351', subReservationId: 'CB-84351-1', guestName: 'Carlos Medina', email: 'carlos.m@email.com', phone: '+52 984 178 6601', checkIn: '2026-10-02', checkOut: '2026-10-06', adults: 2, children: 0, roomType: 'NAY', roomNumber: 'NAY-01', status: 'Hospedado', channel: 'Cloudbeds', total: 9360, paid: 7000, createdAt: '2026-06-04', notes: 'Salida confirmada para las 10:30.', cleaningRequested: false, nights: reservationNights('2026-10-02', [2180, 2390, 2390, 2400]) },
-  { id: 'CB-84287', subReservationId: 'CB-84287-1', guestName: 'Alicia Fernández', email: 'alicia.f@email.com', phone: '+52 81 2250 7301', checkIn: '2026-10-01', checkOut: '2026-10-06', adults: 1, children: 0, roomType: 'KAA', roomNumber: 'KAA-01', status: 'Salida', channel: 'Walk-in', total: 6550, paid: 6550, createdAt: '2026-10-01', notes: '', cleaningRequested: false, nights: reservationNights('2026-10-01', [1250, 1250, 1350, 1350, 1350]) },
-  { id: 'CB-84703', subReservationId: 'CB-84703-1', guestName: 'Lucía Campos', email: 'lucia.campos@email.com', phone: '+52 998 540 1182', checkIn: '2026-10-08', checkOut: '2026-10-12', adults: 2, children: 0, roomType: 'MUU', roomNumber: 'MUU-04', status: 'Confirmada', channel: 'Booking.com', total: 8260, paid: 2000, createdAt: '2026-09-28', notes: 'Aniversario. Preparar detalle sencillo.', cleaningRequested: false, nights: reservationNights('2026-10-08', [1850, 2130, 2130, 2150]) },
-  { id: 'CB-84719', subReservationId: 'CB-84719-1', guestName: 'John Miller', email: 'john.miller@email.com', phone: '+1 512 555 0184', checkIn: '2026-10-10', checkOut: '2026-10-15', adults: 2, children: 2, roomType: "NA'", roomNumber: "NA'-01", status: 'Confirmada', channel: 'Expedia', total: 11850, paid: 0, createdAt: '2026-09-30', notes: 'Requiere factura al finalizar.', cleaningRequested: false, nights: reservationNights('2026-10-10', [2470, 2470, 2250, 2250, 2410]) },
-  { id: 'CB-84742', subReservationId: 'CB-84742-1', guestName: 'Sofía Herrera', email: 'sofia.h@email.com', phone: '+52 998 772 3409', checkIn: '2026-10-12', checkOut: '2026-10-14', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA-05', status: 'Confirmada', channel: 'Directa', total: 3920, paid: 3920, createdAt: '2026-10-02', notes: '', cleaningRequested: false, nights: reservationNights('2026-10-12', [1880, 2040]) },
-  { id: 'CB-84588', subReservationId: 'CB-84588-1', guestName: 'Roberto Silva', email: 'roberto.s@email.com', phone: '+52 33 1820 4901', checkIn: '2026-10-07', checkOut: '2026-10-10', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA-01', status: 'Cancelada', channel: 'Booking.com', total: 5790, paid: 0, createdAt: '2026-08-29', notes: 'Cancelación recibida por el canal.', cleaningRequested: false, nights: reservationNights('2026-10-07', [1830, 1830, 2130]) },
+  { id: 'CB-84492', subReservationId: 'CB-84492-1', guestName: 'Marta Ruiz', email: 'marta.ruiz@email.com', phone: '+34 611 204 388', checkIn: '2026-10-04', checkOut: '2026-10-08', adults: 2, children: 1, roomType: "NA'", roomNumber: 'NA2', status: 'Hospedado', channel: 'Expedia', total: 8920, paid: 8920, createdAt: '2026-07-25', notes: 'Cuna solicitada y confirmada.', cleaningRequested: true, nights: reservationNights('2026-10-04', [2150, 2150, 2210, 2410]) },
+  { id: 'CB-84351', subReservationId: 'CB-84351-1', guestName: 'Carlos Medina', email: 'carlos.m@email.com', phone: '+52 984 178 6601', checkIn: '2026-10-02', checkOut: '2026-10-06', adults: 2, children: 0, roomType: 'NAY', roomNumber: 'NAY17', status: 'Hospedado', channel: 'Cloudbeds', total: 9360, paid: 7000, createdAt: '2026-06-04', notes: 'Salida confirmada para las 10:30.', cleaningRequested: false, nights: reservationNights('2026-10-02', [2180, 2390, 2390, 2400]) },
+  { id: 'CB-84287', subReservationId: 'CB-84287-1', guestName: 'Alicia Fernández', email: 'alicia.f@email.com', phone: '+52 81 2250 7301', checkIn: '2026-10-01', checkOut: '2026-10-06', adults: 1, children: 0, roomType: 'KAA', roomNumber: 'KA10', status: 'Salida', channel: 'Walk-in', total: 6550, paid: 6550, createdAt: '2026-10-01', notes: '', cleaningRequested: false, nights: reservationNights('2026-10-01', [1250, 1250, 1350, 1350, 1350]) },
+  { id: 'CB-84703', subReservationId: 'CB-84703-1', guestName: 'Lucía Campos', email: 'lucia.campos@email.com', phone: '+52 998 540 1182', checkIn: '2026-10-08', checkOut: '2026-10-12', adults: 2, children: 0, roomType: 'MUU', roomNumber: 'MUU15', status: 'Confirmada', channel: 'Booking.com', total: 8260, paid: 2000, createdAt: '2026-09-28', notes: 'Aniversario. Preparar detalle sencillo.', cleaningRequested: false, nights: reservationNights('2026-10-08', [1850, 2130, 2130, 2150]) },
+  { id: 'CB-84719', subReservationId: 'CB-84719-1', guestName: 'John Miller', email: 'john.miller@email.com', phone: '+1 512 555 0184', checkIn: '2026-10-10', checkOut: '2026-10-15', adults: 2, children: 2, roomType: "NA'", roomNumber: 'NA1', status: 'Confirmada', channel: 'Expedia', total: 11850, paid: 0, createdAt: '2026-09-30', notes: 'Requiere factura al finalizar.', cleaningRequested: false, nights: reservationNights('2026-10-10', [2470, 2470, 2250, 2250, 2410]) },
+  { id: 'CB-84742', subReservationId: 'CB-84742-1', guestName: 'Sofía Herrera', email: 'sofia.h@email.com', phone: '+52 998 772 3409', checkIn: '2026-10-12', checkOut: '2026-10-14', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA8', status: 'Confirmada', channel: 'Directa', total: 3920, paid: 3920, createdAt: '2026-10-02', notes: '', cleaningRequested: false, nights: reservationNights('2026-10-12', [1880, 2040]) },
+  { id: 'CB-84588', subReservationId: 'CB-84588-1', guestName: 'Roberto Silva', email: 'roberto.s@email.com', phone: '+52 33 1820 4901', checkIn: '2026-10-07', checkOut: '2026-10-10', adults: 2, children: 0, roomType: 'CHA', roomNumber: 'CHA4', status: 'Cancelada', channel: 'Booking.com', total: 5790, paid: 0, createdAt: '2026-08-29', notes: 'Cancelación recibida por el canal.', cleaningRequested: false, nights: reservationNights('2026-10-07', [1830, 1830, 2130]) },
 ]
 
 export const roomStates: RoomState[] = [
-  { roomNumber: 'NAY-01', roomType: 'NAY', occupancy: 'Salida prevista', cleaning: 'Limpia', currentReservationId: 'CB-84351' },
-  { roomNumber: "NA'-01", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84719' },
-  { roomNumber: "NA'-02", roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', accessStatus: 'Limpieza solicitada', currentReservationId: 'CB-84492', issues: [{ id: 'INC-1001', type: 'Falta papel higiénico', status: 'Pendiente', reportedAt: '09:15', reportedBy: 'Recepción', taskId: 'OP-1003R' }] },
-  { roomNumber: "NA'-03", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'CHA-01', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'CHA-02', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'CHA-03', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Por revisar', nextReservationId: 'CB-84621' },
-  { roomNumber: 'CHA-04', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'CHA-05', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84742' },
-  { roomNumber: 'CHA-06', roomType: 'CHA', occupancy: 'Bloqueada', cleaning: 'Sucia', blockReason: 'Revisión de aire acondicionado' },
-  { roomNumber: 'KAA-01', roomType: 'KAA', occupancy: 'Libre', cleaning: 'Sucia', currentReservationId: 'CB-84287' },
-  { roomNumber: 'KAA-02', roomType: 'KAA', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'MUU-01', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'MUU-02', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'MUU-03', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
-  { roomNumber: 'MUU-04', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84703' },
-  { roomNumber: 'MUU-05', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'NA1', roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84719' },
+  { roomNumber: 'NA2', roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', accessStatus: 'Limpieza solicitada', currentReservationId: 'CB-84492', issues: [{ id: 'INC-1001', type: 'Falta papel higiénico', status: 'Pendiente', reportedAt: '09:15', reportedBy: 'Recepción', taskId: 'OP-1003R' }] },
+  { roomNumber: 'NA3', roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA4', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA5', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA6', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Por revisar', nextReservationId: 'CB-84621' },
+  { roomNumber: 'CHA7', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'CHA8', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84742' },
+  { roomNumber: 'CHA9', roomType: 'CHA', occupancy: 'Bloqueada', cleaning: 'Sucia', blockReason: 'Revisión de aire acondicionado' },
+  { roomNumber: 'KA10', roomType: 'KAA', occupancy: 'Libre', cleaning: 'Sucia', currentReservationId: 'CB-84287' },
+  { roomNumber: 'KA11', roomType: 'KAA', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU12', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU13', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU14', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'MUU15', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84703' },
+  { roomNumber: 'MUU16', roomType: 'MUU', occupancy: 'Libre', cleaning: 'Limpia' },
+  { roomNumber: 'NAY17', roomType: 'NAY', occupancy: 'Salida prevista', cleaning: 'Limpia', currentReservationId: 'CB-84351' },
 ]
 
 export const operationTasks: OperationTask[] = [
-  { id: 'OP-1001', date: '2026-10-06', roomNumber: 'CHA-03', roomType: 'CHA', type: 'Revisión', status: 'Pendiente', priority: 'Crítica', assignedTo: 'Recepción', requestedAt: '08:04', deadline: '14:30', note: 'Validar amenidades antes de la llegada.', reservationId: 'CB-84621' },
-  { id: 'OP-1002', date: '2026-10-06', roomNumber: 'KAA-01', roomType: 'KAA', type: 'Limpieza de salida', status: 'Pendiente', priority: 'Alta', assignedTo: 'María', requestedAt: '08:05', deadline: '13:30', note: 'Salida confirmada temprano.', reservationId: 'CB-84287' },
-  { id: 'OP-1003', date: '2026-10-06', roomNumber: "NA'-02", roomType: "NA'", type: 'Limpieza de estancia', status: 'Pendiente', priority: 'Normal', assignedTo: 'Elena', requestedAt: '09:15', deadline: '15:00', note: 'Solicitada por la huésped.', reservationId: 'CB-84492' },
-  { id: 'OP-1003R', date: '2026-10-06', roomNumber: "NA'-02", roomType: "NA'", type: 'Reposición', status: 'Pendiente', priority: 'Normal', assignedTo: 'Limpieza', requestedAt: '09:15', deadline: '15:00', note: 'Falta papel higiénico.' },
-  { id: 'OP-1004', date: '2026-10-06', roomNumber: 'CHA-06', roomType: 'CHA', type: 'Mantenimiento', status: 'En proceso', priority: 'Alta', assignedTo: 'Gerencia', requestedAt: '07:50', startedAt: '08:20', note: 'Aire acondicionado no enfría correctamente.' },
+  { id: 'OP-1001', date: '2026-10-06', roomNumber: 'CHA6', roomType: 'CHA', type: 'Revisión', status: 'Pendiente', priority: 'Crítica', assignedTo: 'Recepción', requestedAt: '08:04', deadline: '14:30', note: 'Validar amenidades antes de la llegada.', reservationId: 'CB-84621' },
+  { id: 'OP-1002', date: '2026-10-06', roomNumber: 'KA10', roomType: 'KAA', type: 'Limpieza de salida', status: 'Pendiente', priority: 'Alta', assignedTo: 'María', requestedAt: '08:05', deadline: '13:30', note: 'Salida confirmada temprano.', reservationId: 'CB-84287' },
+  { id: 'OP-1003', date: '2026-10-06', roomNumber: 'NA2', roomType: "NA'", type: 'Limpieza de estancia', status: 'Pendiente', priority: 'Normal', assignedTo: 'Elena', requestedAt: '09:15', deadline: '15:00', note: 'Solicitada por la huésped.', reservationId: 'CB-84492' },
+  { id: 'OP-1003R', date: '2026-10-06', roomNumber: 'NA2', roomType: "NA'", type: 'Reposición', status: 'Pendiente', priority: 'Normal', assignedTo: 'Limpieza', requestedAt: '09:15', deadline: '15:00', note: 'Falta papel higiénico.' },
+  { id: 'OP-1004', date: '2026-10-06', roomNumber: 'CHA9', roomType: 'CHA', type: 'Mantenimiento', status: 'En proceso', priority: 'Alta', assignedTo: 'Gerencia', requestedAt: '07:50', startedAt: '08:20', note: 'Aire acondicionado no enfría correctamente.' },
 ]
 
 export const operationDays: OperationDay[] = Array.from({ length: 21 }, (_, index) => {

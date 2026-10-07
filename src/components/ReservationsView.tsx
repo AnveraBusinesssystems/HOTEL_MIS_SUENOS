@@ -4,18 +4,11 @@ import {
   CircleDollarSign, Cloud, List, LogIn, LogOut, Search, Sparkles, UserRound, X,
 } from 'lucide-react'
 import type { Reservation, ReservationStatus, RoomCode } from '../types'
+import { roomNumbers } from '../data/mockData'
 import { longDate, money, shortDate } from '../utils'
 
 const TODAY = '2026-10-06'
 const ACTIVE_STATUSES: ReservationStatus[] = ['Confirmada', 'Hospedado']
-const ROOMS: Record<RoomCode, string[]> = {
-  NAY: ['NAY-01'],
-  "NA'": ["NA'-01", "NA'-02", "NA'-03"],
-  CHA: ['CHA-01', 'CHA-02', 'CHA-03', 'CHA-04', 'CHA-05', 'CHA-06'],
-  KAA: ['KAA-01', 'KAA-02'],
-  MUU: ['MUU-01', 'MUU-02', 'MUU-03', 'MUU-04', 'MUU-05'],
-}
-
 type Props = {
   reservations: Reservation[]
   onChange: (updater: (rows: Reservation[]) => Reservation[]) => void
@@ -134,7 +127,7 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
 }
 
 function ReservationsCalendar({ dates, reservations, roomType, onOpen }: { dates: string[]; reservations: Reservation[]; roomType: 'Todas' | RoomCode; onOpen: (id: string) => void }) {
-  const roomGroups = (Object.entries(ROOMS) as [RoomCode, string[]][]).filter(([code]) => roomType === 'Todas' || roomType === code)
+  const roomGroups = (Object.entries(roomNumbers) as [RoomCode, string[]][]).filter(([code]) => roomType === 'Todas' || roomType === code)
   const unassigned = reservations.filter(reservation => !reservation.roomNumber)
   const columns = `190px repeat(${dates.length}, minmax(76px, 1fr))`
   const occupancy = (date: string) => new Set(reservations.filter(reservation => reservation.roomNumber && reservation.checkIn <= date && reservation.checkOut > date).map(reservation => reservation.roomNumber)).size
@@ -185,7 +178,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reser
 
       <section className="drawer-section"><span className="drawer-label">ESTANCIA</span><div className="reservation-stay"><div><small>Check-in</small><b>{longDate(reservation.checkIn)}</b><em>15:00</em></div><div><small>Check-out</small><b>{longDate(reservation.checkOut)}</b><em>11:00</em></div></div><div className="reservation-facts"><div><small>Noches</small><b>{nights(reservation)}</b></div><div><small>Huéspedes</small><b>{reservation.adults + reservation.children}</b></div><div><small>Tipo</small><b>{reservation.roomType}</b></div><div><small>Canal</small><b>{reservation.channel}</b></div></div></section>
 
-      <section className="drawer-section"><span className="drawer-label">HABITACIÓN</span><div className="room-assignment"><select value={room} onChange={event => setRoom(event.target.value)}><option value="">Sin asignar</option>{ROOMS[reservation.roomType].map(item => <option key={item}>{item}</option>)}</select><button disabled={room === (reservation.roomNumber ?? '')} onClick={() => onUpdate(reservation.id, { roomNumber: room || undefined }, room ? `habitación asignada: ${room}` : 'habitación desasignada')}>Guardar asignación</button></div><small className="field-help">En la integración real se validará disponibilidad antes de enviar el cambio.</small></section>
+      <section className="drawer-section"><span className="drawer-label">HABITACIÓN</span><div className="room-assignment"><select value={room} onChange={event => setRoom(event.target.value)}><option value="">Sin asignar</option>{roomNumbers[reservation.roomType].map(item => <option key={item}>{item}</option>)}</select><button disabled={room === (reservation.roomNumber ?? '')} onClick={() => onUpdate(reservation.id, { roomNumber: room || undefined }, room ? `habitación asignada: ${room}` : 'habitación desasignada')}>Guardar asignación</button></div><small className="field-help">En la integración real se validará disponibilidad antes de enviar el cambio.</small></section>
 
       <section className="drawer-section"><span className="drawer-label">HUÉSPED</span><div className="guest-contact"><b>{reservation.email}</b><span>{reservation.phone}</span></div>{reservation.notes && <p className="reservation-notes">{reservation.notes}</p>}</section>
 
