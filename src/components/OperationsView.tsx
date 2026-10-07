@@ -66,7 +66,7 @@ const issueTaskMeta = (issue: RoomIssueType) => {
   const technical = issue === 'Luces no funcionan' || issue === 'A/C no funciona bien'
   return { type: (technical ? 'Mantenimiento' : 'Reposición') as OperationTask['type'], priority: (issue === 'No hay llaves' ? 'Crítica' : technical ? 'Alta' : 'Normal') as OperationTask['priority'], assignedTo: technical ? 'Gerencia' : 'Limpieza' }
 }
-const allowedTabsFor = (role: Role): OperationTab[] => role === 'Limpieza' ? ['Limpieza'] : role === 'Recepción' ? ['Hoy', 'Habitaciones'] : ['Cocina', 'Alberca'].includes(role) ? ['Hoy'] : ['Hoy', 'Habitaciones', 'Limpieza']
+const allowedTabsFor = (role: Role): OperationTab[] => role === 'Limpieza' ? ['Limpieza', 'Habitaciones'] : role === 'Recepción' ? ['Hoy', 'Habitaciones'] : ['Cocina', 'Alberca'].includes(role) ? ['Hoy'] : ['Hoy', 'Habitaciones', 'Limpieza']
 const canUpdateOperation = (role: Role) => ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
 const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms.map(room => {
   if (room.occupancy === 'Bloqueada') return room
