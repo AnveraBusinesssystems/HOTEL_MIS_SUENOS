@@ -70,7 +70,7 @@ function App() {
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">MS</div>{!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 0.8</small></div>}</div>
+      <div className="brand"><div className="brand-mark">MS</div>{!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 0.9</small></div>}</div>
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
       <nav>{menu.map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => enabled && setActive(label as ActivePage)}><Icon size={18}/>{!collapsed && <><span>{label}</span>{!enabled && <em>PRÓX.</em>}</>}</button>)}</nav>
       {!collapsed && <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>}
@@ -107,7 +107,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('Contraseña incorrecta')
   }
   return <div className="login-shell">
-    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 0.8</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
+    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 0.9</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
     <section className="login-form-panel"><form className="login-form" onSubmit={submit}><p className="eyebrow">ACCESO INTERNO</p><h2>Bienvenido</h2><p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p><label htmlFor="password">Contraseña</label><input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••"/>{error && <div className="login-error">{error}</div>}<button type="submit">Entrar al sistema</button><small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small></form></section>
   </div>
 }

@@ -208,7 +208,7 @@ export const reservations: Reservation[] = [
 export const roomStates: RoomState[] = [
   { roomNumber: 'NAY-01', roomType: 'NAY', occupancy: 'Salida prevista', cleaning: 'Limpia', currentReservationId: 'CB-84351' },
   { roomNumber: "NA'-01", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84719' },
-  { roomNumber: "NA'-02", roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', currentReservationId: 'CB-84492' },
+  { roomNumber: "NA'-02", roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', currentReservationId: 'CB-84492', issues: [{ id: 'INC-1001', type: 'Falta papel higiénico', status: 'Pendiente', reportedAt: '09:15', reportedBy: 'Recepción', taskId: 'OP-1003R' }] },
   { roomNumber: "NA'-03", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia' },
   { roomNumber: 'CHA-01', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
   { roomNumber: 'CHA-02', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
@@ -229,6 +229,7 @@ export const operationTasks: OperationTask[] = [
   { id: 'OP-1001', date: '2026-10-06', roomNumber: 'CHA-03', roomType: 'CHA', type: 'Revisión', status: 'Pendiente', priority: 'Crítica', assignedTo: 'Recepción', requestedAt: '08:04', deadline: '14:30', note: 'Validar amenidades antes de la llegada.', reservationId: 'CB-84621' },
   { id: 'OP-1002', date: '2026-10-06', roomNumber: 'KAA-01', roomType: 'KAA', type: 'Limpieza de salida', status: 'Pendiente', priority: 'Alta', assignedTo: 'María', requestedAt: '08:05', deadline: '13:30', note: 'Salida confirmada temprano.', reservationId: 'CB-84287' },
   { id: 'OP-1003', date: '2026-10-06', roomNumber: "NA'-02", roomType: "NA'", type: 'Limpieza de estancia', status: 'Pendiente', priority: 'Normal', assignedTo: 'Elena', requestedAt: '09:15', deadline: '15:00', note: 'Solicitada por la huésped.', reservationId: 'CB-84492' },
+  { id: 'OP-1003R', date: '2026-10-06', roomNumber: "NA'-02", roomType: "NA'", type: 'Reposición', status: 'Pendiente', priority: 'Normal', assignedTo: 'Limpieza', requestedAt: '09:15', deadline: '15:00', note: 'Falta papel higiénico.' },
   { id: 'OP-1004', date: '2026-10-06', roomNumber: 'CHA-06', roomType: 'CHA', type: 'Mantenimiento', status: 'En proceso', priority: 'Alta', assignedTo: 'Gerencia', requestedAt: '07:50', startedAt: '08:20', note: 'Aire acondicionado no enfría correctamente.' },
 ]
 

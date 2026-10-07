@@ -136,7 +136,17 @@ export interface Reservation {
 export type OccupancyStatus = 'Libre' | 'Ocupada' | 'Salida prevista' | 'Bloqueada'
 export type CleaningStatus = 'Limpia' | 'Sucia' | 'En limpieza' | 'Por revisar'
 export type OperationTaskStatus = 'Pendiente' | 'En proceso' | 'Pausada' | 'Terminada'
-export type OperationTaskType = 'Limpieza de salida' | 'Limpieza de estancia' | 'Revisión' | 'Mantenimiento'
+export type OperationTaskType = 'Limpieza de salida' | 'Limpieza de estancia' | 'Limpieza general' | 'Reposición' | 'Revisión' | 'Mantenimiento'
+export type RoomIssueType = 'Falta control de TV' | 'Falta control de A/C' | 'Luces no funcionan' | 'A/C no funciona bien' | 'No hay llaves' | 'Falta papel higiénico' | 'Faltan toallas' | 'Otro faltante o falla'
+
+export interface RoomIssue {
+  id: string
+  type: RoomIssueType
+  status: 'Pendiente' | 'Resuelto'
+  reportedAt: string
+  reportedBy: string
+  taskId?: string
+}
 
 export interface RoomState {
   roomNumber: string
@@ -146,6 +156,7 @@ export interface RoomState {
   currentReservationId?: string
   nextReservationId?: string
   blockReason?: string
+  issues?: RoomIssue[]
 }
 
 export interface OperationTask {
