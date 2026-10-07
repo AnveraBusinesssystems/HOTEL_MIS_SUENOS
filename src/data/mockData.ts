@@ -208,7 +208,7 @@ export const reservations: Reservation[] = [
 export const roomStates: RoomState[] = [
   { roomNumber: 'NAY-01', roomType: 'NAY', occupancy: 'Salida prevista', cleaning: 'Limpia', currentReservationId: 'CB-84351' },
   { roomNumber: "NA'-01", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia', nextReservationId: 'CB-84719' },
-  { roomNumber: "NA'-02", roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', currentReservationId: 'CB-84492', issues: [{ id: 'INC-1001', type: 'Falta papel higiénico', status: 'Pendiente', reportedAt: '09:15', reportedBy: 'Recepción', taskId: 'OP-1003R' }] },
+  { roomNumber: "NA'-02", roomType: "NA'", occupancy: 'Ocupada', cleaning: 'Limpia', accessStatus: 'Limpieza solicitada', currentReservationId: 'CB-84492', issues: [{ id: 'INC-1001', type: 'Falta papel higiénico', status: 'Pendiente', reportedAt: '09:15', reportedBy: 'Recepción', taskId: 'OP-1003R' }] },
   { roomNumber: "NA'-03", roomType: "NA'", occupancy: 'Libre', cleaning: 'Limpia' },
   { roomNumber: 'CHA-01', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
   { roomNumber: 'CHA-02', roomType: 'CHA', occupancy: 'Libre', cleaning: 'Limpia' },
