@@ -197,6 +197,7 @@ export type CashMovementCategory =
 export interface CashPurchaseItem {
   product: string
   quantity: number
+  unit: string
   total: number
 }
 
