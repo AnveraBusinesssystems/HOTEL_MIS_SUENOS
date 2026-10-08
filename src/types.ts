@@ -192,7 +192,7 @@ export type CashArea = 'Reservas' | 'Recepción' | 'Restaurante' | 'Lavandería'
 export type CashMovementCategory =
   | 'Pago de reserva' | 'Anticipo de reserva' | 'Venta de restaurante' | 'Otro ingreso'
   | 'Compra de inventario' | 'Mantenimiento' | 'Lavandería' | 'Servicios'
-  | 'Reembolso' | 'Retiro de efectivo' | 'Otro gasto'
+  | 'Reembolso' | 'Retiro de efectivo' | 'Gastos externos' | 'Otro gasto'
 
 export interface CashMovement {
   id: string

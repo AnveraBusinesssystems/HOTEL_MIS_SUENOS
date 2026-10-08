@@ -41,7 +41,7 @@ const currentTime = () => new Intl.DateTimeFormat('es-MX', {
 }).format(new Date())
 
 const incomeCategories: CashMovementCategory[] = ['Pago de reserva', 'Anticipo de reserva', 'Venta de restaurante', 'Otro ingreso']
-const expenseCategories: CashMovementCategory[] = ['Compra de inventario', 'Mantenimiento', 'Lavandería', 'Servicios', 'Reembolso', 'Retiro de efectivo', 'Otro gasto']
+const expenseCategories: CashMovementCategory[] = ['Compra de inventario', 'Mantenimiento', 'Lavandería', 'Servicios', 'Reembolso', 'Gastos externos', 'Retiro de efectivo', 'Otro gasto']
 const methods: CashPaymentMethod[] = ['Efectivo', 'Tarjeta', 'Transferencia']
 const inventoryProducts = ['Huevo', 'Fruta', 'Café', 'Agua embotellada', 'Papel higiénico', 'Toallas', 'Productos de limpieza', 'Otro producto']
 const areaForCategory: Record<CashMovementCategory, CashArea> = {
@@ -54,6 +54,7 @@ const areaForCategory: Record<CashMovementCategory, CashArea> = {
   Lavandería: 'Lavandería',
   Servicios: 'Administración',
   Reembolso: 'Recepción',
+  'Gastos externos': 'Administración',
   'Retiro de efectivo': 'Administración',
   'Otro gasto': 'Otros',
 }
