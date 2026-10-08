@@ -194,6 +194,12 @@ export type CashMovementCategory =
   | 'Compra de inventario' | 'Mantenimiento' | 'Lavandería' | 'Servicios'
   | 'Reembolso' | 'Retiro de efectivo' | 'Gastos externos' | 'Otro gasto'
 
+export interface CashPurchaseItem {
+  product: string
+  quantity: number
+  total: number
+}
+
 export interface CashMovement {
   id: string
   date: string
@@ -208,9 +214,7 @@ export interface CashMovement {
   createdBy: string
   reservationId?: string
   purchaseId?: string
-  product?: string
-  quantity?: number
-  unit?: string
+  purchaseItems?: CashPurchaseItem[]
   annulledBy?: string
   annulledAt?: string
 }
