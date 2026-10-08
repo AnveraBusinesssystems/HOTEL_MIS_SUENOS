@@ -24,7 +24,6 @@ type Draft = {
   type: CashMovementType
   amount: string
   paymentMethod: CashPaymentMethod
-  area: CashArea
   category: CashMovementCategory
   description: string
   reservationId: string
@@ -43,15 +42,26 @@ const currentTime = () => new Intl.DateTimeFormat('es-MX', {
 
 const incomeCategories: CashMovementCategory[] = ['Pago de reserva', 'Anticipo de reserva', 'Venta de restaurante', 'Otro ingreso']
 const expenseCategories: CashMovementCategory[] = ['Compra de inventario', 'Mantenimiento', 'Lavandería', 'Servicios', 'Reembolso', 'Retiro de efectivo', 'Otro gasto']
-const areas: CashArea[] = ['Reservas', 'Recepción', 'Restaurante', 'Lavandería', 'Limpieza', 'Mantenimiento', 'Administración', 'Otros']
 const methods: CashPaymentMethod[] = ['Efectivo', 'Tarjeta', 'Transferencia']
 const inventoryProducts = ['Huevo', 'Fruta', 'Café', 'Agua embotellada', 'Papel higiénico', 'Toallas', 'Productos de limpieza', 'Otro producto']
+const areaForCategory: Record<CashMovementCategory, CashArea> = {
+  'Pago de reserva': 'Reservas',
+  'Anticipo de reserva': 'Reservas',
+  'Venta de restaurante': 'Restaurante',
+  'Otro ingreso': 'Recepción',
+  'Compra de inventario': 'Administración',
+  Mantenimiento: 'Mantenimiento',
+  Lavandería: 'Lavandería',
+  Servicios: 'Administración',
+  Reembolso: 'Recepción',
+  'Retiro de efectivo': 'Administración',
+  'Otro gasto': 'Otros',
+}
 
 const freshDraft = (type: CashMovementType): Draft => ({
   type,
   amount: '',
   paymentMethod: 'Efectivo',
-  area: type === 'Entrada' ? 'Reservas' : 'Restaurante',
   category: type === 'Entrada' ? 'Pago de reserva' : 'Compra de inventario',
   description: '',
   reservationId: '',
@@ -95,9 +105,9 @@ export function CashView({
     exits: activeMovements.filter(item => item.type === 'Salida' && item.paymentMethod === method).reduce((sum, item) => sum + item.amount, 0),
   }))
 
-  const expensesByArea = useMemo(() => {
-    const totals = new Map<CashArea, number>()
-    activeMovements.filter(item => item.type === 'Salida').forEach(item => totals.set(item.area, (totals.get(item.area) ?? 0) + item.amount))
+  const expensesByCategory = useMemo(() => {
+    const totals = new Map<CashMovementCategory, number>()
+    activeMovements.filter(item => item.type === 'Salida').forEach(item => totals.set(item.category, (totals.get(item.category) ?? 0) + item.amount))
     return [...totals.entries()].sort((a, b) => b[1] - a[1])
   }, [activeMovements])
 
@@ -115,7 +125,6 @@ export function CashView({
     if (reservationId) {
       next.reservationId = reservationId
       next.category = 'Pago de reserva'
-      next.area = 'Reservas'
     }
     setFormError('')
     setDraft(next)
@@ -127,7 +136,7 @@ export function CashView({
     if (!draft) return
     const amount = Number(draft.amount)
     if (!Number.isFinite(amount) || amount <= 0) { setFormError('Ingresa un monto válido mayor a cero.'); return }
-    const linksReservation = draft.type === 'Entrada' && draft.area === 'Reservas' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
+    const linksReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
     const reservation = reservations.find(item => item.id === draft.reservationId)
     if (linksReservation && !reservation) { setFormError('Selecciona la reserva que está pagando.'); return }
     if (reservation && amount > balance(reservation)) { setFormError(`El pago no puede exceder el saldo de ${money(balance(reservation))}.`); return }
@@ -145,7 +154,7 @@ export function CashView({
       type: draft.type,
       amount,
       paymentMethod: draft.paymentMethod,
-      area: draft.area,
+      area: areaForCategory[draft.category],
       category: draft.category,
       description: draft.description.trim(),
       status: 'Registrado',
@@ -217,9 +226,9 @@ export function CashView({
           <select value={typeFilter} onChange={event => setTypeFilter(event.target.value as typeof typeFilter)}><option>Todos</option><option>Entrada</option><option>Salida</option></select>
           <select value={methodFilter} onChange={event => setMethodFilter(event.target.value as typeof methodFilter)}><option>Todos</option>{methods.map(item => <option key={item}>{item}</option>)}</select>
         </div>
-        <div className="table-scroll"><table className="cash-table"><thead><tr><th>Hora / ID</th><th>Concepto</th><th>Área</th><th>Método</th><th>Entrada</th><th>Salida</th><th>Responsable</th><th></th></tr></thead><tbody>
+        <div className="table-scroll"><table className="cash-table"><thead><tr><th>Hora / ID</th><th>Concepto / categoría</th><th>Método</th><th>Entrada</th><th>Salida</th><th>Responsable</th><th></th></tr></thead><tbody>
           {filtered.map(item => <tr key={item.id} className={item.status === 'Anulado' ? 'annulled' : ''} onClick={() => setSelectedMovement(item)}>
-            <td><b>{item.time}</b><small>{item.id}</small></td><td><b>{item.description}</b><small>{item.category}{item.reservationId ? ` · ${item.reservationId}` : ''}</small></td><td>{item.area}</td><td><span className={`cash-method ${item.paymentMethod.toLowerCase()}`}>{item.paymentMethod}</span></td><td className="money-cell positive">{item.type === 'Entrada' ? money(item.amount) : '—'}</td><td className="money-cell negative">{item.type === 'Salida' ? money(item.amount) : '—'}</td><td>{item.createdBy}{item.status === 'Anulado' && <small className="annulled-label">ANULADO</small>}</td><td><button className="row-open" aria-label="Ver movimiento"><ChevronRight size={15}/></button></td>
+            <td><b>{item.time}</b><small>{item.id}</small></td><td><b>{item.description}</b><small>{item.category}{item.reservationId ? ` · ${item.reservationId}` : ''}</small></td><td><span className={`cash-method ${item.paymentMethod.toLowerCase()}`}>{item.paymentMethod}</span></td><td className="money-cell positive">{item.type === 'Entrada' ? money(item.amount) : '—'}</td><td className="money-cell negative">{item.type === 'Salida' ? money(item.amount) : '—'}</td><td>{item.createdBy}{item.status === 'Anulado' && <small className="annulled-label">ANULADO</small>}</td><td><button className="row-open" aria-label="Ver movimiento"><ChevronRight size={15}/></button></td>
           </tr>)}
         </tbody></table></div>
         {!filtered.length && <div className="cash-empty"><WalletCards size={24}/><b>Sin movimientos</b><span>No hay registros que coincidan con los filtros.</span></div>}
@@ -232,7 +241,7 @@ export function CashView({
           <label><span>REGISTRAR CONTEO</span><div><input type="number" min="0" value={counted} onChange={event => setCounted(event.target.value)} placeholder="0.00"/><button onClick={saveCount}>Guardar</button></div></label>
         </div></section>
 
-        <section className="panel cash-breakdown"><header><div><span>SALIDAS</span><h2>Gasto por área</h2></div></header><div>{expensesByArea.length ? expensesByArea.map(([area, amount]) => <p key={area}><span>{area}</span><b>{money(amount)}</b></p>) : <small>Sin gastos registrados este día.</small>}</div></section>
+        <section className="panel cash-breakdown"><header><div><span>SALIDAS</span><h2>Gasto por categoría</h2></div></header><div>{expensesByCategory.length ? expensesByCategory.map(([category, amount]) => <p key={category}><span>{category}</span><b>{money(amount)}</b></p>) : <small>Sin gastos registrados este día.</small>}</div></section>
 
         <section className="panel pending-payments"><header><div><span>COBRANZA</span><h2>Mayores saldos pendientes</h2></div></header><div>{pendingReservations.slice(0, 4).map(reservation => <button key={reservation.id} onClick={() => openForm('Entrada', reservation.id)}><span><b>{reservation.guestName}</b><small>{reservation.roomNumber ?? reservation.roomType} · {reservation.id}</small></span><strong>{money(balance(reservation))}</strong><Plus size={14}/></button>)}</div></section>
       </aside>
@@ -254,33 +263,18 @@ function MovementDialog({ draft, reservations, error, onChange, onSwitchType, on
 }) {
   const categories = draft.type === 'Entrada' ? incomeCategories : expenseCategories
   const linkedReservation = reservations.find(item => item.id === draft.reservationId)
-  const needsReservation = draft.type === 'Entrada' && draft.area === 'Reservas' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
+  const needsReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
   const isInventory = draft.type === 'Salida' && draft.category === 'Compra de inventario'
   const changeCategory = (category: CashMovementCategory) => onChange({
     ...draft,
     category,
-    area: ['Pago de reserva', 'Anticipo de reserva'].includes(category)
-      ? 'Reservas'
-      : category === 'Venta de restaurante' ? 'Restaurante' : draft.area,
     reservationId: '',
   })
-  const changeArea = (area: CashArea) => {
-    const wasReservationPayment = ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
-    onChange({
-      ...draft,
-      area,
-      category: draft.type === 'Entrada' && area !== 'Reservas' && wasReservationPayment
-        ? area === 'Restaurante' ? 'Venta de restaurante' : 'Otro ingreso'
-        : draft.category,
-      reservationId: area === 'Reservas' ? draft.reservationId : '',
-    })
-  }
   return <div className="dialog-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}><section className="cash-dialog">
     <header><div><span>NUEVO MOVIMIENTO</span><h2>{draft.type === 'Entrada' ? 'Registrar entrada de dinero' : 'Registrar gasto'}</h2><p>El movimiento quedará ligado al usuario y no podrá eliminarse.</p></div><button onClick={onClose}><X size={17}/></button></header>
     <div className="cash-type-switch"><button className={draft.type === 'Entrada' ? 'active income' : ''} onClick={() => onSwitchType('Entrada')}>Entrada</button><button className={draft.type === 'Salida' ? 'active expense' : ''} onClick={() => onSwitchType('Salida')}>Salida</button></div>
     <div className="cash-form">
-      <label><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
-      <label><span>Área</span><select value={draft.area} onChange={event => changeArea(event.target.value as CashArea)}>{areas.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
       {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.id} value={item.id}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
       <label><span>Monto total</span><div className="amount-input"><i>$</i><input type="number" min="0" max={linkedReservation ? balance(linkedReservation) : undefined} value={draft.amount} onChange={event => onChange({ ...draft, amount: event.target.value })} placeholder="0.00"/></div></label>
@@ -297,7 +291,7 @@ function MovementDetail({ movement, canAnnul, onClose, onAnnul }: { movement: Ca
   return <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}><aside className="drawer cash-detail">
     <header><div><span>DETALLE DEL MOVIMIENTO</span><h2>{movement.description}</h2><p>{movement.id}</p></div><button onClick={onClose}><X size={18}/></button></header>
     <section className={`movement-amount ${movement.type.toLowerCase()}`}><span>{movement.type}</span><strong>{movement.type === 'Entrada' ? '+' : '−'} {money(movement.amount)}</strong><small className={movement.status === 'Anulado' ? 'annulled-label' : ''}>{movement.status}</small></section>
-    <section className="drawer-section cash-detail-grid"><div><small>Fecha</small><b>{longDate(movement.date)} · {movement.time}</b></div><div><small>Método</small><b>{movement.paymentMethod}</b></div><div><small>Área</small><b>{movement.area}</b></div><div><small>Categoría</small><b>{movement.category}</b></div><div><small>Registrado por</small><b>{movement.createdBy}</b></div>{movement.reservationId && <div><small>Reserva</small><b>{movement.reservationId}</b></div>}{movement.purchaseId && <div><small>ID de compra</small><b>{movement.purchaseId}</b></div>}{movement.product && <div><small>Producto</small><b>{movement.product} · {movement.quantity} {movement.unit}</b></div>}</section>
+    <section className="drawer-section cash-detail-grid"><div><small>Fecha</small><b>{longDate(movement.date)} · {movement.time}</b></div><div><small>Método</small><b>{movement.paymentMethod}</b></div><div><small>Categoría</small><b>{movement.category}</b></div><div><small>Registrado por</small><b>{movement.createdBy}</b></div>{movement.reservationId && <div><small>Reserva</small><b>{movement.reservationId}</b></div>}{movement.purchaseId && <div><small>ID de compra</small><b>{movement.purchaseId}</b></div>}{movement.product && <div><small>Producto</small><b>{movement.product} · {movement.quantity} {movement.unit}</b></div>}</section>
     {movement.status === 'Anulado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Anulado por {movement.annulledBy}. El registro se conserva para auditoría.</p></section>}
     <footer><button onClick={onClose}>Cerrar</button>{canAnnul && movement.status === 'Registrado' && <button className="danger-action" onClick={onAnnul}>Anular movimiento</button>}</footer>
   </aside></div>
