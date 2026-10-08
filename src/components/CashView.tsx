@@ -127,7 +127,7 @@ export function CashView({
     if (!draft) return
     const amount = Number(draft.amount)
     if (!Number.isFinite(amount) || amount <= 0) { setFormError('Ingresa un monto válido mayor a cero.'); return }
-    const linksReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
+    const linksReservation = draft.type === 'Entrada' && draft.area === 'Reservas' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
     const reservation = reservations.find(item => item.id === draft.reservationId)
     if (linksReservation && !reservation) { setFormError('Selecciona la reserva que está pagando.'); return }
     if (reservation && amount > balance(reservation)) { setFormError(`El pago no puede exceder el saldo de ${money(balance(reservation))}.`); return }
@@ -254,14 +254,33 @@ function MovementDialog({ draft, reservations, error, onChange, onSwitchType, on
 }) {
   const categories = draft.type === 'Entrada' ? incomeCategories : expenseCategories
   const linkedReservation = reservations.find(item => item.id === draft.reservationId)
-  const needsReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
+  const needsReservation = draft.type === 'Entrada' && draft.area === 'Reservas' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
   const isInventory = draft.type === 'Salida' && draft.category === 'Compra de inventario'
+  const changeCategory = (category: CashMovementCategory) => onChange({
+    ...draft,
+    category,
+    area: ['Pago de reserva', 'Anticipo de reserva'].includes(category)
+      ? 'Reservas'
+      : category === 'Venta de restaurante' ? 'Restaurante' : draft.area,
+    reservationId: '',
+  })
+  const changeArea = (area: CashArea) => {
+    const wasReservationPayment = ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
+    onChange({
+      ...draft,
+      area,
+      category: draft.type === 'Entrada' && area !== 'Reservas' && wasReservationPayment
+        ? area === 'Restaurante' ? 'Venta de restaurante' : 'Otro ingreso'
+        : draft.category,
+      reservationId: area === 'Reservas' ? draft.reservationId : '',
+    })
+  }
   return <div className="dialog-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}><section className="cash-dialog">
     <header><div><span>NUEVO MOVIMIENTO</span><h2>{draft.type === 'Entrada' ? 'Registrar entrada de dinero' : 'Registrar gasto'}</h2><p>El movimiento quedará ligado al usuario y no podrá eliminarse.</p></div><button onClick={onClose}><X size={17}/></button></header>
     <div className="cash-type-switch"><button className={draft.type === 'Entrada' ? 'active income' : ''} onClick={() => onSwitchType('Entrada')}>Entrada</button><button className={draft.type === 'Salida' ? 'active expense' : ''} onClick={() => onSwitchType('Salida')}>Salida</button></div>
     <div className="cash-form">
-      <label><span>Categoría</span><select value={draft.category} onChange={event => onChange({ ...draft, category: event.target.value as CashMovementCategory, reservationId: '' })}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
-      <label><span>Área</span><select value={draft.area} onChange={event => onChange({ ...draft, area: event.target.value as CashArea })}>{areas.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label><span>Área</span><select value={draft.area} onChange={event => changeArea(event.target.value as CashArea)}>{areas.map(item => <option key={item}>{item}</option>)}</select></label>
       {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.id} value={item.id}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
       <label><span>Monto total</span><div className="amount-input"><i>$</i><input type="number" min="0" max={linkedReservation ? balance(linkedReservation) : undefined} value={draft.amount} onChange={event => onChange({ ...draft, amount: event.target.value })} placeholder="0.00"/></div></label>
