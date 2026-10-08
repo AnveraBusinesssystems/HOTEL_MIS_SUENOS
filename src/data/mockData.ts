@@ -1,6 +1,6 @@
 import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
-  ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
+  CashDay, CashMovement, ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
   RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
   RoomTypeConfig,
 } from '../types'
@@ -252,6 +252,20 @@ export const operationDays: OperationDay[] = Array.from({ length: 21 }, (_, inde
     openedAt: key < '2026-10-06' ? '08:00' : undefined,
   }
 })
+
+export const cashMovements: CashMovement[] = [
+  { id: 'MOV-20261007-001', date: '2026-10-07', time: '08:42', type: 'Entrada', amount: 1500, paymentMethod: 'Efectivo', area: 'Reservas', category: 'Pago de reserva', description: 'Abono de Ana Torres', status: 'Registrado', createdBy: 'Recepción', reservationId: 'CB-84621' },
+  { id: 'MOV-20261007-002', date: '2026-10-07', time: '09:18', type: 'Salida', amount: 840, paymentMethod: 'Efectivo', area: 'Restaurante', category: 'Compra de inventario', description: 'Compra de huevo y fruta para desayunos', status: 'Registrado', createdBy: 'Recepción', purchaseId: 'COMP-20261007-001', product: 'Huevo y fruta', quantity: 1, unit: 'Lote' },
+  { id: 'MOV-20261007-003', date: '2026-10-07', time: '10:06', type: 'Entrada', amount: 1000, paymentMethod: 'Tarjeta', area: 'Reservas', category: 'Pago de reserva', description: 'Abono de Carlos Medina', status: 'Registrado', createdBy: 'Recepción', reservationId: 'CB-84351' },
+  { id: 'MOV-20261007-004', date: '2026-10-07', time: '10:31', type: 'Entrada', amount: 620, paymentMethod: 'Efectivo', area: 'Restaurante', category: 'Venta de restaurante', description: 'Consumos de huéspedes', status: 'Registrado', createdBy: 'Recepción' },
+  { id: 'MOV-20261007-005', date: '2026-10-07', time: '11:24', type: 'Salida', amount: 1200, paymentMethod: 'Transferencia', area: 'Lavandería', category: 'Lavandería', description: 'Servicio semanal de blancos', status: 'Registrado', createdBy: 'Administración', purchaseId: 'COMP-20261007-002' },
+  { id: 'MOV-20261006-009', date: '2026-10-06', time: '17:40', type: 'Salida', amount: 450, paymentMethod: 'Efectivo', area: 'Mantenimiento', category: 'Mantenimiento', description: 'Material para reparación de cerradura', status: 'Registrado', createdBy: 'Gerencia', purchaseId: 'COMP-20261006-003' },
+]
+
+export const cashDays: CashDay[] = [
+  { date: '2026-10-06', openingCash: 3500, countedCash: 4280 },
+  { date: '2026-10-07', openingCash: 4280 },
+]
 
 export const costs: CostSummary = {
   registered: 236800,

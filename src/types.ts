@@ -186,6 +186,41 @@ export interface OperationDay {
   openedAt?: string
 }
 
+export type CashMovementType = 'Entrada' | 'Salida'
+export type CashPaymentMethod = 'Efectivo' | 'Tarjeta' | 'Transferencia'
+export type CashArea = 'Reservas' | 'Recepción' | 'Restaurante' | 'Lavandería' | 'Limpieza' | 'Mantenimiento' | 'Administración' | 'Otros'
+export type CashMovementCategory =
+  | 'Pago de reserva' | 'Anticipo de reserva' | 'Venta de restaurante' | 'Otro ingreso'
+  | 'Compra de inventario' | 'Mantenimiento' | 'Lavandería' | 'Servicios'
+  | 'Reembolso' | 'Retiro de efectivo' | 'Otro gasto'
+
+export interface CashMovement {
+  id: string
+  date: string
+  time: string
+  type: CashMovementType
+  amount: number
+  paymentMethod: CashPaymentMethod
+  area: CashArea
+  category: CashMovementCategory
+  description: string
+  status: 'Registrado' | 'Anulado'
+  createdBy: string
+  reservationId?: string
+  purchaseId?: string
+  product?: string
+  quantity?: number
+  unit?: string
+  annulledBy?: string
+  annulledAt?: string
+}
+
+export interface CashDay {
+  date: string
+  openingCash: number
+  countedCash?: number
+}
+
 export interface CostSummary {
   registered: number
   estimated: number
@@ -213,6 +248,8 @@ export interface DashboardData {
   roomStates: RoomState[]
   operationTasks: OperationTask[]
   operationDays: OperationDay[]
+  cashMovements: CashMovement[]
+  cashDays: CashDay[]
   costs: CostSummary
   alerts: Alert[]
   generatedAt: string
