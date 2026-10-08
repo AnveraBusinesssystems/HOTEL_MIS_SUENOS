@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1f33" />
     <title>Hotel Mis Sueños | RMS</title>
+    <script>
+      fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (response) { return response.json() })
+        .then(function (release) {
+          var url = new URL(window.location.href)
+          if (url.searchParams.get('v') !== release.version) {
+            url.searchParams.set('v', release.version)
+            window.location.replace(url.toString())
+          }
+        })
+        .catch(function () {})
+    </script>
   </head>
   <body>
     <div id="root"></div>
