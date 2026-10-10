@@ -59,7 +59,7 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
   const capacity = nextSeven.length * 17
   const forwardOccupancy = capacity ? occupied / capacity * 100 : 0
 
-  return <div className="page">
+  return <div className="page summary-page">
     <section className="page-heading">
       <div><p className="eyebrow">CONTROL EJECUTIVO</p><h1>Resumen</h1><p>Las cifras esenciales del hotel y las decisiones que requieren atención.</p></div>
       <div className="status-strip"><span><i className="dot good"/> Próximos 7 días</span><strong>{number(forwardOccupancy)}%</strong><small>{occupied} de {capacity} noches ocupadas</small></div>
