@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle, Check, CheckCircle2, ClipboardCheck, Minus, PackageCheck,
-  PackageOpen, Plus, Search, ShoppingCart, SlidersHorizontal,
+  AlertTriangle, ArrowRight, Check, CheckCircle2, ClipboardCheck, ClipboardList,
+  Minus, PackageCheck, PackageOpen, Plus, Search, ShoppingCart, SlidersHorizontal,
 } from 'lucide-react'
-import type { InventoryCategory, InventoryItem, Role } from '../types'
+import type { InventoryCategory, InventoryItem, PurchaseRequest, Role } from '../types'
 import { money } from '../utils'
 
-type InventoryTab = 'Existencias' | 'Conteo' | 'Compra recomendada'
+type InventoryTab = 'Existencias' | 'Conteo' | 'Compra recomendada' | 'Solicitudes'
 type StockState = 'Agotado' | 'Bajo' | 'Correcto'
 
 type Props = {
   role: Role
   items: InventoryItem[]
+  requests: PurchaseRequest[]
   onChange: (updater: (rows: InventoryItem[]) => InventoryItem[]) => void
+  onRequestsChange: (updater: (rows: PurchaseRequest[]) => PurchaseRequest[]) => void
+  onOpenCash: (requestId: string) => void
   onNotify: (message: string) => void
 }
 
@@ -21,7 +24,11 @@ const categories: Array<'Todas' | InventoryCategory> = ['Todas', 'Alimentos', 'B
 const stockState = (item: InventoryItem): StockState => item.stock <= 0 ? 'Agotado' : item.stock < item.parLevel ? 'Bajo' : 'Correcto'
 const formatQuantity = (value: number) => new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(value)
 
-export function InventoryView({ role, items, onChange, onNotify }: Props) {
+const requestTime = () => new Intl.DateTimeFormat('es-MX', {
+  timeZone: 'America/Cancun', hour: '2-digit', minute: '2-digit', hour12: false,
+}).format(new Date())
+
+export function InventoryView({ role, items, requests, onChange, onRequestsChange, onOpenCash, onNotify }: Props) {
   const [tab, setTab] = useState<InventoryTab>('Existencias')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'Todas' | InventoryCategory>('Todas')
@@ -87,8 +94,38 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
 
   const createRequest = () => {
     if (!selectedItems.length) { onNotify('Selecciona al menos un producto'); return }
-    onNotify(`Solicitud preparada · ${selectedItems.length} productos`)
+    if (selectedItems.some(item => !Number.isFinite(Number(orderDraft[item.id])) || Number(orderDraft[item.id]) <= 0)) {
+      onNotify('Todas las cantidades solicitadas deben ser mayores a cero')
+      return
+    }
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    const request: PurchaseRequest = {
+      id: `SOL-${date.replaceAll('-', '')}-${String(requests.length + 1).padStart(3, '0')}`,
+      createdAt: `Hoy · ${requestTime()}`,
+      createdBy: role,
+      status: 'Pendiente',
+      items: selectedItems.map(item => ({
+        product: item.name,
+        quantity: Number(orderDraft[item.id]) || 0,
+        unit: item.unit,
+        estimatedTotal: (Number(orderDraft[item.id]) || 0) * item.lastPrice,
+      })),
+      estimatedTotal,
+    }
+    onRequestsChange(rows => [request, ...rows])
+    setTab('Solicitudes')
+    onNotify(`Solicitud creada · ${selectedItems.length} productos`)
   }
+
+  const acknowledgeRequest = (requestId: string) => {
+    onRequestsChange(rows => rows.map(request => request.id === requestId ? {
+      ...request, status: 'Tomada en cuenta', acknowledgedBy: role, acknowledgedAt: `Hoy · ${requestTime()}`,
+    } : request))
+    onNotify('Solicitud tomada en cuenta')
+  }
+
+  const canAcknowledge = ['Dueño', 'Gerencia', 'Administración'].includes(role)
+  const canRegisterPurchase = ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
 
   return <section className="page inventory-page">
     <section className="page-heading inventory-heading">
@@ -108,7 +145,7 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
     </section>
 
     <div className="inventory-tabs" role="tablist" aria-label="Vistas de inventario">
-      {(['Existencias', 'Conteo', 'Compra recomendada'] as InventoryTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)} role="tab" aria-selected={tab === item}>{item === 'Existencias' ? <PackageOpen size={15}/> : item === 'Conteo' ? <ClipboardCheck size={15}/> : <ShoppingCart size={15}/>} {item}</button>)}
+      {(['Existencias', 'Conteo', 'Compra recomendada', 'Solicitudes'] as InventoryTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)} role="tab" aria-selected={tab === item}>{item === 'Existencias' ? <PackageOpen size={15}/> : item === 'Conteo' ? <ClipboardCheck size={15}/> : item === 'Compra recomendada' ? <ShoppingCart size={15}/> : <ClipboardList size={15}/>} {item}{item === 'Solicitudes' && requests.some(request => request.status === 'Pendiente') && <i>{requests.filter(request => request.status === 'Pendiente').length}</i>}</button>)}
     </div>
 
     {tab === 'Existencias' && <>
@@ -144,7 +181,17 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
 
     {tab === 'Compra recomendada' && <section className="inventory-order-layout">
       <article className="panel recommended-order"><header><div><span>RECOMENDACIÓN SEMANAL</span><h2>{recommended.length} productos por reponer</h2></div><small>Las cantidades pueden editarse antes de solicitar</small></header><div className="recommended-list">{recommended.map(item => <label key={item.id} className={selected.has(item.id) ? 'selected' : ''}><input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)}/><span><b>{item.name}</b><small>{item.category} · Hay {formatQuantity(item.stock)} de {formatQuantity(item.parLevel)} {item.unit}</small></span><div><small>COMPRAR</small><input type="number" min="0" step="0.01" value={orderDraft[item.id] ?? ''} onChange={event => setOrderDraft({ ...orderDraft, [item.id]: event.target.value })}/><i>{item.unit}</i></div><strong>{money((Number(orderDraft[item.id]) || 0) * item.lastPrice)}</strong></label>)}</div></article>
-      <aside className="panel order-review"><header><div><span>SOLICITUD</span><h2>Resumen de compra</h2></div></header><div className="order-review-body"><span className="order-role">Preparada por <b>{role}</b></span><ul>{selectedItems.map(item => <li key={item.id}><span>{item.name}<small>{orderDraft[item.id]} {item.unit}</small></span><b>{money((Number(orderDraft[item.id]) || 0) * item.lastPrice)}</b></li>)}</ul>{!selectedItems.length && <div className="order-empty"><ShoppingCart size={23}/><span>Selecciona productos para preparar la solicitud.</span></div>}<footer><span><small>ESTIMADO</small><b>{money(estimatedTotal)}</b></span><button className="primary-action" onClick={createRequest}><Check size={15}/>Crear solicitud</button><p>Este botón es demostrativo hasta conectar Caja e Inventario.</p></footer></div></aside>
+      <aside className="panel order-review"><header><div><span>SOLICITUD</span><h2>Resumen de compra</h2></div></header><div className="order-review-body"><span className="order-role">Preparada por <b>{role}</b></span><ul>{selectedItems.map(item => <li key={item.id}><span>{item.name}<small>{orderDraft[item.id]} {item.unit}</small></span><b>{money((Number(orderDraft[item.id]) || 0) * item.lastPrice)}</b></li>)}</ul>{!selectedItems.length && <div className="order-empty"><ShoppingCart size={23}/><span>Selecciona productos para preparar la solicitud.</span></div>}<footer><span><small>ESTIMADO</small><b>{money(estimatedTotal)}</b></span><button className="primary-action" onClick={createRequest}><Check size={15}/>Crear solicitud</button><p>La solicitud no modifica existencias hasta confirmar la compra real en Caja.</p></footer></div></aside>
+    </section>}
+
+    {tab === 'Solicitudes' && <section className="purchase-requests-view">
+      <header className="purchase-requests-heading"><div><span>SEGUIMIENTO</span><h2>Solicitudes de compra</h2><p>La solicitud conserva lo pedido originalmente. La compra real se corrige y confirma desde Caja.</p></div><div><b>{requests.filter(request => request.status === 'Pendiente').length}</b><small>pendientes de revisión</small></div></header>
+      <div className="purchase-request-list">{requests.map(request => <article key={request.id} className={`purchase-request-card ${request.status.toLowerCase().replaceAll(' ', '-')}`}>
+        <header><div><span>{request.id}</span><h3>{request.items.length} productos solicitados</h3><small>Creada por {request.createdBy} · {request.createdAt}</small></div><em>{request.status}</em></header>
+        <div className="purchase-request-items">{request.items.map(item => <div key={`${request.id}-${item.product}`}><span><b>{item.product}</b><small>{formatQuantity(item.quantity)} {item.unit}</small></span><strong>{money(item.estimatedTotal)}</strong></div>)}</div>
+        <footer><span><small>ESTIMADO ORIGINAL</small><b>{money(request.estimatedTotal)}</b></span><div>{request.status === 'Pendiente' && canAcknowledge && <button className="primary-action" onClick={() => acknowledgeRequest(request.id)}><Check size={14}/>Tomar en cuenta</button>}{request.status === 'Pendiente' && !canAcknowledge && <small>Esperando revisión de administración</small>}{request.status === 'Tomada en cuenta' && canRegisterPurchase && <button className="primary-action" onClick={() => onOpenCash(request.id)}>Registrar compra real <ArrowRight size={14}/></button>}{request.status === 'Tomada en cuenta' && !canRegisterPurchase && <small>Administración realizará la compra</small>}{request.status === 'Comprada' && <small><CheckCircle2 size={13}/>Compra registrada por {request.purchasedBy}</small>}</div></footer>
+        {request.acknowledgedBy && <p className="request-trace">Tomada en cuenta por {request.acknowledgedBy} · {request.acknowledgedAt}</p>}
+      </article>)}</div>
     </section>}
   </section>
 }

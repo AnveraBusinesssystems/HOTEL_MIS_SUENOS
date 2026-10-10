@@ -1,7 +1,7 @@
 import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
   CashDay, CashMovement, ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
-  InventoryItem,
+  InventoryItem, PurchaseRequest,
   RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
   RoomTypeConfig, StaffMember, StaffRequest, StaffScheduleEntry, StaffTimeEntry, TourBooking, UserAccount,
 } from '../types'
@@ -29,6 +29,19 @@ export const inventory: InventoryItem[] = [
   { id: 'INV-012', name: 'Papel higiénico', category: 'Amenidades', unit: 'rollos', stock: 42, parLevel: 60, suggestedPurchase: 18, lastUpdated: '08 oct · 16:10', lastPrice: 8.5 },
   { id: 'INV-013', name: 'Shampoo individual', category: 'Amenidades', unit: 'piezas', stock: 110, parLevel: 100, suggestedPurchase: 0, lastUpdated: '08 oct · 16:10', lastPrice: 6.2 },
   { id: 'INV-014', name: 'Bolsas negras', category: 'Suministros', unit: 'cajas', stock: 1, parLevel: 2, suggestedPurchase: 1, lastUpdated: '07 oct · 12:40', lastPrice: 286 },
+]
+
+export const purchaseRequests: PurchaseRequest[] = [
+  {
+    id: 'SOL-20261010-001', createdAt: 'Hoy · 08:15', createdBy: 'Cocina', status: 'Pendiente', estimatedTotal: 1109,
+    items: [
+      { product: 'Huevo', quantity: 42, unit: 'piezas', estimatedTotal: 160 },
+      { product: 'Jamón', quantity: 3, unit: 'kg', estimatedTotal: 444 },
+      { product: 'Harina para pancakes', quantity: 5, unit: 'kg', estimatedTotal: 270 },
+      { product: 'Cebolla', quantity: 1, unit: 'kg', estimatedTotal: 35 },
+      { product: 'Café', quantity: 1, unit: 'kg', estimatedTotal: 200 },
+    ],
+  },
 ]
 
 export const roomNumbers = {

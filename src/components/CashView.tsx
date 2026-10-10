@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, Banknote, CalendarDays, ChevronRight, CircleDollarSign,
   CreditCard, FileText, Landmark, Plus, Receipt, Search, Trash2, WalletCards, X,
 } from 'lucide-react'
 import type {
   CashArea, CashDay, CashMovement, CashMovementCategory, CashMovementType,
-  CashPaymentMethod, Reservation, Role,
+  CashPaymentMethod, InventoryItem, PurchaseRequest, Reservation, Role,
 } from '../types'
 import { longDate, money } from '../utils'
 
@@ -14,9 +14,15 @@ interface CashViewProps {
   reservations: Reservation[]
   movements: CashMovement[]
   days: CashDay[]
+  inventory: InventoryItem[]
+  purchaseRequests: PurchaseRequest[]
+  initialPurchaseRequestId?: string
   onReservationsChange: (updater: (rows: Reservation[]) => Reservation[]) => void
   onMovementsChange: (updater: (rows: CashMovement[]) => CashMovement[]) => void
   onDaysChange: (updater: (rows: CashDay[]) => CashDay[]) => void
+  onInventoryChange: (updater: (rows: InventoryItem[]) => InventoryItem[]) => void
+  onPurchaseRequestsChange: (updater: (rows: PurchaseRequest[]) => PurchaseRequest[]) => void
+  onPurchaseRequestOpened: () => void
   onNotify: (message: string) => void
 }
 
@@ -27,6 +33,7 @@ type Draft = {
   category: CashMovementCategory
   description: string
   reservationId: string
+  purchaseRequestId: string
   purchaseItems: Array<{ id: string; product: string; quantity: string; unit: string; total: string }>
 }
 
@@ -41,7 +48,7 @@ const currentTime = () => new Intl.DateTimeFormat('es-MX', {
 const incomeCategories: CashMovementCategory[] = ['Pago de reserva', 'Anticipo de reserva', 'Venta de restaurante', 'Otro ingreso']
 const expenseCategories: CashMovementCategory[] = ['Compra de inventario', 'Mantenimiento', 'Lavandería', 'Servicios', 'Reembolso', 'Gastos externos', 'Retiro de efectivo', 'Otro gasto']
 const methods: CashPaymentMethod[] = ['Efectivo', 'Tarjeta', 'Transferencia']
-const inventoryUnits: Record<string, string> = {
+const fallbackInventoryUnits: Record<string, string> = {
   Huevo: 'Piezas',
   Fruta: 'Kilogramos',
   Café: 'Kilogramos',
@@ -51,7 +58,6 @@ const inventoryUnits: Record<string, string> = {
   'Productos de limpieza': 'Litros',
   'Otro producto': 'Unidades',
 }
-const inventoryProducts = Object.keys(inventoryUnits)
 const newPurchaseItem = () => ({ id: crypto.randomUUID(), product: '', quantity: '', unit: '', total: '' })
 const areaForCategory: Record<CashMovementCategory, CashArea> = {
   'Pago de reserva': 'Reservas',
@@ -78,6 +84,7 @@ const freshDraft = (type: CashMovementType): Draft => ({
   category: type === 'Entrada' ? 'Pago de reserva' : 'Compra de inventario',
   description: '',
   reservationId: '',
+  purchaseRequestId: '',
   purchaseItems: type === 'Salida' ? [newPurchaseItem()] : [],
 })
 
@@ -85,8 +92,9 @@ const activeReservation = (reservation: Reservation) => !['Cancelada', 'No show'
 const balance = (reservation: Reservation) => Math.max(0, reservation.total - reservation.paid)
 
 export function CashView({
-  role, reservations, movements, days,
-  onReservationsChange, onMovementsChange, onDaysChange, onNotify,
+  role, reservations, movements, days, inventory, purchaseRequests, initialPurchaseRequestId,
+  onReservationsChange, onMovementsChange, onDaysChange, onInventoryChange,
+  onPurchaseRequestsChange, onPurchaseRequestOpened, onNotify,
 }: CashViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -109,6 +117,30 @@ export function CashView({
   const expectedCash = day.openingCash + cashEntries - cashExits
   const outstanding = reservations.filter(activeReservation).reduce((sum, item) => sum + balance(item), 0)
   const pendingReservations = reservations.filter(item => activeReservation(item) && balance(item) > 0).sort((a, b) => balance(b) - balance(a))
+  const readyPurchaseRequests = purchaseRequests.filter(item => item.status === 'Tomada en cuenta')
+
+  const openPurchaseRequest = (request: PurchaseRequest) => {
+    const next = freshDraft('Salida')
+    next.category = 'Compra de inventario'
+    next.purchaseRequestId = request.id
+    next.description = `Compra basada en ${request.id}`
+    next.purchaseItems = request.items.map(item => ({
+      id: crypto.randomUUID(),
+      product: item.product,
+      quantity: String(item.quantity),
+      unit: item.unit,
+      total: '',
+    }))
+    setFormError('')
+    setDraft(next)
+  }
+
+  useEffect(() => {
+    if (!initialPurchaseRequestId) return
+    const request = purchaseRequests.find(item => item.id === initialPurchaseRequestId)
+    if (request?.status === 'Tomada en cuenta') openPurchaseRequest(request)
+    onPurchaseRequestOpened()
+  }, [initialPurchaseRequestId])
 
   const methodTotals = methods.map(method => ({
     method,
@@ -124,7 +156,7 @@ export function CashView({
 
   const filtered = dayMovements.filter(item => {
     const query = search.trim().toLowerCase()
-    const matchesSearch = !query || [item.id, item.description, item.area, item.category, item.reservationId, item.tourId, item.purchaseId]
+    const matchesSearch = !query || [item.id, item.description, item.area, item.category, item.reservationId, item.tourId, item.purchaseId, item.purchaseRequestId]
       .some(value => value?.toLowerCase().includes(query))
     return matchesSearch && (typeFilter === 'Todos' || item.type === typeFilter) && (methodFilter === 'Todos' || item.paymentMethod === methodFilter)
   }).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`))
@@ -174,13 +206,31 @@ export function CashView({
       status: 'Registrado',
       createdBy: role,
       reservationId: linksReservation ? draft.reservationId : undefined,
+      purchaseRequestId: isInventoryPurchase && draft.purchaseRequestId ? draft.purchaseRequestId : undefined,
       purchaseId: draft.type === 'Salida' ? `COMP-${stamp}-${String(movements.filter(item => item.date === selectedDate && item.type === 'Salida').length + 1).padStart(3, '0')}` : undefined,
       purchaseItems: isInventoryPurchase ? draft.purchaseItems.map(item => ({ product: item.product, quantity: Number(item.quantity), unit: item.unit, total: Number(item.total) })) : undefined,
     }
     onMovementsChange(rows => [movement, ...rows])
     if (reservation) onReservationsChange(rows => rows.map(item => item.id === reservation.id ? { ...item, paid: Math.min(item.total, item.paid + amount) } : item))
+    if (isInventoryPurchase) {
+      onInventoryChange(rows => rows.map(item => {
+        const purchased = movement.purchaseItems?.filter(line => line.product === item.name).reduce((sum, line) => sum + line.quantity, 0) ?? 0
+        if (!purchased) return item
+        const stock = item.stock + purchased
+        return { ...item, stock, suggestedPurchase: Math.max(0, Math.ceil(item.parLevel - stock)), lastUpdated: 'Ahora' }
+      }))
+      if (draft.purchaseRequestId) {
+        onPurchaseRequestsChange(rows => rows.map(item => item.id === draft.purchaseRequestId ? {
+          ...item,
+          status: 'Comprada',
+          purchasedBy: role,
+          purchasedAt: `Hoy · ${currentTime()}`,
+          cashMovementId: movement.id,
+        } : item))
+      }
+    }
     setDraft(null)
-    onNotify(`${draft.type} registrada · ${money(amount)}`)
+    onNotify(isInventoryPurchase ? `Compra real registrada · inventario actualizado · ${money(amount)}` : `${draft.type} registrada · ${money(amount)}`)
   }
 
   const saveCount = () => {
@@ -197,6 +247,23 @@ export function CashView({
     onMovementsChange(rows => rows.map(item => item.id === movement.id ? { ...item, status: 'Anulado', annulledBy: role, annulledAt: `${selectedDate} ${currentTime()}` } : item))
     if (movement.reservationId && movement.type === 'Entrada') {
       onReservationsChange(rows => rows.map(item => item.id === movement.reservationId ? { ...item, paid: Math.max(0, item.paid - movement.amount) } : item))
+    }
+    if (movement.category === 'Compra de inventario' && movement.purchaseItems?.length) {
+      onInventoryChange(rows => rows.map(item => {
+        const purchased = movement.purchaseItems?.filter(line => line.product === item.name).reduce((sum, line) => sum + line.quantity, 0) ?? 0
+        if (!purchased) return item
+        const stock = Math.max(0, item.stock - purchased)
+        return { ...item, stock, suggestedPurchase: Math.max(0, Math.ceil(item.parLevel - stock)), lastUpdated: 'Ahora' }
+      }))
+      if (movement.purchaseRequestId) {
+        onPurchaseRequestsChange(rows => rows.map(item => item.id === movement.purchaseRequestId ? {
+          ...item,
+          status: 'Tomada en cuenta',
+          purchasedBy: undefined,
+          purchasedAt: undefined,
+          cashMovementId: undefined,
+        } : item))
+      }
     }
     setSelectedMovement(null)
     onNotify('Movimiento anulado; el historial se conservó')
@@ -255,18 +322,21 @@ export function CashView({
 
         <section className="panel cash-breakdown"><header><div><span>SALIDAS</span><h2>Gasto por categoría</h2></div></header><div>{expensesByCategory.length ? expensesByCategory.map(([category, amount]) => <p key={category}><span>{category}</span><b>{money(amount)}</b></p>) : <small>Sin gastos registrados este día.</small>}</div></section>
 
+        <section className="panel cash-purchase-requests"><header><div><span>COMPRAS AUTORIZADAS</span><h2>Solicitudes listas</h2></div><b>{readyPurchaseRequests.length}</b></header><div>{readyPurchaseRequests.length ? readyPurchaseRequests.map(request => <button key={request.id} onClick={() => openPurchaseRequest(request)}><span><b>{request.id}</b><small>{request.items.length} productos · solicitó {request.createdBy}</small></span><strong>{money(request.estimatedTotal)}</strong><ChevronRight size={14}/></button>) : <small>No hay solicitudes tomadas en cuenta.</small>}</div></section>
+
         <section className="panel pending-payments"><header><div><span>COBRANZA</span><h2>Mayores saldos pendientes</h2></div></header><div>{pendingReservations.slice(0, 4).map(reservation => <button key={reservation.id} onClick={() => openForm('Entrada', reservation.id)}><span><b>{reservation.guestName}</b><small>{reservation.roomNumber ?? reservation.roomType} · {reservation.id}</small></span><strong>{money(balance(reservation))}</strong><Plus size={14}/></button>)}</div></section>
       </aside>
     </section>
 
-    {draft && <MovementDialog draft={draft} reservations={pendingReservations} error={formError} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => setDraft(null)} onSave={saveMovement}/>} 
-    {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul} onClose={() => setSelectedMovement(null)} onAnnul={() => annul(selectedMovement)}/>} 
+    {draft && <MovementDialog draft={draft} reservations={pendingReservations} inventory={inventory} error={formError} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => setDraft(null)} onSave={saveMovement}/>}
+    {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul} onClose={() => setSelectedMovement(null)} onAnnul={() => annul(selectedMovement)}/>}
   </section>
 }
 
-function MovementDialog({ draft, reservations, error, onChange, onSwitchType, onClose, onSave }: {
+function MovementDialog({ draft, reservations, inventory, error, onChange, onSwitchType, onClose, onSave }: {
   draft: Draft
   reservations: Reservation[]
+  inventory: InventoryItem[]
   error: string
   onChange: (draft: Draft) => void
   onSwitchType: (type: CashMovementType) => void
@@ -278,10 +348,13 @@ function MovementDialog({ draft, reservations, error, onChange, onSwitchType, on
   const needsReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
   const isInventory = draft.type === 'Salida' && draft.category === 'Compra de inventario'
   const invoiceTotal = draft.purchaseItems.reduce((sum, item) => sum + Number(item.total || 0), 0)
+  const inventoryUnits = { ...fallbackInventoryUnits, ...Object.fromEntries(inventory.map(item => [item.name, item.unit])) }
+  const inventoryProducts = Object.keys(inventoryUnits)
   const changeCategory = (category: CashMovementCategory) => onChange({
     ...draft,
     category,
     reservationId: '',
+    purchaseRequestId: category === 'Compra de inventario' ? draft.purchaseRequestId : '',
     purchaseItems: category === 'Compra de inventario'
       ? draft.purchaseItems.length ? draft.purchaseItems : [newPurchaseItem()]
       : [],
@@ -298,6 +371,7 @@ function MovementDialog({ draft, reservations, error, onChange, onSwitchType, on
     <header><div><span>NUEVO MOVIMIENTO</span><h2>{draft.type === 'Entrada' ? 'Registrar entrada de dinero' : 'Registrar gasto'}</h2><p>El movimiento quedará ligado al usuario y no podrá eliminarse.</p></div><button onClick={onClose} aria-label="Cerrar"><X size={17}/></button></header>
     <div className="cash-type-switch"><button className={draft.type === 'Entrada' ? 'active income' : ''} onClick={() => onSwitchType('Entrada')}>Entrada</button><button className={draft.type === 'Salida' ? 'active expense' : ''} onClick={() => onSwitchType('Salida')}>Salida</button></div>
     <div className="cash-form">
+      {draft.purchaseRequestId && <div className="linked-purchase-request full"><FileText size={16}/><p><b>Compra ligada a {draft.purchaseRequestId}</b><span>Esta factura es editable: ajusta, elimina o añade productos según lo comprado realmente. La solicitud original no cambiará.</span></p></div>}
       <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
       {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.id} value={item.id}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
@@ -324,7 +398,7 @@ function MovementDetail({ movement, canAnnul, onClose, onAnnul }: { movement: Ca
   return <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}><aside className="drawer cash-detail">
     <header><div><span>DETALLE DEL MOVIMIENTO</span><h2>{movement.description}</h2><p>{movement.id}</p></div><button onClick={onClose} aria-label="Cerrar"><X size={18}/></button></header>
     <section className={`movement-amount ${movement.type.toLowerCase()}`}><span>{movement.type}</span><strong>{movement.type === 'Entrada' ? '+' : '−'} {money(movement.amount)}</strong><small className={movement.status === 'Anulado' ? 'annulled-label' : ''}>{movement.status}</small></section>
-    <section className="drawer-section cash-detail-grid"><div><small>Fecha</small><b>{longDate(movement.date)} · {movement.time}</b></div><div><small>Método</small><b>{movement.paymentMethod}</b></div><div><small>Categoría</small><b>{movement.category}</b></div><div><small>Registrado por</small><b>{movement.createdBy}</b></div>{movement.reservationId && <div><small>Reserva</small><b>{movement.reservationId}</b></div>}{movement.tourId && <div><small>Tour</small><b>{movement.tourId}</b></div>}{movement.purchaseId && <div><small>ID de compra</small><b>{movement.purchaseId}</b></div>}</section>
+    <section className="drawer-section cash-detail-grid"><div><small>Fecha</small><b>{longDate(movement.date)} · {movement.time}</b></div><div><small>Método</small><b>{movement.paymentMethod}</b></div><div><small>Categoría</small><b>{movement.category}</b></div><div><small>Registrado por</small><b>{movement.createdBy}</b></div>{movement.reservationId && <div><small>Reserva</small><b>{movement.reservationId}</b></div>}{movement.tourId && <div><small>Tour</small><b>{movement.tourId}</b></div>}{movement.purchaseRequestId && <div><small>Solicitud original</small><b>{movement.purchaseRequestId}</b></div>}{movement.purchaseId && <div><small>ID de compra</small><b>{movement.purchaseId}</b></div>}</section>
     {Boolean(movement.purchaseItems?.length) && <section className="drawer-section purchase-detail"><span className="drawer-label">PRODUCTOS DE LA COMPRA</span><div className="purchase-detail-head"><span>Producto</span><span>Cantidad</span><span>Unidad</span><span>Total</span></div>{movement.purchaseItems?.map((item, index) => <div className="purchase-detail-row" key={`${item.product}-${index}`}><b>{item.product}</b><span>{item.quantity}</span><span>{item.unit}</span><strong>{money(item.total)}</strong></div>)}</section>}
     {movement.tourId && movement.status === 'Registrado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Este movimiento se originó en Tours. Las correcciones se harán desde ese flujo para mantener Caja y el tour sincronizados.</p></section>}
     {movement.status === 'Anulado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Anulado por {movement.annulledBy}. El registro se conserva para auditoría.</p></section>}

@@ -305,6 +305,7 @@ export interface CashMovement {
   reservationId?: string
   tourId?: string
   purchaseId?: string
+  purchaseRequestId?: string
   purchaseItems?: CashPurchaseItem[]
   annulledBy?: string
   annulledAt?: string
@@ -328,6 +329,29 @@ export interface InventoryItem {
   suggestedPurchase: number
   lastUpdated: string
   lastPrice: number
+}
+
+export type PurchaseRequestStatus = 'Pendiente' | 'Tomada en cuenta' | 'Comprada' | 'Cancelada'
+
+export interface PurchaseRequestItem {
+  product: string
+  quantity: number
+  unit: string
+  estimatedTotal: number
+}
+
+export interface PurchaseRequest {
+  id: string
+  createdAt: string
+  createdBy: string
+  status: PurchaseRequestStatus
+  items: PurchaseRequestItem[]
+  estimatedTotal: number
+  acknowledgedBy?: string
+  acknowledgedAt?: string
+  purchasedBy?: string
+  purchasedAt?: string
+  cashMovementId?: string
 }
 
 export interface CostSummary {
@@ -366,6 +390,7 @@ export interface DashboardData {
   cashMovements: CashMovement[]
   cashDays: CashDay[]
   inventory: InventoryItem[]
+  purchaseRequests: PurchaseRequest[]
   costs: CostSummary
   alerts: Alert[]
   generatedAt: string
