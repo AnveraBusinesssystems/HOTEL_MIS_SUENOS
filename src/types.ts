@@ -225,7 +225,22 @@ export interface StaffMember {
   name: string
   role: StaffRole
   weeklySalary: number
+  defaultShiftStart: string
+  defaultShiftEnd: string
+  defaultRestDay: number
   status: 'Activo' | 'Inactivo'
+}
+
+export type SystemModule = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Personal'
+export type AccessLevel = 'Sin acceso' | 'Ver' | 'Editar'
+
+export interface UserAccount {
+  id: string
+  employeeId: string
+  username: string
+  role: Role
+  status: 'Activo' | 'Inactivo'
+  permissions: Record<SystemModule, AccessLevel>
 }
 
 export interface StaffScheduleEntry {
@@ -333,6 +348,7 @@ export interface DashboardData {
   staffSchedules: StaffScheduleEntry[]
   staffTimeEntries: StaffTimeEntry[]
   staffRequests: StaffRequest[]
+  userAccounts: UserAccount[]
   cashMovements: CashMovement[]
   cashDays: CashDay[]
   costs: CostSummary

@@ -2,7 +2,7 @@ import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
   CashDay, CashMovement, ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
   RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
-  RoomTypeConfig, StaffMember, StaffRequest, StaffScheduleEntry, StaffTimeEntry, TourBooking,
+  RoomTypeConfig, StaffMember, StaffRequest, StaffScheduleEntry, StaffTimeEntry, TourBooking, UserAccount,
 } from '../types'
 
 export const roomTypes: RoomTypeConfig[] = [
@@ -286,30 +286,34 @@ export const tours: TourBooking[] = [
 ]
 
 export const staff: StaffMember[] = [
-  { id: 'EMP-001', name: 'María López', role: 'Limpieza', weeklySalary: 2800, status: 'Activo' },
-  { id: 'EMP-002', name: 'Elena Pérez', role: 'Limpieza', weeklySalary: 2800, status: 'Activo' },
-  { id: 'EMP-003', name: 'Diego Santos', role: 'Recepción', weeklySalary: 3200, status: 'Activo' },
-  { id: 'EMP-004', name: 'Karla Méndez', role: 'Cocina', weeklySalary: 3000, status: 'Activo' },
-  { id: 'EMP-005', name: 'Luis Tun', role: 'Alberca', weeklySalary: 2600, status: 'Activo' },
-  { id: 'EMP-006', name: 'Laura Gómez', role: 'Administración', weeklySalary: 4200, status: 'Activo' },
+  { id: 'EMP-001', name: 'María López', role: 'Limpieza', weeklySalary: 2800, defaultShiftStart: '08:00', defaultShiftEnd: '16:00', defaultRestDay: 0, status: 'Activo' },
+  { id: 'EMP-002', name: 'Elena Pérez', role: 'Limpieza', weeklySalary: 2800, defaultShiftStart: '09:00', defaultShiftEnd: '17:00', defaultRestDay: 3, status: 'Activo' },
+  { id: 'EMP-003', name: 'Diego Santos', role: 'Recepción', weeklySalary: 3200, defaultShiftStart: '08:00', defaultShiftEnd: '16:00', defaultRestDay: 2, status: 'Activo' },
+  { id: 'EMP-004', name: 'Karla Méndez', role: 'Cocina', weeklySalary: 3000, defaultShiftStart: '06:30', defaultShiftEnd: '14:30', defaultRestDay: 3, status: 'Activo' },
+  { id: 'EMP-005', name: 'Luis Tun', role: 'Alberca', weeklySalary: 2600, defaultShiftStart: '07:00', defaultShiftEnd: '15:00', defaultRestDay: 1, status: 'Activo' },
+  { id: 'EMP-006', name: 'Laura Gómez', role: 'Administración', weeklySalary: 4200, defaultShiftStart: '09:00', defaultShiftEnd: '17:00', defaultRestDay: 0, status: 'Activo' },
 ]
-
-const staffShift: Record<string, { start: string; end: string; restDay: number }> = {
-  'EMP-001': { start: '08:00', end: '16:00', restDay: 0 },
-  'EMP-002': { start: '09:00', end: '17:00', restDay: 3 },
-  'EMP-003': { start: '08:00', end: '16:00', restDay: 2 },
-  'EMP-004': { start: '06:30', end: '14:30', restDay: 3 },
-  'EMP-005': { start: '07:00', end: '15:00', restDay: 1 },
-  'EMP-006': { start: '09:00', end: '17:00', restDay: 0 },
-}
 
 export const staffSchedules: StaffScheduleEntry[] = staff.flatMap(employee => Array.from({ length: 28 }, (_, index) => {
   const date = new Date('2026-09-28T12:00:00')
   date.setDate(date.getDate() + index)
-  const shift = staffShift[employee.id]
-  const isRest = date.getDay() === shift.restDay
-  return { employeeId: employee.id, date: iso(date), isRest, shiftStart: isRest ? undefined : shift.start, shiftEnd: isRest ? undefined : shift.end }
+  const isRest = date.getDay() === employee.defaultRestDay
+  return { employeeId: employee.id, date: iso(date), isRest, shiftStart: isRest ? undefined : employee.defaultShiftStart, shiftEnd: isRest ? undefined : employee.defaultShiftEnd }
 }))
+
+const permissions = (values: Partial<UserAccount['permissions']>): UserAccount['permissions'] => ({
+  Resumen: 'Ver', Indicadores: 'Sin acceso', 'RMS / Tarifas': 'Sin acceso', Reservas: 'Sin acceso',
+  'Operación diaria': 'Sin acceso', Caja: 'Sin acceso', Personal: 'Ver', ...values,
+})
+
+export const userAccounts: UserAccount[] = [
+  { id: 'USR-001', employeeId: 'EMP-001', username: 'maria.lopez', role: 'Limpieza', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Editar' }) },
+  { id: 'USR-002', employeeId: 'EMP-002', username: 'elena.perez', role: 'Limpieza', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Editar' }) },
+  { id: 'USR-003', employeeId: 'EMP-003', username: 'diego.santos', role: 'Recepción', status: 'Activo', permissions: permissions({ Reservas: 'Editar', 'Operación diaria': 'Editar', Caja: 'Editar' }) },
+  { id: 'USR-004', employeeId: 'EMP-004', username: 'karla.mendez', role: 'Cocina', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Ver' }) },
+  { id: 'USR-005', employeeId: 'EMP-005', username: 'luis.tun', role: 'Alberca', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Ver' }) },
+  { id: 'USR-006', employeeId: 'EMP-006', username: 'laura.gomez', role: 'Administración', status: 'Activo', permissions: permissions({ Indicadores: 'Ver', Reservas: 'Ver', 'Operación diaria': 'Editar', Caja: 'Editar', Personal: 'Editar' }) },
+]
 
 export const staffTimeEntries: StaffTimeEntry[] = [
   { id: 'ASIS-001', employeeId: 'EMP-001', date: '2026-10-05', clockIn: '07:58', clockOut: '16:03' },

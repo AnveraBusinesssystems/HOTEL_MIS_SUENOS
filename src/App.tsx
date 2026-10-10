@@ -8,11 +8,12 @@ import { CashView } from './components/CashView'
 import { OperationsView } from './components/OperationsView'
 import { RatesView } from './components/RatesView'
 import { ReservationsView } from './components/ReservationsView'
+import { SettingsView } from './components/SettingsView'
 import { StaffView } from './components/StaffView'
 import { hotelService } from './services/hotelService'
 import type { DashboardData, Role } from './types'
 
-type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Personal'
+type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Personal' | 'Configuración'
 
 const menu = [
   ['Resumen', LayoutDashboard, true],
@@ -22,7 +23,7 @@ const menu = [
   ['Operación diaria', ReceiptText, true],
   ['Caja', WalletCards, true],
   ['Personal', Users, true],
-  ['Configuración', Settings, false],
+  ['Configuración', Settings, true],
 ] as const
 
 function App() {
@@ -48,6 +49,9 @@ function App() {
     const timeout = window.setTimeout(() => setToast(''), 2800)
     return () => window.clearTimeout(timeout)
   }, [toast])
+  useEffect(() => {
+    if (active === 'Configuración' && !['Dueño', 'Gerencia'].includes(role)) setActive('Resumen')
+  }, [active, role])
 
   const openRms = (recommendationId?: string) => {
     setSelectedRecommendationId(recommendationId)
@@ -84,15 +88,21 @@ function App() {
   const updateStaffRequests = (updater: (rows: DashboardData['staffRequests']) => DashboardData['staffRequests']) => {
     setData(current => current ? { ...current, staffRequests: updater(current.staffRequests) } : current)
   }
+  const updateStaff = (updater: (rows: DashboardData['staff']) => DashboardData['staff']) => {
+    setData(current => current ? { ...current, staff: updater(current.staff) } : current)
+  }
+  const updateUserAccounts = (updater: (rows: DashboardData['userAccounts']) => DashboardData['userAccounts']) => {
+    setData(current => current ? { ...current, userAccounts: updater(current.userAccounts) } : current)
+  }
 
   if (!authenticated) return <LoginScreen onLogin={() => { localStorage.setItem('hms_demo_auth', 'true'); setAuthenticated(true) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">MS</div>{!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.7.0</small></div>}</div>
+      <div className="brand"><div className="brand-mark">MS</div>{!collapsed && <div><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.8.0</small></div>}</div>
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
-      <nav>{menu.map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => enabled && setActive(label as ActivePage)}><Icon size={18}/>{!collapsed && <><span>{label}</span>{!enabled && <em>PRÓX.</em>}</>}</button>)}</nav>
+      <nav>{menu.filter(([label]) => label !== 'Configuración' || ['Dueño', 'Gerencia'].includes(role)).map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => enabled && setActive(label as ActivePage)}><Icon size={18}/>{!collapsed && <><span>{label}</span>{!enabled && <em>PRÓX.</em>}</>}</button>)}</nav>
       {!collapsed && <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>}
     </aside>
 
@@ -130,6 +140,11 @@ function App() {
         onSchedulesChange={updateStaffSchedules} onTimeEntriesChange={updateStaffTimeEntries}
         onRequestsChange={updateStaffRequests} onNotify={setToast}
       />}
+      {active === 'Configuración' && <SettingsView
+        role={role} staff={data.staff} accounts={data.userAccounts}
+        onStaffChange={updateStaff} onAccountsChange={updateUserAccounts}
+        onSchedulesChange={updateStaffSchedules} onNotify={setToast}
+      />}
     </main>
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>
@@ -144,7 +159,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('Contraseña incorrecta')
   }
   return <div className="login-shell">
-    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.7.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
+    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.8.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
     <section className="login-form-panel"><form className="login-form" onSubmit={submit}><p className="eyebrow">ACCESO INTERNO</p><h2>Bienvenido</h2><p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p><label htmlFor="password">Contraseña</label><input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••"/>{error && <div className="login-error">{error}</div>}<button type="submit">Entrar al sistema</button><small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small></form></section>
   </div>
 }
