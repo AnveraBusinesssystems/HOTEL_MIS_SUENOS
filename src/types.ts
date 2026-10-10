@@ -218,6 +218,47 @@ export interface TourBooking {
   notes?: string
 }
 
+export type StaffRole = 'Gerencia' | 'Administración' | 'Recepción' | 'Cocina' | 'Limpieza' | 'Alberca'
+
+export interface StaffMember {
+  id: string
+  name: string
+  role: StaffRole
+  weeklySalary: number
+  status: 'Activo' | 'Inactivo'
+}
+
+export interface StaffScheduleEntry {
+  employeeId: string
+  date: string
+  isRest: boolean
+  unpaidLeave?: boolean
+  shiftStart?: string
+  shiftEnd?: string
+}
+
+export interface StaffTimeEntry {
+  id: string
+  employeeId: string
+  date: string
+  clockIn: string
+  clockOut?: string
+}
+
+export type StaffRequestType = 'Cambio de descanso' | 'Día libre sin goce'
+
+export interface StaffRequest {
+  id: string
+  employeeId: string
+  type: StaffRequestType
+  requestedDate: string
+  proposedDate?: string
+  reason: string
+  status: 'Pendiente' | 'Aprobada' | 'Rechazada'
+  createdAt: string
+  reviewedBy?: string
+}
+
 export type CashMovementType = 'Entrada' | 'Salida'
 export type CashPaymentMethod = 'Efectivo' | 'Tarjeta' | 'Transferencia'
 export type CashArea = 'Reservas' | 'Recepción' | 'Restaurante' | 'Lavandería' | 'Limpieza' | 'Mantenimiento' | 'Administración' | 'Otros'
@@ -288,6 +329,10 @@ export interface DashboardData {
   operationTasks: OperationTask[]
   operationDays: OperationDay[]
   tours: TourBooking[]
+  staff: StaffMember[]
+  staffSchedules: StaffScheduleEntry[]
+  staffTimeEntries: StaffTimeEntry[]
+  staffRequests: StaffRequest[]
   cashMovements: CashMovement[]
   cashDays: CashDay[]
   costs: CostSummary

@@ -2,7 +2,7 @@ import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
   CashDay, CashMovement, ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
   RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
-  RoomTypeConfig, TourBooking,
+  RoomTypeConfig, StaffMember, StaffRequest, StaffScheduleEntry, StaffTimeEntry, TourBooking,
 } from '../types'
 
 export const roomTypes: RoomTypeConfig[] = [
@@ -283,6 +283,63 @@ export const tours: TourBooking[] = [
     receptionCommissionStatus: 'Pagada', receptionCommissionMethod: 'Efectivo', receptionCommissionPaidAt: '2026-10-07 12:12',
     settlementDueDate: '2026-10-07', createdAt: '2026-10-02 16:40', createdBy: 'Recepción',
   },
+]
+
+export const staff: StaffMember[] = [
+  { id: 'EMP-001', name: 'María López', role: 'Limpieza', weeklySalary: 2800, status: 'Activo' },
+  { id: 'EMP-002', name: 'Elena Pérez', role: 'Limpieza', weeklySalary: 2800, status: 'Activo' },
+  { id: 'EMP-003', name: 'Diego Santos', role: 'Recepción', weeklySalary: 3200, status: 'Activo' },
+  { id: 'EMP-004', name: 'Karla Méndez', role: 'Cocina', weeklySalary: 3000, status: 'Activo' },
+  { id: 'EMP-005', name: 'Luis Tun', role: 'Alberca', weeklySalary: 2600, status: 'Activo' },
+  { id: 'EMP-006', name: 'Laura Gómez', role: 'Administración', weeklySalary: 4200, status: 'Activo' },
+]
+
+const staffShift: Record<string, { start: string; end: string; restDay: number }> = {
+  'EMP-001': { start: '08:00', end: '16:00', restDay: 0 },
+  'EMP-002': { start: '09:00', end: '17:00', restDay: 3 },
+  'EMP-003': { start: '08:00', end: '16:00', restDay: 2 },
+  'EMP-004': { start: '06:30', end: '14:30', restDay: 3 },
+  'EMP-005': { start: '07:00', end: '15:00', restDay: 1 },
+  'EMP-006': { start: '09:00', end: '17:00', restDay: 0 },
+}
+
+export const staffSchedules: StaffScheduleEntry[] = staff.flatMap(employee => Array.from({ length: 28 }, (_, index) => {
+  const date = new Date('2026-09-28T12:00:00')
+  date.setDate(date.getDate() + index)
+  const shift = staffShift[employee.id]
+  const isRest = date.getDay() === shift.restDay
+  return { employeeId: employee.id, date: iso(date), isRest, shiftStart: isRest ? undefined : shift.start, shiftEnd: isRest ? undefined : shift.end }
+}))
+
+export const staffTimeEntries: StaffTimeEntry[] = [
+  { id: 'ASIS-001', employeeId: 'EMP-001', date: '2026-10-05', clockIn: '07:58', clockOut: '16:03' },
+  { id: 'ASIS-002', employeeId: 'EMP-001', date: '2026-10-06', clockIn: '08:04', clockOut: '16:08' },
+  { id: 'ASIS-003', employeeId: 'EMP-001', date: '2026-10-07', clockIn: '07:55', clockOut: '15:57' },
+  { id: 'ASIS-004', employeeId: 'EMP-001', date: '2026-10-08', clockIn: '08:01', clockOut: '16:00' },
+  { id: 'ASIS-005', employeeId: 'EMP-002', date: '2026-10-05', clockIn: '09:03', clockOut: '17:02' },
+  { id: 'ASIS-006', employeeId: 'EMP-002', date: '2026-10-06', clockIn: '08:57', clockOut: '17:06' },
+  { id: 'ASIS-007', employeeId: 'EMP-002', date: '2026-10-08', clockIn: '09:00', clockOut: '17:01' },
+  { id: 'ASIS-008', employeeId: 'EMP-002', date: '2026-10-09', clockIn: '09:06' },
+  { id: 'ASIS-009', employeeId: 'EMP-003', date: '2026-10-05', clockIn: '07:52', clockOut: '16:00' },
+  { id: 'ASIS-010', employeeId: 'EMP-003', date: '2026-10-07', clockIn: '08:01', clockOut: '16:04' },
+  { id: 'ASIS-011', employeeId: 'EMP-003', date: '2026-10-08', clockIn: '07:59', clockOut: '16:02' },
+  { id: 'ASIS-012', employeeId: 'EMP-003', date: '2026-10-09', clockIn: '08:03' },
+  { id: 'ASIS-013', employeeId: 'EMP-004', date: '2026-10-05', clockIn: '06:27', clockOut: '14:31' },
+  { id: 'ASIS-014', employeeId: 'EMP-004', date: '2026-10-06', clockIn: '06:35', clockOut: '14:28' },
+  { id: 'ASIS-015', employeeId: 'EMP-004', date: '2026-10-08', clockIn: '06:29', clockOut: '14:34' },
+  { id: 'ASIS-016', employeeId: 'EMP-005', date: '2026-10-06', clockIn: '06:58', clockOut: '15:03' },
+  { id: 'ASIS-017', employeeId: 'EMP-005', date: '2026-10-07', clockIn: '07:04', clockOut: '15:01' },
+  { id: 'ASIS-018', employeeId: 'EMP-005', date: '2026-10-08', clockIn: '06:56', clockOut: '15:00' },
+  { id: 'ASIS-019', employeeId: 'EMP-006', date: '2026-10-05', clockIn: '08:56', clockOut: '17:04' },
+  { id: 'ASIS-020', employeeId: 'EMP-006', date: '2026-10-06', clockIn: '09:02', clockOut: '17:00' },
+  { id: 'ASIS-021', employeeId: 'EMP-006', date: '2026-10-07', clockIn: '08:59', clockOut: '17:03' },
+  { id: 'ASIS-022', employeeId: 'EMP-006', date: '2026-10-08', clockIn: '09:01', clockOut: '17:02' },
+]
+
+export const staffRequests: StaffRequest[] = [
+  { id: 'SOL-001', employeeId: 'EMP-001', type: 'Cambio de descanso', requestedDate: '2026-10-11', proposedDate: '2026-10-10', reason: 'Compromiso familiar el sábado.', status: 'Pendiente', createdAt: '2026-10-08 16:20' },
+  { id: 'SOL-002', employeeId: 'EMP-004', type: 'Día libre sin goce', requestedDate: '2026-10-12', reason: 'Trámite personal fuera de la isla.', status: 'Pendiente', createdAt: '2026-10-09 10:15' },
+  { id: 'SOL-003', employeeId: 'EMP-002', type: 'Cambio de descanso', requestedDate: '2026-10-07', proposedDate: '2026-10-11', reason: 'Cita médica.', status: 'Aprobada', createdAt: '2026-10-03 13:05', reviewedBy: 'Gerencia' },
 ]
 
 export const cashMovements: CashMovement[] = [
