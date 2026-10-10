@@ -186,6 +186,38 @@ export interface OperationDay {
   openedAt?: string
 }
 
+export type TourStatus = 'Agendado' | 'Realizado' | 'Cancelado'
+export type TourPaymentStatus = 'Pendiente' | 'Pagado'
+export type TourSettlementStatus = 'Pendiente' | 'Liquidado'
+export type TourCommissionStatus = 'Pendiente' | 'Pagada'
+
+export interface TourBooking {
+  id: string
+  reservationId?: string
+  guestName: string
+  tourType: string
+  provider: string
+  serviceDate: string
+  serviceTime: string
+  people: number
+  salePrice: number
+  providerAmount: number
+  status: TourStatus
+  paymentStatus: TourPaymentStatus
+  paymentMethod?: CashPaymentMethod
+  paidAt?: string
+  providerSettlementStatus: TourSettlementStatus
+  providerSettlementMethod?: CashPaymentMethod
+  settledAt?: string
+  receptionCommissionStatus: TourCommissionStatus
+  receptionCommissionMethod?: CashPaymentMethod
+  receptionCommissionPaidAt?: string
+  settlementDueDate: string
+  createdAt: string
+  createdBy: string
+  notes?: string
+}
+
 export type CashMovementType = 'Entrada' | 'Salida'
 export type CashPaymentMethod = 'Efectivo' | 'Tarjeta' | 'Transferencia'
 export type CashArea = 'Reservas' | 'Recepción' | 'Restaurante' | 'Lavandería' | 'Limpieza' | 'Mantenimiento' | 'Administración' | 'Otros'
@@ -193,6 +225,7 @@ export type CashMovementCategory =
   | 'Pago de reserva' | 'Anticipo de reserva' | 'Venta de restaurante' | 'Otro ingreso'
   | 'Compra de inventario' | 'Mantenimiento' | 'Lavandería' | 'Servicios'
   | 'Reembolso' | 'Retiro de efectivo' | 'Gastos externos' | 'Otro gasto'
+  | 'Cobro de tour' | 'Pago a proveedor de tour' | 'Comisión de tour a recepción'
 
 export interface CashPurchaseItem {
   product: string
@@ -214,6 +247,7 @@ export interface CashMovement {
   status: 'Registrado' | 'Anulado'
   createdBy: string
   reservationId?: string
+  tourId?: string
   purchaseId?: string
   purchaseItems?: CashPurchaseItem[]
   annulledBy?: string
@@ -253,6 +287,7 @@ export interface DashboardData {
   roomStates: RoomState[]
   operationTasks: OperationTask[]
   operationDays: OperationDay[]
+  tours: TourBooking[]
   cashMovements: CashMovement[]
   cashDays: CashDay[]
   costs: CostSummary

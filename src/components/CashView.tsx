@@ -66,6 +66,9 @@ const areaForCategory: Record<CashMovementCategory, CashArea> = {
   'Gastos externos': 'Administración',
   'Retiro de efectivo': 'Administración',
   'Otro gasto': 'Otros',
+  'Cobro de tour': 'Recepción',
+  'Pago a proveedor de tour': 'Administración',
+  'Comisión de tour a recepción': 'Administración',
 }
 
 const freshDraft = (type: CashMovementType): Draft => ({
@@ -121,7 +124,7 @@ export function CashView({
 
   const filtered = dayMovements.filter(item => {
     const query = search.trim().toLowerCase()
-    const matchesSearch = !query || [item.id, item.description, item.area, item.category, item.reservationId, item.purchaseId]
+    const matchesSearch = !query || [item.id, item.description, item.area, item.category, item.reservationId, item.tourId, item.purchaseId]
       .some(value => value?.toLowerCase().includes(query))
     return matchesSearch && (typeFilter === 'Todos' || item.type === typeFilter) && (methodFilter === 'Todos' || item.paymentMethod === methodFilter)
   }).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`))
@@ -237,7 +240,7 @@ export function CashView({
         </div>
         <div className="table-scroll"><table className="cash-table"><thead><tr><th>Hora / ID</th><th>Concepto / categoría</th><th>Método</th><th>Entrada</th><th>Salida</th><th>Responsable</th><th></th></tr></thead><tbody>
           {filtered.map(item => <tr key={item.id} className={item.status === 'Anulado' ? 'annulled' : ''} onClick={() => setSelectedMovement(item)}>
-            <td><b>{item.time}</b><small>{item.id}</small></td><td><b>{item.description}</b><small>{item.category}{item.reservationId ? ` · ${item.reservationId}` : ''}</small></td><td><span className={`cash-method ${item.paymentMethod.toLowerCase()}`}>{item.paymentMethod}</span></td><td className="money-cell positive">{item.type === 'Entrada' ? money(item.amount) : '—'}</td><td className="money-cell negative">{item.type === 'Salida' ? money(item.amount) : '—'}</td><td>{item.createdBy}{item.status === 'Anulado' && <small className="annulled-label">ANULADO</small>}</td><td><button className="row-open" aria-label="Ver movimiento"><ChevronRight size={15}/></button></td>
+            <td><b>{item.time}</b><small>{item.id}</small></td><td><b>{item.description}</b><small>{item.category}{item.tourId ? ` · ${item.tourId}` : item.reservationId ? ` · ${item.reservationId}` : ''}</small></td><td><span className={`cash-method ${item.paymentMethod.toLowerCase()}`}>{item.paymentMethod}</span></td><td className="money-cell positive">{item.type === 'Entrada' ? money(item.amount) : '—'}</td><td className="money-cell negative">{item.type === 'Salida' ? money(item.amount) : '—'}</td><td>{item.createdBy}{item.status === 'Anulado' && <small className="annulled-label">ANULADO</small>}</td><td><button className="row-open" aria-label="Ver movimiento"><ChevronRight size={15}/></button></td>
           </tr>)}
         </tbody></table></div>
         {!filtered.length && <div className="cash-empty"><WalletCards size={24}/><b>Sin movimientos</b><span>No hay registros que coincidan con los filtros.</span></div>}
@@ -321,9 +324,10 @@ function MovementDetail({ movement, canAnnul, onClose, onAnnul }: { movement: Ca
   return <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}><aside className="drawer cash-detail">
     <header><div><span>DETALLE DEL MOVIMIENTO</span><h2>{movement.description}</h2><p>{movement.id}</p></div><button onClick={onClose}><X size={18}/></button></header>
     <section className={`movement-amount ${movement.type.toLowerCase()}`}><span>{movement.type}</span><strong>{movement.type === 'Entrada' ? '+' : '−'} {money(movement.amount)}</strong><small className={movement.status === 'Anulado' ? 'annulled-label' : ''}>{movement.status}</small></section>
-    <section className="drawer-section cash-detail-grid"><div><small>Fecha</small><b>{longDate(movement.date)} · {movement.time}</b></div><div><small>Método</small><b>{movement.paymentMethod}</b></div><div><small>Categoría</small><b>{movement.category}</b></div><div><small>Registrado por</small><b>{movement.createdBy}</b></div>{movement.reservationId && <div><small>Reserva</small><b>{movement.reservationId}</b></div>}{movement.purchaseId && <div><small>ID de compra</small><b>{movement.purchaseId}</b></div>}</section>
+    <section className="drawer-section cash-detail-grid"><div><small>Fecha</small><b>{longDate(movement.date)} · {movement.time}</b></div><div><small>Método</small><b>{movement.paymentMethod}</b></div><div><small>Categoría</small><b>{movement.category}</b></div><div><small>Registrado por</small><b>{movement.createdBy}</b></div>{movement.reservationId && <div><small>Reserva</small><b>{movement.reservationId}</b></div>}{movement.tourId && <div><small>Tour</small><b>{movement.tourId}</b></div>}{movement.purchaseId && <div><small>ID de compra</small><b>{movement.purchaseId}</b></div>}</section>
     {Boolean(movement.purchaseItems?.length) && <section className="drawer-section purchase-detail"><span className="drawer-label">PRODUCTOS DE LA COMPRA</span><div className="purchase-detail-head"><span>Producto</span><span>Cantidad</span><span>Unidad</span><span>Total</span></div>{movement.purchaseItems?.map((item, index) => <div className="purchase-detail-row" key={`${item.product}-${index}`}><b>{item.product}</b><span>{item.quantity}</span><span>{item.unit}</span><strong>{money(item.total)}</strong></div>)}</section>}
+    {movement.tourId && movement.status === 'Registrado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Este movimiento se originó en Tours. Las correcciones se harán desde ese flujo para mantener Caja y el tour sincronizados.</p></section>}
     {movement.status === 'Anulado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Anulado por {movement.annulledBy}. El registro se conserva para auditoría.</p></section>}
-    <footer><button onClick={onClose}>Cerrar</button>{canAnnul && movement.status === 'Registrado' && <button className="danger-action" onClick={onAnnul}>Anular movimiento</button>}</footer>
+    <footer><button onClick={onClose}>Cerrar</button>{canAnnul && movement.status === 'Registrado' && !movement.tourId && <button className="danger-action" onClick={onAnnul}>Anular movimiento</button>}</footer>
   </aside></div>
 }

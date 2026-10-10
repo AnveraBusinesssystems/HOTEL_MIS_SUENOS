@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, BedDouble, CalendarDays, CheckCircle2, Clock3, LogIn, LogOut,
-  PackageOpen, Play, RefreshCw, Sparkles, UserRound, Wrench, X,
+  MapPinned, PackageOpen, Play, RefreshCw, Sparkles, UserRound, Wrench, X,
 } from 'lucide-react'
 import type {
-  OperationDay, OperationTask, Reservation, Role, RoomAccessStatus, RoomIssueType, RoomState,
+  CashMovement, OperationDay, OperationTask, Reservation, Role, RoomAccessStatus, RoomIssueType, RoomState, TourBooking,
 } from '../types'
 import { longDate, number, shortDate } from '../utils'
+import { ToursView } from './ToursView'
 
 const hotelDate = () => {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
@@ -18,7 +19,7 @@ const TODAY = hotelDate()
 const completedNow = () => `${TODAY} · ${hotelTime()}`
 const completionTime = (value?: string) => value?.includes(' · ') ? value.split(' · ')[1] : value
 
-type OperationTab = 'Hoy' | 'Habitaciones' | 'Limpieza'
+type OperationTab = 'Hoy' | 'Habitaciones' | 'Limpieza' | 'Tours'
 type CleaningQueue = 'Salidas' | 'Limpieza' | 'Check'
 type PriorityItem = {
   id: string
@@ -45,10 +46,14 @@ type Props = {
   rooms: RoomState[]
   tasks: OperationTask[]
   days: OperationDay[]
+  tours: TourBooking[]
+  cashMovements: CashMovement[]
   onReservationsChange: (updater: (rows: Reservation[]) => Reservation[]) => void
   onRoomsChange: (updater: (rows: RoomState[]) => RoomState[]) => void
   onTasksChange: (updater: (rows: OperationTask[]) => OperationTask[]) => void
   onDaysChange: (updater: (rows: OperationDay[]) => OperationDay[]) => void
+  onToursChange: (updater: (rows: TourBooking[]) => TourBooking[]) => void
+  onCashMovementsChange: (updater: (rows: CashMovement[]) => CashMovement[]) => void
   onNotify: (message: string) => void
 }
 
@@ -66,7 +71,7 @@ const issueTaskMeta = (issue: RoomIssueType) => {
   const technical = issue === 'Luces no funcionan' || issue === 'A/C no funciona bien'
   return { type: (technical ? 'Mantenimiento' : 'Reposición') as OperationTask['type'], priority: (issue === 'No hay llaves' ? 'Crítica' : technical ? 'Alta' : 'Normal') as OperationTask['priority'], assignedTo: technical ? 'Gerencia' : 'Limpieza' }
 }
-const allowedTabsFor = (role: Role): OperationTab[] => role === 'Limpieza' ? ['Limpieza', 'Habitaciones'] : role === 'Recepción' ? ['Hoy', 'Habitaciones'] : ['Cocina', 'Alberca'].includes(role) ? ['Hoy'] : ['Hoy', 'Habitaciones', 'Limpieza']
+const allowedTabsFor = (role: Role): OperationTab[] => role === 'Limpieza' ? ['Limpieza', 'Habitaciones'] : role === 'Recepción' ? ['Hoy', 'Habitaciones', 'Tours'] : ['Cocina', 'Alberca'].includes(role) ? ['Hoy'] : ['Hoy', 'Habitaciones', 'Limpieza', 'Tours']
 const canUpdateOperation = (role: Role) => ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
 const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms.map(room => {
   if (room.occupancy === 'Bloqueada') return room
@@ -76,7 +81,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onNotify } = props
+  const { role, reservations, rooms, tasks, days, tours, cashMovements, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onToursChange, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
@@ -163,18 +168,26 @@ export function OperationsView(props: Props) {
     if (item.reservation && !item.reservation.roomNumber) return onNotify(`Abre ${item.reservation.id} desde el módulo Reservas para asignar habitación`)
     if (item.roomNumber) { setTab(item.task && CLEANING_TYPES.includes(item.task.type) && allowedTabs.includes('Limpieza') ? 'Limpieza' : 'Habitaciones'); setSelectedDate(TODAY) }
   }
-  const chooseTab = (next: OperationTab) => { setTab(next); if (next !== 'Hoy') setSelectedDate(TODAY) }
+  const chooseTab = (next: OperationTab) => { setTab(next); if (next === 'Habitaciones' || next === 'Limpieza') setSelectedDate(TODAY) }
 
   return <div className="page operations-page">
     <section className="page-heading operation-heading"><div><p className="eyebrow">CENTRO DE CONTROL</p><h1>Operación</h1><p>Una sola vista para coordinar recepción, habitaciones y limpieza.</p></div><div className={`operation-day-state ${isLiveDate && selectedDay.status === 'Abierto' ? 'abierto' : ''}`}><span>{isLiveDate ? 'SINCRONIZACIÓN CLOUDBEDS' : selectedDate < TODAY ? 'CONSULTA HISTÓRICA' : 'PLANIFICACIÓN'}</span><strong>{isLiveDate ? selectedDay.status === 'Abierto' ? 'Actualizado' : 'Pendiente' : longDate(selectedDate)}</strong><small>{isLiveDate && selectedDay.openedAt ? `${selectedDay.openedBy} · ${selectedDay.openedAt}` : isLiveDate ? 'Recepción debe actualizar la operación' : 'Vista informativa · sin cambios operativos'}</small></div></section>
 
-    {tab === 'Hoy' && <section className="operation-date-strip" ref={dateStripRef}>{dayStrip.map(day => <button key={day.date} className={`${day.date === selectedDate ? 'active' : ''} ${day.date === TODAY ? 'today' : ''}`} onClick={() => setSelectedDate(day.date)}><span>{shortDate(day.date)}</span><b>{number(day.occupancy, 0)}%</b><small>{day.arrivals} lleg. · {day.departures} sal.</small><em>{day.cleaningLoad} limp.</em></button>)}</section>}
+    {(tab === 'Hoy' || tab === 'Tours') && <section className="operation-date-strip" ref={dateStripRef}>{dayStrip.map(day => <button key={day.date} className={`${day.date === selectedDate ? 'active' : ''} ${day.date === TODAY ? 'today' : ''}`} onClick={() => setSelectedDate(day.date)}><span>{shortDate(day.date)}</span><b>{number(day.occupancy, 0)}%</b><small>{day.arrivals} lleg. · {day.departures} sal.</small><em>{day.cleaningLoad} limp.</em></button>)}</section>}
 
-    <section className="operation-controls"><div className="operation-tabs">{allowedTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => chooseTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : <Sparkles size={15}/>} {item === 'Hoy' ? 'Control de hoy' : item}</button>)}</div><div className="day-actions">{tab === 'Hoy' && !isLiveDate && <button onClick={() => setSelectedDate(TODAY)}><CalendarDays size={14}/>Volver a hoy</button>}{tab === 'Hoy' && isLiveDate && canUpdateOperation(role) && <button className="primary-action" onClick={syncOperation}><RefreshCw size={14}/>{selectedDay.status === 'Abierto' ? 'Actualizar operación' : 'Iniciar operación'}</button>}</div></section>
+    <section className="operation-controls"><div className="operation-tabs">{allowedTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => chooseTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : item === 'Tours' ? <MapPinned size={15}/> : <Sparkles size={15}/>} {item === 'Hoy' ? 'Control de hoy' : item}</button>)}</div><div className="day-actions">{(tab === 'Hoy' || tab === 'Tours') && !isLiveDate && <button onClick={() => setSelectedDate(TODAY)}><CalendarDays size={14}/>Volver a hoy</button>}{tab === 'Hoy' && isLiveDate && canUpdateOperation(role) && <button className="primary-action" onClick={syncOperation}><RefreshCw size={14}/>{selectedDay.status === 'Abierto' ? 'Actualizar operación' : 'Iniciar operación'}</button>}</div></section>
 
     {tab === 'Hoy' && <TodayView date={selectedDate} isLive={isLiveDate} metrics={metrics} arrivals={arrivals} departures={departures} stays={stays} priorities={priorities} onPriority={runPriorityAction}/>}
     {tab === 'Habitaciones' && <RoomsView role={role} rooms={liveRooms} reservations={reservations} tasks={tasks} filter={roomFilter} setFilter={setRoomFilter} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onOpenCleaning={() => chooseTab('Limpieza')} onNotify={onNotify}/>}
-    {tab === 'Limpieza' && <CleaningView role={role} tasks={tasks.filter(task => task.date === TODAY || task.date < TODAY && (task.status !== 'Terminada' || task.completedAt?.startsWith(TODAY)))} rooms={liveRooms} reservations={reservations} onTasksChange={onTasksChange} onRoomsChange={onRoomsChange} onNotify={onNotify}/>}
+    {tab === 'Limpieza' && <CleaningView
+      role={role} tasks={tasks.filter(task => task.date === TODAY || task.date < TODAY && (task.status !== 'Terminada' || task.completedAt?.startsWith(TODAY)))}
+      rooms={liveRooms} reservations={reservations} onTasksChange={onTasksChange}
+      onRoomsChange={onRoomsChange} onNotify={onNotify}
+    />}
+    {tab === 'Tours' && <ToursView
+      role={role} date={selectedDate} tours={tours} reservations={reservations} cashMovements={cashMovements}
+      onToursChange={onToursChange} onCashMovementsChange={onCashMovementsChange} onNotify={onNotify}
+    />}
   </div>
 }
 

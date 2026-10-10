@@ -2,7 +2,7 @@ import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
   CashDay, CashMovement, ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
   RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
-  RoomTypeConfig,
+  RoomTypeConfig, TourBooking,
 } from '../types'
 
 export const roomTypes: RoomTypeConfig[] = [
@@ -252,6 +252,38 @@ export const operationDays: OperationDay[] = Array.from({ length: 21 }, (_, inde
     openedAt: key < '2026-10-06' ? '08:00' : undefined,
   }
 })
+
+export const tours: TourBooking[] = [
+  {
+    id: 'TOUR-20261009-001', reservationId: 'CB-84621', guestName: 'Ana Torres',
+    tourType: 'Tiburón ballena', provider: 'Holbox Tours', serviceDate: '2026-10-09', serviceTime: '07:30', people: 2,
+    salePrice: 2800, providerAmount: 2000, status: 'Agendado', paymentStatus: 'Pendiente',
+    providerSettlementStatus: 'Pendiente', receptionCommissionStatus: 'Pendiente', settlementDueDate: '2026-10-13',
+    createdAt: '2026-10-08 18:20', createdBy: 'Recepción', notes: 'Recoger en recepción 15 minutos antes.',
+  },
+  {
+    id: 'TOUR-20261009-002', guestName: 'Emma García',
+    tourType: 'Bioluminiscencia', provider: 'VIP Holbox', serviceDate: '2026-10-09', serviceTime: '20:00', people: 2,
+    salePrice: 1600, providerAmount: 1100, status: 'Agendado', paymentStatus: 'Pagado', paymentMethod: 'Efectivo', paidAt: '2026-10-08 17:10',
+    providerSettlementStatus: 'Pendiente', receptionCommissionStatus: 'Pendiente', settlementDueDate: '2026-10-13',
+    createdAt: '2026-10-08 16:55', createdBy: 'Recepción', notes: 'Cliente externo; llega directo al hotel.',
+  },
+  {
+    id: 'TOUR-20261005-001', reservationId: 'CB-84351', guestName: 'Carlos Medina',
+    tourType: 'Tres Islas', provider: 'Holbox Tours', serviceDate: '2026-10-05', serviceTime: '09:00', people: 2,
+    salePrice: 1000, providerAmount: 700, status: 'Realizado', paymentStatus: 'Pagado', paymentMethod: 'Tarjeta', paidAt: '2026-10-05 08:30',
+    providerSettlementStatus: 'Pendiente', receptionCommissionStatus: 'Pendiente', settlementDueDate: '2026-10-09',
+    createdAt: '2026-10-04 19:10', createdBy: 'Recepción',
+  },
+  {
+    id: 'TOUR-20261003-001', reservationId: 'CB-84492', guestName: 'Marta Ruiz',
+    tourType: 'Pesca', provider: 'Tours El Chino', serviceDate: '2026-10-03', serviceTime: '06:30', people: 3,
+    salePrice: 3000, providerAmount: 2200, status: 'Realizado', paymentStatus: 'Pagado', paymentMethod: 'Efectivo', paidAt: '2026-10-03 06:15',
+    providerSettlementStatus: 'Liquidado', providerSettlementMethod: 'Efectivo', settledAt: '2026-10-07 12:10',
+    receptionCommissionStatus: 'Pagada', receptionCommissionMethod: 'Efectivo', receptionCommissionPaidAt: '2026-10-07 12:12',
+    settlementDueDate: '2026-10-07', createdAt: '2026-10-02 16:40', createdBy: 'Recepción',
+  },
+]
 
 export const cashMovements: CashMovement[] = [
   { id: 'MOV-20261007-001', date: '2026-10-07', time: '08:42', type: 'Entrada', amount: 1500, paymentMethod: 'Efectivo', area: 'Reservas', category: 'Pago de reserva', description: 'Abono de Ana Torres', status: 'Registrado', createdBy: 'Recepción', reservationId: 'CB-84621' },
