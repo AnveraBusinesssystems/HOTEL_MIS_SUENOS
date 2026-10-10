@@ -231,7 +231,7 @@ export interface StaffMember {
   status: 'Activo' | 'Inactivo'
 }
 
-export type SystemModule = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Personal'
+export type SystemModule = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Inventario' | 'Personal'
 export type AccessLevel = 'Sin acceso' | 'Ver' | 'Editar'
 
 export interface UserAccount {
@@ -316,6 +316,20 @@ export interface CashDay {
   countedCash?: number
 }
 
+export type InventoryCategory = 'Alimentos' | 'Bebidas' | 'Limpieza' | 'Lavandería' | 'Amenidades' | 'Suministros'
+
+export interface InventoryItem {
+  id: string
+  name: string
+  category: InventoryCategory
+  unit: string
+  stock: number
+  parLevel: number
+  suggestedPurchase: number
+  lastUpdated: string
+  lastPrice: number
+}
+
 export interface CostSummary {
   registered: number
   estimated: number
@@ -351,6 +365,7 @@ export interface DashboardData {
   userAccounts: UserAccount[]
   cashMovements: CashMovement[]
   cashDays: CashDay[]
+  inventory: InventoryItem[]
   costs: CostSummary
   alerts: Alert[]
   generatedAt: string

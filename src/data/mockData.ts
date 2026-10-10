@@ -1,6 +1,7 @@
 import type {
   Alert, CostSummary, DailyPerformance, HotelSnapshot, MonthlySummary,
   CashDay, CashMovement, ExpenseCategory, ExpenseRecord, OperationDay, OperationTask, Reservation,
+  InventoryItem,
   RMSRecommendation, RateDay, RoomMonthlyPerformance, RoomPerformance, RoomState,
   RoomTypeConfig, StaffMember, StaffRequest, StaffScheduleEntry, StaffTimeEntry, TourBooking, UserAccount,
 } from '../types'
@@ -11,6 +12,23 @@ export const roomTypes: RoomTypeConfig[] = [
   { code: 'CHA', name: 'King', rooms: 6, baseRate: 1750, minRate: 1350, maxRate: 2550 },
   { code: 'KAA', name: 'Queen económica', rooms: 2, baseRate: 1390, minRate: 1050, maxRate: 1950 },
   { code: 'MUU', name: 'Queen balcón', rooms: 5, baseRate: 1850, minRate: 1450, maxRate: 2700 },
+]
+
+export const inventory: InventoryItem[] = [
+  { id: 'INV-001', name: 'Huevo', category: 'Alimentos', unit: 'piezas', stock: 48, parLevel: 90, suggestedPurchase: 42, lastUpdated: 'Hoy · 07:20', lastPrice: 3.8 },
+  { id: 'INV-002', name: 'Jamón', category: 'Alimentos', unit: 'kg', stock: 1.4, parLevel: 4, suggestedPurchase: 3, lastUpdated: 'Hoy · 07:20', lastPrice: 148 },
+  { id: 'INV-003', name: 'Queso manchego', category: 'Alimentos', unit: 'kg', stock: 2.6, parLevel: 3, suggestedPurchase: 1, lastUpdated: 'Hoy · 07:20', lastPrice: 196 },
+  { id: 'INV-004', name: 'Harina para pancakes', category: 'Alimentos', unit: 'kg', stock: 0, parLevel: 5, suggestedPurchase: 5, lastUpdated: 'Hoy · 07:20', lastPrice: 54 },
+  { id: 'INV-005', name: 'Jitomate', category: 'Alimentos', unit: 'kg', stock: 3.2, parLevel: 3, suggestedPurchase: 0, lastUpdated: 'Hoy · 07:20', lastPrice: 42 },
+  { id: 'INV-006', name: 'Cebolla', category: 'Alimentos', unit: 'kg', stock: 1.7, parLevel: 2, suggestedPurchase: 1, lastUpdated: 'Ayer · 14:35', lastPrice: 35 },
+  { id: 'INV-007', name: 'Café', category: 'Bebidas', unit: 'kg', stock: 4, parLevel: 5, suggestedPurchase: 1, lastUpdated: 'Ayer · 14:35', lastPrice: 248 },
+  { id: 'INV-008', name: 'Caja de té', category: 'Bebidas', unit: 'cajas', stock: 2, parLevel: 2, suggestedPurchase: 0, lastUpdated: 'Ayer · 14:35', lastPrice: 33 },
+  { id: 'INV-009', name: 'Azúcar', category: 'Alimentos', unit: 'kg', stock: 12, parLevel: 8, suggestedPurchase: 0, lastUpdated: 'Ayer · 14:35', lastPrice: 22 },
+  { id: 'INV-010', name: 'Cloro', category: 'Limpieza', unit: 'L', stock: 8, parLevel: 10, suggestedPurchase: 2, lastUpdated: '08 oct · 16:10', lastPrice: 45 },
+  { id: 'INV-011', name: 'Detergente para ropa', category: 'Lavandería', unit: 'kg', stock: 3, parLevel: 6, suggestedPurchase: 3, lastUpdated: '08 oct · 16:10', lastPrice: 86 },
+  { id: 'INV-012', name: 'Papel higiénico', category: 'Amenidades', unit: 'rollos', stock: 42, parLevel: 60, suggestedPurchase: 18, lastUpdated: '08 oct · 16:10', lastPrice: 8.5 },
+  { id: 'INV-013', name: 'Shampoo individual', category: 'Amenidades', unit: 'piezas', stock: 110, parLevel: 100, suggestedPurchase: 0, lastUpdated: '08 oct · 16:10', lastPrice: 6.2 },
+  { id: 'INV-014', name: 'Bolsas negras', category: 'Suministros', unit: 'cajas', stock: 1, parLevel: 2, suggestedPurchase: 1, lastUpdated: '07 oct · 12:40', lastPrice: 286 },
 ]
 
 export const roomNumbers = {
@@ -303,16 +321,16 @@ export const staffSchedules: StaffScheduleEntry[] = staff.flatMap(employee => Ar
 
 const permissions = (values: Partial<UserAccount['permissions']>): UserAccount['permissions'] => ({
   Resumen: 'Ver', Indicadores: 'Sin acceso', 'RMS / Tarifas': 'Sin acceso', Reservas: 'Sin acceso',
-  'Operación diaria': 'Sin acceso', Caja: 'Sin acceso', Personal: 'Ver', ...values,
+  'Operación diaria': 'Sin acceso', Caja: 'Sin acceso', Inventario: 'Sin acceso', Personal: 'Ver', ...values,
 })
 
 export const userAccounts: UserAccount[] = [
   { id: 'USR-001', employeeId: 'EMP-001', username: 'maria.lopez', role: 'Limpieza', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Editar' }) },
   { id: 'USR-002', employeeId: 'EMP-002', username: 'elena.perez', role: 'Limpieza', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Editar' }) },
-  { id: 'USR-003', employeeId: 'EMP-003', username: 'diego.santos', role: 'Recepción', status: 'Activo', permissions: permissions({ Reservas: 'Editar', 'Operación diaria': 'Editar', Caja: 'Editar' }) },
-  { id: 'USR-004', employeeId: 'EMP-004', username: 'karla.mendez', role: 'Cocina', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Ver' }) },
+  { id: 'USR-003', employeeId: 'EMP-003', username: 'diego.santos', role: 'Recepción', status: 'Activo', permissions: permissions({ Reservas: 'Editar', 'Operación diaria': 'Editar', Caja: 'Editar', Inventario: 'Editar' }) },
+  { id: 'USR-004', employeeId: 'EMP-004', username: 'karla.mendez', role: 'Cocina', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Ver', Inventario: 'Editar' }) },
   { id: 'USR-005', employeeId: 'EMP-005', username: 'luis.tun', role: 'Alberca', status: 'Activo', permissions: permissions({ 'Operación diaria': 'Ver' }) },
-  { id: 'USR-006', employeeId: 'EMP-006', username: 'laura.gomez', role: 'Administración', status: 'Activo', permissions: permissions({ Indicadores: 'Ver', Reservas: 'Ver', 'Operación diaria': 'Editar', Caja: 'Editar', Personal: 'Editar' }) },
+  { id: 'USR-006', employeeId: 'EMP-006', username: 'laura.gomez', role: 'Administración', status: 'Activo', permissions: permissions({ Indicadores: 'Ver', Reservas: 'Ver', 'Operación diaria': 'Editar', Caja: 'Editar', Inventario: 'Editar', Personal: 'Editar' }) },
 ]
 
 export const staffTimeEntries: StaffTimeEntry[] = [

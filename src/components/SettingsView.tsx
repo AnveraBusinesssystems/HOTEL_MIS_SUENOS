@@ -30,7 +30,7 @@ type NewEmployee = {
 }
 
 const staffRoles: StaffRole[] = ['Gerencia', 'Administración', 'Recepción', 'Cocina', 'Limpieza', 'Alberca']
-const modules: SystemModule[] = ['Resumen', 'Indicadores', 'RMS / Tarifas', 'Reservas', 'Operación diaria', 'Caja', 'Personal']
+const modules: SystemModule[] = ['Resumen', 'Indicadores', 'RMS / Tarifas', 'Reservas', 'Operación diaria', 'Caja', 'Inventario', 'Personal']
 const levels: AccessLevel[] = ['Sin acceso', 'Ver', 'Editar']
 const restDays = [{ value: 1, label: 'Lunes' }, { value: 2, label: 'Martes' }, { value: 3, label: 'Miércoles' }, { value: 4, label: 'Jueves' }, { value: 5, label: 'Viernes' }, { value: 6, label: 'Sábado' }, { value: 0, label: 'Domingo' }]
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
@@ -39,11 +39,12 @@ const iso = (date: Date) => date.toISOString().slice(0, 10)
 const moveDays = (value: string, amount: number) => { const date = new Date(`${value}T12:00:00`); date.setDate(date.getDate() + amount); return iso(date) }
 
 const permissionsFor = (role: StaffRole): UserAccount['permissions'] => {
-  const base: UserAccount['permissions'] = { Resumen: 'Ver', Indicadores: 'Sin acceso', 'RMS / Tarifas': 'Sin acceso', Reservas: 'Sin acceso', 'Operación diaria': 'Sin acceso', Caja: 'Sin acceso', Personal: 'Ver' }
+  const base: UserAccount['permissions'] = { Resumen: 'Ver', Indicadores: 'Sin acceso', 'RMS / Tarifas': 'Sin acceso', Reservas: 'Sin acceso', 'Operación diaria': 'Sin acceso', Caja: 'Sin acceso', Inventario: 'Sin acceso', Personal: 'Ver' }
   if (role === 'Gerencia') return Object.fromEntries(modules.map(module => [module, 'Editar'])) as UserAccount['permissions']
-  if (role === 'Administración') return { ...base, Indicadores: 'Ver', Reservas: 'Ver', 'Operación diaria': 'Editar', Caja: 'Editar', Personal: 'Editar' }
-  if (role === 'Recepción') return { ...base, Reservas: 'Editar', 'Operación diaria': 'Editar', Caja: 'Editar' }
+  if (role === 'Administración') return { ...base, Indicadores: 'Ver', Reservas: 'Ver', 'Operación diaria': 'Editar', Caja: 'Editar', Inventario: 'Editar', Personal: 'Editar' }
+  if (role === 'Recepción') return { ...base, Reservas: 'Editar', 'Operación diaria': 'Editar', Caja: 'Editar', Inventario: 'Editar' }
   if (role === 'Limpieza') return { ...base, 'Operación diaria': 'Editar' }
+  if (role === 'Cocina') return { ...base, 'Operación diaria': 'Ver', Inventario: 'Editar' }
   return { ...base, 'Operación diaria': 'Ver' }
 }
 

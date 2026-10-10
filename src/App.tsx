@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Bell, CalendarDays, DollarSign, Gauge, LayoutDashboard, Menu,
-  ReceiptText, RefreshCw, Settings, Users, WalletCards, X,
+  PackageOpen, ReceiptText, RefreshCw, Settings, Users, WalletCards, X,
 } from 'lucide-react'
 import { IndicatorsView, SummaryView } from './components/DashboardViews'
 import { CashView } from './components/CashView'
@@ -10,10 +10,11 @@ import { RatesView } from './components/RatesView'
 import { ReservationsView } from './components/ReservationsView'
 import { SettingsView } from './components/SettingsView'
 import { StaffView } from './components/StaffView'
+import { InventoryView } from './components/InventoryView'
 import { hotelService } from './services/hotelService'
 import type { DashboardData, Role } from './types'
 
-type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Personal' | 'Configuración'
+type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Inventario' | 'Personal' | 'Configuración'
 
 const menu = [
   ['Resumen', LayoutDashboard, true],
@@ -22,13 +23,14 @@ const menu = [
   ['Reservas', CalendarDays, true],
   ['Operación diaria', ReceiptText, true],
   ['Caja', WalletCards, true],
+  ['Inventario', PackageOpen, true],
   ['Personal', Users, true],
   ['Configuración', Settings, true],
 ] as const
 
 const allPages = menu.map(([label]) => label) as ActivePage[]
 const managementPages = allPages.filter(page => page !== 'Configuración')
-const receptionPages: ActivePage[] = ['Operación diaria', 'Caja', 'Personal']
+const receptionPages: ActivePage[] = ['Operación diaria', 'Caja', 'Inventario', 'Personal']
 const staffPages: ActivePage[] = ['Operación diaria', 'Personal']
 const pagesByRole: Record<Role, ActivePage[]> = {
   'Dueño': allPages,
@@ -36,7 +38,7 @@ const pagesByRole: Record<Role, ActivePage[]> = {
   'Administración': managementPages,
   'Recepción': receptionPages,
   'Limpieza': staffPages,
-  'Cocina': staffPages,
+  'Cocina': ['Operación diaria', 'Inventario', 'Personal'],
   'Alberca': staffPages,
 }
 
@@ -100,6 +102,9 @@ function App() {
   const updateCashDays = (updater: (rows: DashboardData['cashDays']) => DashboardData['cashDays']) => {
     setData(current => current ? { ...current, cashDays: updater(current.cashDays) } : current)
   }
+  const updateInventory = (updater: (rows: DashboardData['inventory']) => DashboardData['inventory']) => {
+    setData(current => current ? { ...current, inventory: updater(current.inventory) } : current)
+  }
   const updateStaffSchedules = (updater: (rows: DashboardData['staffSchedules']) => DashboardData['staffSchedules']) => {
     setData(current => current ? { ...current, staffSchedules: updater(current.staffSchedules) } : current)
   }
@@ -123,7 +128,7 @@ function App() {
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">MS</div><div className="brand-copy"><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.10.0</small></div><button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20}/></button></div>
+      <div className="brand"><div className="brand-mark">MS</div><div className="brand-copy"><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.11.0</small></div><button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20}/></button></div>
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
       <nav>{menu.filter(([label]) => pagesByRole[role].includes(label)).map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => { if (enabled) { setActive(label as ActivePage); setMobileNavOpen(false) } }}><Icon size={18}/><span>{label}</span>{!enabled && <em>PRÓX.</em>}</button>)}</nav>
       <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>
@@ -159,6 +164,7 @@ function App() {
         onReservationsChange={updateReservations} onMovementsChange={updateCashMovements}
         onDaysChange={updateCashDays} onNotify={setToast}
       />}
+      {active === 'Inventario' && <InventoryView role={role} items={data.inventory} onChange={updateInventory} onNotify={setToast}/>}
       {active === 'Personal' && <StaffView
         role={role} staff={data.staff} schedules={data.staffSchedules}
         timeEntries={data.staffTimeEntries} requests={data.staffRequests}
@@ -184,7 +190,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('Contraseña incorrecta')
   }
   return <div className="login-shell">
-    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.10.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
+    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.11.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
     <section className="login-form-panel"><form className="login-form" onSubmit={submit}><p className="eyebrow">ACCESO INTERNO</p><h2>Bienvenido</h2><p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p><label htmlFor="password">Contraseña</label><input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••"/>{error && <div className="login-error">{error}</div>}<button type="submit">Entrar al sistema</button><small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small></form></section>
   </div>
 }
