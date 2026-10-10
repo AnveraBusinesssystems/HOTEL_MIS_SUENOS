@@ -26,6 +26,7 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'Todas' | InventoryCategory>('Todas')
   const [stateFilter, setStateFilter] = useState<'Todos' | StockState>('Todos')
+  const [countCategory, setCountCategory] = useState<InventoryCategory>('Alimentos')
   const [countDraft, setCountDraft] = useState<Record<string, string>>(() => Object.fromEntries(items.map(item => [item.id, String(item.stock)])))
   const [selected, setSelected] = useState<Set<string>>(() => new Set(items.filter(item => item.suggestedPurchase > 0).map(item => item.id)))
   const [orderDraft, setOrderDraft] = useState<Record<string, string>>(() => Object.fromEntries(items.map(item => [item.id, String(item.suggestedPurchase)])))
@@ -50,6 +51,7 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
   }), [category, items, search, stateFilter])
 
   const recommended = items.filter(item => item.suggestedPurchase > 0)
+  const countItems = items.filter(item => item.category === countCategory)
   const selectedItems = recommended.filter(item => selected.has(item.id))
   const estimatedTotal = selectedItems.reduce((sum, item) => sum + (Number(orderDraft[item.id]) || 0) * item.lastPrice, 0)
   const changedCount = items.filter(item => Number(countDraft[item.id]) !== item.stock && countDraft[item.id] !== '').length
@@ -93,7 +95,7 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
       <div><p className="eyebrow">CONTROL DE EXISTENCIAS</p><h1>Inventario</h1><p>Consulta existencias, registra el conteo físico y prepara la siguiente compra.</p></div>
       <div className="inventory-heading-actions">
         <span><PackageCheck size={14}/><small>Último conteo</small><b>{lastCountLabel}</b></span>
-        <button onClick={() => setTab('Conteo')}><ClipboardCheck size={15}/>Hacer conteo</button>
+        <button onClick={() => { if (role === 'Cocina') setCountCategory('Alimentos'); setTab('Conteo') }}><ClipboardCheck size={15}/>Hacer conteo</button>
         <button className="primary-action" onClick={() => setTab('Compra recomendada')}><ShoppingCart size={15}/>Revisar compra</button>
       </div>
     </section>
@@ -119,20 +121,24 @@ export function InventoryView({ role, items, onChange, onNotify }: Props) {
 
       <section className="panel inventory-table-panel">
         <header><div><span>EXISTENCIA ACTUAL</span><h2>Productos registrados</h2></div><small>Las cantidades mostradas son datos de demostración</small></header>
-        <div className="table-scroll"><table className="inventory-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Nivel objetivo</th><th>Estado</th><th>Último conteo</th><th></th></tr></thead><tbody>{visibleItems.map(item => {
+        <div className="table-scroll inventory-desktop-table"><table className="inventory-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Nivel objetivo</th><th>Estado</th><th>Último conteo</th><th></th></tr></thead><tbody>{visibleItems.map(item => {
           const state = stockState(item)
-          return <tr key={item.id}><td><b>{item.name}</b><small>{item.id}</small></td><td>{item.category}</td><td><strong>{formatQuantity(item.stock)}</strong> <small className="inline-unit">{item.unit}</small></td><td>{formatQuantity(item.parLevel)} {item.unit}</td><td><span className={`inventory-state ${state.toLowerCase()}`}>{state}</span></td><td>{item.lastUpdated}</td><td><button className="table-action" onClick={() => setTab('Conteo')}>Actualizar</button></td></tr>
+          return <tr key={item.id}><td><b>{item.name}</b><small>{item.id}</small></td><td>{item.category}</td><td><strong>{formatQuantity(item.stock)}</strong> <small className="inline-unit">{item.unit}</small></td><td>{formatQuantity(item.parLevel)} {item.unit}</td><td><span className={`inventory-state ${state.toLowerCase()}`}>{state}</span></td><td>{item.lastUpdated}</td><td><button className="table-action" onClick={() => { setCountCategory(item.category); setTab('Conteo') }}>Actualizar</button></td></tr>
         })}</tbody></table></div>
+        <div className="inventory-mobile-list">{visibleItems.map(item => {
+          const state = stockState(item)
+          return <article key={item.id}><header><span><b>{item.name}</b><small>{item.id} · {item.category}</small></span><em className={`inventory-state ${state.toLowerCase()}`}>{state}</em></header><div><span><small>EXISTENCIA</small><b>{formatQuantity(item.stock)} <i>{item.unit}</i></b></span><span><small>OBJETIVO</small><b>{formatQuantity(item.parLevel)} <i>{item.unit}</i></b></span></div><footer><small>Conteo: {item.lastUpdated}</small><button onClick={() => { setCountCategory(item.category); setTab('Conteo') }}>Contar</button></footer></article>
+        })}</div>
         {!visibleItems.length && <div className="inventory-empty"><Search size={22}/><b>No encontramos productos</b><span>Cambia los filtros o el texto de búsqueda.</span></div>}
       </section>
     </>}
 
     {tab === 'Conteo' && <section className="inventory-count-layout">
-      <article className="panel inventory-count-panel"><header><div><span>CONTEO FÍSICO</span><h2>Actualiza solamente lo que cambió</h2></div><em>{changedCount} modificados</em></header><div className="inventory-count-list">{items.map(item => {
+      <article className="panel inventory-count-panel"><header><div><span>CONTEO FÍSICO</span><h2>Actualiza solamente lo que cambió</h2></div><em>{changedCount} modificados</em></header><div className="inventory-count-filter"><label><span>SECCIÓN DEL CONTEO</span><select value={countCategory} onChange={event => setCountCategory(event.target.value as InventoryCategory)}>{categories.filter(item => item !== 'Todas').map(item => <option key={item}>{item}</option>)}</select></label><small>{countItems.length} productos en esta sección</small></div><div className="inventory-count-list">{countItems.map(item => {
         const draft = countDraft[item.id] ?? ''
         const changed = Number(draft) !== item.stock && draft !== ''
         return <div key={item.id} className={changed ? 'changed' : ''}><span><b>{item.name}</b><small>{item.category} · Anterior: {formatQuantity(item.stock)} {item.unit}</small></span><div className="count-control"><button onClick={() => updateCount(item.id, -1)} aria-label={`Restar ${item.name}`}><Minus size={14}/></button><input type="number" min="0" step="0.01" value={draft} onChange={event => setCountDraft({ ...countDraft, [item.id]: event.target.value })}/><i>{item.unit}</i><button onClick={() => updateCount(item.id, 1)} aria-label={`Sumar ${item.name}`}><Plus size={14}/></button></div>{changed ? <CheckCircle2 size={17} className="count-changed-icon"/> : <span className="count-unchanged">Sin cambio</span>}</div>
-      })}</div></article>
+      })}</div><div className="mobile-count-savebar"><span><b>{changedCount}</b><small>modificados</small></span><button className="primary-action" onClick={saveCount}>Guardar conteo</button></div></article>
       <aside className="panel count-review"><header><div><span>REVISIÓN</span><h2>Antes de guardar</h2></div></header><div><ClipboardCheck size={28}/><b>{changedCount} productos modificados</b><p>El sistema conservará las cantidades que no cambiaste y recalculará la compra sugerida.</p><button className="primary-action" onClick={saveCount}>Guardar conteo</button><button onClick={() => { setCountDraft(Object.fromEntries(items.map(item => [item.id, String(item.stock)]))); setTab('Existencias') }}>Cancelar</button></div></aside>
     </section>}
 
