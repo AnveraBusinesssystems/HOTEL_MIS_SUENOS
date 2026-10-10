@@ -129,13 +129,13 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
 function ReservationsCalendar({ dates, reservations, roomType, onOpen }: { dates: string[]; reservations: Reservation[]; roomType: 'Todas' | RoomCode; onOpen: (id: string) => void }) {
   const roomGroups = (Object.entries(roomNumbers) as [RoomCode, string[]][]).filter(([code]) => roomType === 'Todas' || roomType === code)
   const unassigned = reservations.filter(reservation => !reservation.roomNumber)
-  const columns = `190px repeat(${dates.length}, minmax(76px, 1fr))`
+  const columns = `var(--calendar-room-column, 190px) repeat(${dates.length}, minmax(76px, 1fr))`
   const occupancy = (date: string) => new Set(reservations.filter(reservation => reservation.roomNumber && reservation.checkIn <= date && reservation.checkOut > date).map(reservation => reservation.roomNumber)).size
 
   return <section className="panel reservation-calendar-panel">
     <header><div><span>CALENDARIO DE HABITACIONES</span><h2>Ocupación y asignación</h2></div><div className="calendar-legend"><span><i className="confirmed"/>Confirmada</span><span><i className="in-house"/>Hospedado</span><span><i className="due"/>Saldo pendiente</span></div></header>
     <div className="reservation-calendar-scroll">
-      <div className="calendar-date-row" style={{ gridTemplateColumns: columns, minWidth: 190 + dates.length * 76 }}><div className="calendar-corner"><b>17 habitaciones</b><small>Hotel Mis Sueños</small></div>{dates.map(date => { const occupied = occupancy(date); return <div key={date} className={`calendar-date ${date === TODAY ? 'today' : ''}`}><b>{calendarLabel(date)}</b><span>{Math.round(occupied / 17 * 100)}% ocup.</span><small>{reservations.filter(row => row.checkIn === date).length} lleg. · {reservations.filter(row => row.checkOut === date).length} sal.</small></div> })}</div>
+      <div className="calendar-date-row" style={{ gridTemplateColumns: columns, minWidth: `calc(var(--calendar-room-column, 190px) + ${dates.length * 76}px)` }}><div className="calendar-corner"><b>17 habitaciones</b><small>Hotel Mis Sueños</small></div>{dates.map(date => { const occupied = occupancy(date); return <div key={date} className={`calendar-date ${date === TODAY ? 'today' : ''}`}><b>{calendarLabel(date)}</b><span>{Math.round(occupied / 17 * 100)}% ocup.</span><small>{reservations.filter(row => row.checkIn === date).length} lleg. · {reservations.filter(row => row.checkOut === date).length} sal.</small></div> })}</div>
       {unassigned.length > 0 && <><div className="calendar-group unassigned-group"><b>Sin habitación asignada</b><span>{unassigned.length} pendientes</span></div><CalendarRoomRow label="Por asignar" dates={dates} reservations={unassigned} columns={columns} onOpen={onOpen}/></>}
       {roomGroups.map(([code, rooms]) => <div key={code} className="calendar-room-group"><div className="calendar-group"><b>{code} · {code === 'NAY' ? 'Suite' : code === "NA'" ? 'Familiar' : code === 'CHA' ? 'King' : code === 'KAA' ? 'Queen económica' : 'Queen balcón'}</b><span>{rooms.length} {rooms.length === 1 ? 'habitación' : 'habitaciones'}</span></div>{rooms.map(room => <CalendarRoomRow key={room} label={room} dates={dates} reservations={reservations.filter(reservation => reservation.roomNumber === room)} columns={columns} onOpen={onOpen}/>)}</div>)}
     </div>
@@ -145,7 +145,7 @@ function ReservationsCalendar({ dates, reservations, roomType, onOpen }: { dates
 
 function CalendarRoomRow({ label, dates, reservations, columns, onOpen }: { label: string; dates: string[]; reservations: Reservation[]; columns: string; onOpen: (id: string) => void }) {
   const afterLastDay = shiftDate(dates.at(-1)!, 1)
-  return <div className="calendar-room-row" style={{ gridTemplateColumns: columns, minWidth: 190 + dates.length * 76 }}>
+  return <div className="calendar-room-row" style={{ gridTemplateColumns: columns, minWidth: `calc(var(--calendar-room-column, 190px) + ${dates.length * 76}px)` }}>
     <div className="calendar-room-label"><BedDouble size={13}/><b>{label}</b></div>
     {dates.map(date => <div key={date} className={`calendar-day-cell ${date === TODAY ? 'today' : ''}`}/>) }
     {reservations.map(reservation => {
