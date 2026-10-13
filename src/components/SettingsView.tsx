@@ -150,9 +150,9 @@ export function SettingsView({ role, staff, accounts, onStaffChange, onAccountsC
     <section className="page-heading settings-heading"><div><p className="eyebrow">CONTROL DE ACCESO</p><h1>Usuarios y personal</h1><p>Datos laborales, salario semanal y permisos esenciales en una sola pantalla.</p></div><button onClick={() => { setError(''); setNewEmployee(freshEmployee()) }}><Plus size={15}/>Agregar trabajador</button></section>
 
     <section className="settings-summary">
-      <article><span><Users size={14}/>Personal activo</span><strong>{activeEmployees}</strong><small>{staff.length - activeEmployees} inactivos</small></article>
-      <article><span><KeyRound size={14}/>Usuarios activos</span><strong>{activeAccounts}</strong><small>{withoutAccess} trabajadores sin acceso</small></article>
-      <article><span><WalletCards size={14}/>Nómina base semanal</span><strong>{money(weeklyPayroll)}</strong><small>Antes de faltas y ajustes</small></article>
+      <article><span><Users size={14}/>Personal activo</span><strong>{staff.length ? activeEmployees : '—'}</strong><small>{staff.length ? `${staff.length - activeEmployees} inactivos` : 'Sin datos'}</small></article>
+      <article><span><KeyRound size={14}/>Usuarios activos</span><strong>{staff.length ? activeAccounts : '—'}</strong><small>{staff.length ? `${withoutAccess} trabajadores sin acceso` : 'Sin datos'}</small></article>
+      <article><span><WalletCards size={14}/>Nómina base semanal</span><strong>{staff.length ? money(weeklyPayroll) : '—'}</strong><small>{staff.length ? 'Antes de faltas y ajustes' : 'Sin datos'}</small></article>
     </section>
 
     <div className="settings-layout">
@@ -167,7 +167,7 @@ export function SettingsView({ role, staff, accounts, onStaffChange, onAccountsC
         <article className="panel access-card"><header><div><span>CUENTA Y PERMISOS</span><h2>Acceso al sistema</h2></div><label className="access-switch"><input type="checkbox" checked={accessEnabled} onChange={event => toggleAccess(event.target.checked)}/><span>{accessEnabled ? 'Acceso activo' : 'Sin acceso'}</span></label></header>{accountDraft && <div className={!accessEnabled ? 'access-body disabled' : 'access-body'}><div className="account-fields"><label><span>Usuario</span><input disabled={!accessEnabled} value={accountDraft.username} onChange={event => setAccountDraft({ ...accountDraft, username: event.target.value })}/></label><label><span>Rol</span><input value={employeeDraft.role} disabled/></label></div><div className="permission-table"><header><span>Módulo</span><span>Nivel de acceso</span></header>{modules.map(module => <label key={module}><span>{module}</span><select disabled={!accessEnabled} value={accountDraft.permissions[module]} onChange={event => setAccountDraft({ ...accountDraft, permissions: { ...accountDraft.permissions, [module]: event.target.value as AccessLevel } })}>{levels.map(level => <option key={level}>{level}</option>)}</select></label>)}</div><p><ShieldCheck size={14}/>Configuración solo aparece para Dueño y Gerencia; no depende de esta tabla.</p></div>}{!accountDraft && <div className="no-account"><KeyRound size={23}/><b>Este trabajador no tiene cuenta</b><span>Activa el acceso para crear su usuario y sus permisos.</span></div>}</article>
 
         {error && <div className="settings-error"><AlertTriangle size={15}/>{error}</div>}
-        <div className="settings-savebar"><span><CheckCircle2 size={14}/>Los cambios son simulados hasta conectar el backend.</span><button onClick={saveProfile}><Save size={14}/>Guardar cambios</button></div>
+        <div className="settings-savebar"><span><CheckCircle2 size={14}/>Los cambios quedan en memoria hasta conectar el backend.</span><button onClick={saveProfile}><Save size={14}/>Guardar cambios</button></div>
       </section>}
     </div>
 

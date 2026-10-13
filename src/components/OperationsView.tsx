@@ -88,6 +88,7 @@ export function OperationsView(props: Props) {
   const [roomFilter, setRoomFilter] = useState<'Todas' | 'Atención' | 'Listas' | 'Ocupadas' | 'Bloqueadas'>('Atención')
   const dateStripRef = useRef<HTMLElement>(null)
   const liveRooms = useMemo(() => liveRoomsFrom(rooms, reservations), [rooms, reservations])
+  const hasOperationData = reservations.length > 0 || rooms.length > 0 || tasks.length > 0 || days.length > 0
 
   useEffect(() => {
     const nextTabs = allowedTabsFor(role)
@@ -139,6 +140,7 @@ export function OperationsView(props: Props) {
     { label: 'Limpiezas', value: departures.length, detail: 'Carga prevista', icon: <Sparkles size={14}/> },
     { label: 'Disponibles', value: Math.max(0, 17 - stays.length), detail: 'Inventario estimado', icon: <BedDouble size={14}/> },
   ]
+  const displayMetrics = hasOperationData ? metrics : metrics.map(metric => ({ ...metric, value: '—', detail: 'Sin datos' }))
 
   const syncOperation = () => {
     const syncedAt = hotelTime()
@@ -177,7 +179,7 @@ export function OperationsView(props: Props) {
 
     <section className="operation-controls"><div className="operation-tabs">{allowedTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => chooseTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : item === 'Tours' ? <MapPinned size={15}/> : <Sparkles size={15}/>} {item === 'Hoy' ? 'Control de hoy' : item}</button>)}</div><div className="day-actions">{(tab === 'Hoy' || tab === 'Tours') && !isLiveDate && <button onClick={() => setSelectedDate(TODAY)}><CalendarDays size={14}/>Volver a hoy</button>}{tab === 'Hoy' && isLiveDate && canUpdateOperation(role) && <button className="primary-action" onClick={syncOperation}><RefreshCw size={14}/>{selectedDay.status === 'Abierto' ? 'Actualizar operación' : 'Iniciar operación'}</button>}</div></section>
 
-    {tab === 'Hoy' && <TodayView date={selectedDate} isLive={isLiveDate} metrics={metrics} arrivals={arrivals} departures={departures} stays={stays} priorities={priorities} onPriority={runPriorityAction}/>}
+    {tab === 'Hoy' && <TodayView date={selectedDate} isLive={isLiveDate} metrics={displayMetrics} arrivals={arrivals} departures={departures} stays={stays} priorities={priorities} onPriority={runPriorityAction}/>}
     {tab === 'Habitaciones' && <RoomsView role={role} rooms={liveRooms} reservations={reservations} tasks={tasks} filter={roomFilter} setFilter={setRoomFilter} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onOpenCleaning={() => chooseTab('Limpieza')} onNotify={onNotify}/>}
     {tab === 'Limpieza' && <CleaningView
       role={role} tasks={tasks.filter(task => task.date === TODAY || task.date < TODAY && (task.status !== 'Terminada' || task.completedAt?.startsWith(TODAY)))}

@@ -136,7 +136,7 @@ function App() {
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">MS</div><div className="brand-copy"><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.13.0</small></div><button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20}/></button></div>
+      <div className="brand"><div className="brand-mark">MS</div><div className="brand-copy"><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.14.0</small></div><button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20}/></button></div>
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
       <nav>{menu.filter(([label]) => pagesByRole[role].includes(label)).map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => { if (enabled) { setActive(label as ActivePage); setMobileNavOpen(false) } }}><Icon size={18}/><span>{label}</span>{!enabled && <em>PRÓX.</em>}</button>)}</nav>
       <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>
@@ -149,8 +149,8 @@ function App() {
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
-          <button className="icon-button" onClick={async () => { await load(); setToast('Datos simulados actualizados') }} title="Actualizar datos"><RefreshCw size={16}/></button>
-          {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/><i>{data.alerts.length}</i></button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>)}</div>}</div>}
+          <button className="icon-button" onClick={async () => { await load(); setToast('Datos actualizados') }} title="Actualizar datos"><RefreshCw size={16}/></button>
+          {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <button className="logout-button" onClick={signOut}>Salir</button>
           <select value={role} onChange={event => { setRole(event.target.value as Role); setNotificationsOpen(false) }} aria-label="Rol simulado"><option>Dueño</option><option>Gerencia</option><option>Administración</option><option>Recepción</option><option>Cocina</option><option>Limpieza</option><option>Alberca</option></select>
         </div>
@@ -204,7 +204,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('Contraseña incorrecta')
   }
   return <div className="login-shell">
-    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.13.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
+    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.14.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
     <section className="login-form-panel"><form className="login-form" onSubmit={submit}><p className="eyebrow">ACCESO INTERNO</p><h2>Bienvenido</h2><p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p><label htmlFor="password">Contraseña</label><input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••"/>{error && <div className="login-error">{error}</div>}<button type="submit">Entrar al sistema</button><small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small></form></section>
   </div>
 }

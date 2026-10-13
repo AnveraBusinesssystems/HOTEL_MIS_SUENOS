@@ -118,6 +118,7 @@ export function CashView({
   const outstanding = reservations.filter(activeReservation).reduce((sum, item) => sum + balance(item), 0)
   const pendingReservations = reservations.filter(item => activeReservation(item) && balance(item) > 0).sort((a, b) => balance(b) - balance(a))
   const readyPurchaseRequests = purchaseRequests.filter(item => item.status === 'Tomada en cuenta')
+  const hasCashData = movements.length > 0 || days.length > 0 || reservations.length > 0
 
   const openPurchaseRequest = (request: PurchaseRequest) => {
     const next = freshDraft('Salida')
@@ -282,17 +283,17 @@ export function CashView({
     </section>
 
     <section className="cash-summary">
-      <article><span><CircleDollarSign size={14}/> Entradas</span><strong className="positive">{money(entries)}</strong><small>{activeMovements.filter(item => item.type === 'Entrada').length} movimientos</small></article>
-      <article><span><Receipt size={14}/> Salidas</span><strong className="negative">{money(exits)}</strong><small>{activeMovements.filter(item => item.type === 'Salida').length} movimientos</small></article>
-      <article><span><Landmark size={14}/> Flujo neto</span><strong className={entries - exits >= 0 ? 'positive' : 'negative'}>{money(entries - exits)}</strong><small>Entradas menos salidas</small></article>
-      <article><span><Banknote size={14}/> Efectivo esperado</span><strong>{money(expectedCash)}</strong><small>Incluye fondo inicial de {money(day.openingCash)}</small></article>
-      <article><span><FileText size={14}/> Pendiente en reservas</span><strong>{money(outstanding)}</strong><small>{pendingReservations.length} reservas con saldo</small></article>
+      <article><span><CircleDollarSign size={14}/> Entradas</span><strong className="positive">{hasCashData ? money(entries) : '—'}</strong><small>{hasCashData ? `${activeMovements.filter(item => item.type === 'Entrada').length} movimientos` : 'Sin datos'}</small></article>
+      <article><span><Receipt size={14}/> Salidas</span><strong className="negative">{hasCashData ? money(exits) : '—'}</strong><small>{hasCashData ? `${activeMovements.filter(item => item.type === 'Salida').length} movimientos` : 'Sin datos'}</small></article>
+      <article><span><Landmark size={14}/> Flujo neto</span><strong className={hasCashData ? entries - exits >= 0 ? 'positive' : 'negative' : ''}>{hasCashData ? money(entries - exits) : '—'}</strong><small>{hasCashData ? 'Entradas menos salidas' : 'Sin datos'}</small></article>
+      <article><span><Banknote size={14}/> Efectivo esperado</span><strong>{hasCashData ? money(expectedCash) : '—'}</strong><small>{hasCashData ? `Incluye fondo inicial de ${money(day.openingCash)}` : 'Sin datos'}</small></article>
+      <article><span><FileText size={14}/> Pendiente en reservas</span><strong>{hasCashData ? money(outstanding) : '—'}</strong><small>{hasCashData ? `${pendingReservations.length} reservas con saldo` : 'Sin datos'}</small></article>
     </section>
 
     <section className="cash-method-strip">
       {methodTotals.map(({ method, entries: methodEntries, exits: methodExits }) => <article key={method}>
         <span>{method === 'Efectivo' ? <Banknote size={14}/> : method === 'Tarjeta' ? <CreditCard size={14}/> : <Landmark size={14}/>} {method}</span>
-        <div><b>{money(methodEntries)}</b><small>entradas</small></div><div><b>{money(methodExits)}</b><small>salidas</small></div>
+        <div><b>{hasCashData ? money(methodEntries) : '—'}</b><small>entradas</small></div><div><b>{hasCashData ? money(methodExits) : '—'}</b><small>salidas</small></div>
       </article>)}
       <p><AlertTriangle size={14}/><span>Los tours se controlan en su módulo independiente y no se mezclan con Caja hasta registrar su pago real.</span></p>
     </section>
@@ -315,7 +316,7 @@ export function CashView({
 
       <aside className="cash-side">
         <section className="panel cash-control"><header><div><span>CONTROL DE EFECTIVO</span><h2>Conteo del día</h2></div></header><div className="cash-control-body">
-          <div><span>Fondo inicial</span><b>{money(day.openingCash)}</b></div><div><span>Movimiento neto</span><b>{money(cashEntries - cashExits)}</b></div><div className="expected"><span>Efectivo esperado</span><b>{money(expectedCash)}</b></div>
+          <div><span>Fondo inicial</span><b>{hasCashData ? money(day.openingCash) : '—'}</b></div><div><span>Movimiento neto</span><b>{hasCashData ? money(cashEntries - cashExits) : '—'}</b></div><div className="expected"><span>Efectivo esperado</span><b>{hasCashData ? money(expectedCash) : '—'}</b></div>
           {day.countedCash !== undefined && <div className="count-result"><span>Efectivo contado</span><b>{money(day.countedCash)}</b><em className={difference === 0 ? 'positive' : 'negative'}>{difference === 0 ? 'Caja cuadrada' : `Diferencia ${money(difference ?? 0)}`}</em></div>}
           <label><span>REGISTRAR CONTEO</span><div><input type="number" min="0" value={counted} onChange={event => setCounted(event.target.value)} placeholder="0.00"/><button onClick={saveCount}>Guardar</button></div></label>
         </div></section>

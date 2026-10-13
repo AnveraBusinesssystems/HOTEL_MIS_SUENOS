@@ -150,13 +150,14 @@ export function ToursView({
   }
 
   const openAction = (type: MoneyAction['type'], tour: TourBooking) => { setMethod('Efectivo'); setAction({ type, tour }) }
+  const hasTourData = tours.length > 0 || cashMovements.length > 0
 
   return <section className="tour-workspace">
     <section className="tour-summary">
-      <article><span><MapPinned size={14}/> Tours del día</span><strong>{scheduled.length}</strong><small>{scheduled.reduce((sum, tour) => sum + tour.people, 0)} personas</small></article>
-      <article><span><ReceiptText size={14}/> Por cobrar</span><strong>{money(unpaid.reduce((sum, tour) => sum + tour.salePrice, 0))}</strong><small>{unpaid.length} tour{unpaid.length === 1 ? '' : 's'}</small></article>
-      <article><span><Banknote size={14}/> A proveedores</span><strong>{money(providerPending.reduce((sum, tour) => sum + tour.providerAmount, 0))}</strong><small>{providerPending.length} liquidación{providerPending.length === 1 ? '' : 'es'}</small></article>
-      <article><span><HandCoins size={14}/> Comisión recepción</span><strong>{money(commissionPending.reduce((sum, tour) => sum + receptionShare(tour), 0))}</strong><small>Pendiente de entregar</small></article>
+      <article><span><MapPinned size={14}/> Tours del día</span><strong>{hasTourData ? scheduled.length : '—'}</strong><small>{hasTourData ? `${scheduled.reduce((sum, tour) => sum + tour.people, 0)} personas` : 'Sin datos'}</small></article>
+      <article><span><ReceiptText size={14}/> Por cobrar</span><strong>{hasTourData ? money(unpaid.reduce((sum, tour) => sum + tour.salePrice, 0)) : '—'}</strong><small>{hasTourData ? `${unpaid.length} tour${unpaid.length === 1 ? '' : 's'}` : 'Sin datos'}</small></article>
+      <article><span><Banknote size={14}/> A proveedores</span><strong>{hasTourData ? money(providerPending.reduce((sum, tour) => sum + tour.providerAmount, 0)) : '—'}</strong><small>{hasTourData ? `${providerPending.length} liquidación${providerPending.length === 1 ? '' : 'es'}` : 'Sin datos'}</small></article>
+      <article><span><HandCoins size={14}/> Comisión recepción</span><strong>{hasTourData ? money(commissionPending.reduce((sum, tour) => sum + receptionShare(tour), 0)) : '—'}</strong><small>{hasTourData ? 'Pendiente de entregar' : 'Sin datos'}</small></article>
     </section>
 
     <div className="tour-layout">

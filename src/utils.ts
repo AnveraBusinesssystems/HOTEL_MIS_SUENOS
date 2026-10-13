@@ -24,14 +24,16 @@ export const kpiValue = (kpi: KPI, value = kpi.value) => {
   return number(value)
 }
 
+const divide = (numerator: number, denominator: number) => denominator ? numerator / denominator : 0
+
 export const monthlyMetrics = (row: MonthlySummary) => ({
-  occupancy: row.soldNights / row.availableNights * 100,
-  adr: row.revenue / row.soldNights,
-  revpar: row.revenue / row.availableNights,
-  stay: row.soldNights / row.bookings,
-  cancellationRate: row.cancellations / (row.bookings + row.cancellations) * 100,
+  occupancy: divide(row.soldNights, row.availableNights) * 100,
+  adr: divide(row.revenue, row.soldNights),
+  revpar: divide(row.revenue, row.availableNights),
+  stay: divide(row.soldNights, row.bookings),
+  cancellationRate: divide(row.cancellations, row.bookings + row.cancellations) * 100,
   operatingResult: row.revenue - row.costs,
-  margin: (row.revenue - row.costs) / row.revenue * 100,
+  margin: divide(row.revenue - row.costs, row.revenue) * 100,
 })
 
 export const toneForOccupancy = (occupancy: number) => occupancy >= 90

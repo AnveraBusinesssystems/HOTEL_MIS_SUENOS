@@ -17,7 +17,7 @@ const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', '
 const ROOM_COLORS = ['#4e6248', '#7d8f6c', '#b99157', '#9b6b58', '#526b7d']
 const COST_COLORS = ['#4e6248', '#7d8f6c', '#b99157', '#9b6b58', '#526b7d', '#88715d', '#b9aa96']
 
-function KpiCards({ kpis }: { kpis: KPI[] }) {
+function KpiCards({ kpis, empty = false }: { kpis: KPI[]; empty?: boolean }) {
   return <section className="kpi-grid">
     {kpis.map(kpi => {
       const difference = kpi.value - kpi.previous
@@ -28,12 +28,11 @@ function KpiCards({ kpis }: { kpis: KPI[] }) {
         : `${difference >= 0 ? '+' : ''}${number(relative, 1)}%`
       return <article className="kpi-card" key={kpi.id} title={kpi.helper}>
         <span>{kpi.label}</span>
-        <strong>{kpiValue(kpi)}</strong>
+        <strong className={empty ? 'empty-value' : ''}>{empty ? '—' : kpiValue(kpi)}</strong>
         <div className="kpi-comparison">
-          <b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
+          {empty ? <><b className="neutral">—</b><small>Sin datos</small></> : <><b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
             {neutral ? '—' : difference > 0 ? '▲' : '▼'} {neutral ? 'Sin cambio' : comparison}
-          </b>
-          <small>Mes anterior {kpiValue(kpi, kpi.previous)}</small>
+          </b><small>Mes anterior {kpiValue(kpi, kpi.previous)}</small></>}
         </div>
       </article>
     })}
@@ -41,6 +40,8 @@ function KpiCards({ kpis }: { kpis: KPI[] }) {
 }
 
 export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
+  if (!data.monthly.length) return <EmptySummaryView role={role} onOpenRms={onOpenRms}/>
+
   const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
   const current = data.monthly.find(row => row.key === '2026-10') ?? data.monthly.at(-1)!
   const previous = data.monthly.find(row => row.key === '2026-09') ?? data.monthly.at(-2)!
@@ -93,6 +94,30 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
   </div>
 }
 
+function EmptySummaryView({ role, onOpenRms }: Pick<SummaryProps, 'role' | 'onOpenRms'>) {
+  const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
+  const placeholders: KPI[] = [
+    { id: 'revenue', label: 'Ingresos', value: 0, previous: 0, format: 'mxn', helper: 'Ingresos por hospedaje.' },
+    { id: 'occupancy', label: 'Ocupación', value: 0, previous: 0, format: 'percent', helper: 'Noches vendidas / disponibles.' },
+    { id: 'adr', label: 'ADR', value: 0, previous: 0, format: 'mxn', helper: 'Precio promedio por noche vendida.' },
+    { id: 'revpar', label: 'RevPAR', value: 0, previous: 0, format: 'mxn', helper: 'Ingreso por habitación disponible.' },
+    { id: 'costs', label: 'Costos', value: 0, previous: 0, format: 'mxn', helper: 'Gastos registrados en el periodo.' },
+    { id: 'result', label: 'Resultado operativo', value: 0, previous: 0, format: 'mxn', helper: 'Ingresos menos costos.' },
+  ]
+  return <div className="page summary-page">
+    <section className="page-heading">
+      <div><p className="eyebrow">CONTROL EJECUTIVO</p><h1>Resumen</h1><p>Las cifras esenciales del hotel y las decisiones que requieren atención.</p></div>
+      <div className="status-strip"><span><i className="dot"/> Próximos 7 días</span><strong className="empty-value">—</strong><small>Sin datos</small></div>
+    </section>
+    <KpiCards kpis={financialAccess ? placeholders : placeholders.slice(0, 4)} empty/>
+    <section className="decision-panel"><header><div><span>DECISIONES PRIORITARIAS</span><h2>Oportunidades con mayor impacto</h2></div><button onClick={() => onOpenRms()}>Abrir centro RMS <ArrowRight size={14}/></button></header><div className="empty-panel-state compact">Sin datos disponibles</div></section>
+    <section className="grid two">
+      <article className="panel"><header><div><span>DESEMPEÑO RECIENTE</span><h2>Ingresos y ocupación</h2></div><span className="data-state">SIN DATOS</span></header><div className="empty-panel-state chart-empty">—</div></article>
+      <article className="panel next-days-panel"><header><div><span>PRÓXIMOS 7 DÍAS</span><h2>Ocupación y disponibilidad</h2></div><button onClick={() => onOpenRms()}>Ver 180 días</button></header><div className="empty-panel-state chart-empty">—</div></article>
+    </section>
+  </div>
+}
+
 type IndicatorTab = 'Rendimiento' | 'Habitaciones' | 'Costos'
 type RoomMetric = 'revenue' | 'occupancy' | 'adr' | 'revpar'
 
@@ -107,7 +132,12 @@ const aggregateRooms = (rows: RoomMonthlyPerformance[]) => {
   })
 }
 
-export function IndicatorsView({ data, role }: { data: DashboardData; role: Role }) {
+export function IndicatorsView(props: { data: DashboardData; role: Role }) {
+  if (!props.data.monthly.length) return <EmptyIndicatorsView role={props.role}/>
+  return <PopulatedIndicatorsView {...props}/>
+}
+
+function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Role }) {
   const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
   const years = [...new Set(data.monthly.map(row => row.year))].sort((a, b) => b - a)
   const [year, setYear] = useState(years[0])
@@ -189,6 +219,22 @@ export function IndicatorsView({ data, role }: { data: DashboardData; role: Role
         <article className="panel"><header><div><span>DESGLOSE</span><h2>¿En qué se gastó?</h2></div></header><DonutChart data={categoryPeriod} colors={COST_COLORS} center={money(selected.costs)}/></article></div>
       <article className="panel"><header><div><span>CONTROL DE VARIACIONES</span><h2>Gastos que más cambian</h2></div></header><div className="table-scroll"><table><thead><tr><th>Categoría</th><th>{MONTHS[month - 1]} {year}</th><th>Variación anual</th><th>Fluctuación</th><th>Lectura</th></tr></thead><tbody>{volatility.map(row => <tr key={row.name}><td><b>{row.name}</b></td><td>{money(row.value)}</td><td className={row.variation > 0 ? 'negative' : 'positive'}>{row.variation > 0 ? '+' : ''}{percent(row.variation)}</td><td>{percent(row.volatility)}</td><td><span className={`control-tag ${row.volatility > 6 ? 'watch' : ''}`}>{row.volatility > 6 ? 'Revisar' : 'Estable'}</span></td></tr>)}</tbody></table></div></article>
     </section> : <section className="access-note">El desglose de costos está disponible únicamente para Dueño, Gerencia y Administración.</section>)}
+  </div>
+}
+
+function EmptyIndicatorsView({ role }: { role: Role }) {
+  const [tab, setTab] = useState<IndicatorTab>('Rendimiento')
+  const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
+  const labels = ['Ingresos', 'Ocupación', 'ADR', 'RevPAR', 'Costos', 'Resultado']
+  return <div className="page indicators-page">
+    <section className="page-heading indicator-heading"><div><p className="eyebrow">INTELIGENCIA DEL NEGOCIO</p><h1>Indicadores</h1><p>Compara demanda, precio, habitaciones y costos para tomar decisiones.</p></div><div className="indicator-filters"><label>Año<select disabled><option>—</option></select></label><label>Mes<select disabled><option>—</option></select></label></div></section>
+    <section className="executive-kpis">{labels.map((label, index) => <article key={label}><span>{label}</span><strong className="empty-value">{!financialAccess && index > 3 ? 'Restringido' : '—'}</strong><div><small className="neutral">— vs mes</small><small className="neutral">— vs año</small></div></article>)}</section>
+    <nav className="indicator-tabs" aria-label="Secciones de indicadores">{(['Rendimiento', 'Habitaciones', 'Costos'] as IndicatorTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'Rendimiento' ? <BarChart3 size={16}/> : item === 'Habitaciones' ? <BedDouble size={16}/> : <WalletCards size={16}/>}<span>{item}</span></button>)}</nav>
+    {tab === 'Costos' && !financialAccess ? <section className="access-note">El desglose de costos está disponible únicamente para Dueño, Gerencia y Administración.</section> : <section className="analytics-section">
+      <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> sin datos disponibles.</p></div>
+      <div className="analytics-grid performance-grid"><article className="panel"><header><div><span>ANÁLISIS</span><h2>{tab}</h2></div></header><div className="empty-panel-state chart-empty">—</div></article><article className="panel"><header><div><span>COMPARACIÓN</span><h2>Periodo anterior</h2></div></header><div className="empty-panel-state chart-empty">—</div></article></div>
+      <article className="panel financial-trend"><header><div><span>DETALLE</span><h2>Información mensual</h2></div></header><div className="empty-panel-state chart-empty">—</div></article>
+    </section>}
   </div>
 }
 

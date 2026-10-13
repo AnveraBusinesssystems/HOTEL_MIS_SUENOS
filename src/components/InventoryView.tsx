@@ -126,6 +126,7 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
 
   const canAcknowledge = ['Dueño', 'Gerencia', 'Administración'].includes(role)
   const canRegisterPurchase = ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
+  const hasInventoryData = items.length > 0
 
   return <section className="page inventory-page">
     <section className="page-heading inventory-heading">
@@ -138,10 +139,10 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
     </section>
 
     <section className="inventory-summary">
-      <article className={counts.depleted ? 'critical' : ''}><span><AlertTriangle size={14}/>Agotados</span><strong>{counts.depleted}</strong><small>Requieren atención inmediata</small></article>
-      <article className={counts.low ? 'warning' : ''}><span><PackageOpen size={14}/>Inventario bajo</span><strong>{counts.low}</strong><small>Por debajo del nivel objetivo</small></article>
-      <article><span><ShoppingCart size={14}/>Productos por pedir</span><strong>{counts.order}</strong><small>Incluidos en la recomendación</small></article>
-      <article><span><PackageCheck size={14}/>Valor aproximado</span><strong>{money(counts.value)}</strong><small>Existencia × último precio</small></article>
+      <article className={counts.depleted ? 'critical' : ''}><span><AlertTriangle size={14}/>Agotados</span><strong>{hasInventoryData ? counts.depleted : '—'}</strong><small>{hasInventoryData ? 'Requieren atención inmediata' : 'Sin datos'}</small></article>
+      <article className={counts.low ? 'warning' : ''}><span><PackageOpen size={14}/>Inventario bajo</span><strong>{hasInventoryData ? counts.low : '—'}</strong><small>{hasInventoryData ? 'Por debajo del nivel objetivo' : 'Sin datos'}</small></article>
+      <article><span><ShoppingCart size={14}/>Productos por pedir</span><strong>{hasInventoryData ? counts.order : '—'}</strong><small>{hasInventoryData ? 'Incluidos en la recomendación' : 'Sin datos'}</small></article>
+      <article><span><PackageCheck size={14}/>Valor aproximado</span><strong>{hasInventoryData ? money(counts.value) : '—'}</strong><small>{hasInventoryData ? 'Existencia × último precio' : 'Sin datos'}</small></article>
     </section>
 
     <div className="inventory-tabs" role="tablist" aria-label="Vistas de inventario">
@@ -157,7 +158,7 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
       </section>
 
       <section className="panel inventory-table-panel">
-        <header><div><span>EXISTENCIA ACTUAL</span><h2>Productos registrados</h2></div><small>Las cantidades mostradas son datos de demostración</small></header>
+        <header><div><span>EXISTENCIA ACTUAL</span><h2>Productos registrados</h2></div><small>{hasInventoryData ? 'Datos registrados' : 'Sin datos conectados'}</small></header>
         <div className="table-scroll inventory-desktop-table"><table className="inventory-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Nivel objetivo</th><th>Estado</th><th>Último conteo</th><th></th></tr></thead><tbody>{visibleItems.map(item => {
           const state = stockState(item)
           return <tr key={item.id}><td><b>{item.name}</b><small>{item.id}</small></td><td>{item.category}</td><td><strong>{formatQuantity(item.stock)}</strong> <small className="inline-unit">{item.unit}</small></td><td>{formatQuantity(item.parLevel)} {item.unit}</td><td><span className={`inventory-state ${state.toLowerCase()}`}>{state}</span></td><td>{item.lastUpdated}</td><td><button className="table-action" onClick={() => { setCountCategory(item.category); setTab('Conteo') }}>Actualizar</button></td></tr>

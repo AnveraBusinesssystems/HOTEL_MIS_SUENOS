@@ -1,0 +1,28 @@
+import type { DashboardData } from '../types'
+
+export const emptyDashboard = (): DashboardData => ({
+  performance: [],
+  roomPerformance: [],
+  rateDays: [],
+  recommendations: [],
+  monthly: [],
+  expenses: [],
+  roomMonthly: [],
+  reservations: [],
+  roomStates: [],
+  operationTasks: [],
+  operationDays: [],
+  tours: [],
+  staff: [],
+  staffSchedules: [],
+  staffTimeEntries: [],
+  staffRequests: [],
+  userAccounts: [],
+  cashMovements: [],
+  cashDays: [],
+  inventory: [],
+  purchaseRequests: [],
+  costs: { registered: 0, estimated: 0 },
+  alerts: [],
+  generatedAt: new Date().toISOString(),
+})

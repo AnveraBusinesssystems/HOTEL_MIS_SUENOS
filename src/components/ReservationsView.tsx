@@ -4,10 +4,10 @@ import {
   CircleDollarSign, Cloud, List, LogIn, LogOut, Search, Sparkles, UserRound, X,
 } from 'lucide-react'
 import type { Reservation, ReservationStatus, RoomCode } from '../types'
-import { roomNumbers } from '../data/mockData'
+import { roomNumbers } from '../data/hotelConfig'
 import { longDate, money, shortDate } from '../utils'
 
-const TODAY = '2026-10-06'
+const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const ACTIVE_STATUSES: ReservationStatus[] = ['Confirmada', 'Hospedado']
 type Props = {
   reservations: Reservation[]
@@ -37,9 +37,10 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
   const [roomType, setRoomType] = useState<'Todas' | RoomCode>('Todas')
   const [payment, setPayment] = useState<'Todos' | 'Pagada' | 'Parcial' | 'Pendiente'>('Todos')
   const [from, setFrom] = useState(TODAY)
-  const [to, setTo] = useState('2026-10-20')
+  const [to, setTo] = useState(() => shiftDate(TODAY, 14))
   const [syncing, setSyncing] = useState(false)
-  const [lastSync, setLastSync] = useState('06 oct · 08:03')
+  const [lastSync, setLastSync] = useState('Sin sincronizar')
+  const hasReservations = reservations.length > 0
 
   const baseFiltered = useMemo(() => reservations.filter(reservation => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -63,27 +64,27 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
     window.setTimeout(() => {
       setSyncing(false)
       setLastSync(new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date()).replace('.', ''))
-      onNotify('Simulación: reservaciones sincronizadas con Cloudbeds')
+      onNotify('Conexión con Cloudbeds pendiente')
     }, 800)
   }
 
   const updateReservation = (id: string, changes: Partial<Reservation>, message: string) => {
     onChange(rows => rows.map(row => row.id === id ? { ...row, ...changes } : row))
-    onNotify(`Simulación: ${message}. Aún no se envió a Cloudbeds`)
+    onNotify(`${message}. El cambio es local hasta conectar Cloudbeds`)
   }
 
   return <div className="page reservations-page">
     <section className="page-heading reservation-heading">
       <div><p className="eyebrow">OPERACIÓN DE HOSPEDAJE</p><h1>Reservas</h1><p>Llegadas, salidas, asignación y saldos desde una sola vista.</p></div>
-      <div className="sync-cluster"><div><span>Última sincronización</span><b>{lastSync}</b><small>Cloudbeds · Simulación</small></div><button className="cloudbeds-action" onClick={sync} disabled={syncing}><Cloud size={15}/>{syncing ? 'Sincronizando…' : 'Sincronizar Cloudbeds'}</button></div>
+      <div className="sync-cluster"><div><span>Última sincronización</span><b>{lastSync}</b><small>Cloudbeds · Conexión pendiente</small></div><button className="cloudbeds-action" onClick={sync} disabled={syncing}><Cloud size={15}/>{syncing ? 'Verificando…' : 'Sincronizar Cloudbeds'}</button></div>
     </section>
 
     <section className="reservation-summary">
-      <article><span><LogIn size={14}/> Llegadas hoy</span><strong>{arrivals}</strong><small>{arrivals ? 'Revisar habitación y saldo' : 'Sin llegadas pendientes'}</small></article>
-      <article><span><LogOut size={14}/> Salidas hoy</span><strong>{departures}</strong><small>Check-out antes de 11:00</small></article>
-      <article><span><UserRound size={14}/> Hospedados</span><strong>{inHouse}</strong><small>Actualmente en el hotel</small></article>
-      <article><span><BedDouble size={14}/> Próximas</span><strong>{future}</strong><small>Después de hoy</small></article>
-      <article className={balance > 0 ? 'summary-warning' : ''}><span><CircleDollarSign size={14}/> Saldo pendiente</span><strong>{money(balance)}</strong><small>{attention} reservas requieren atención</small></article>
+      <article><span><LogIn size={14}/> Llegadas hoy</span><strong>{hasReservations ? arrivals : '—'}</strong><small>{hasReservations ? arrivals ? 'Revisar habitación y saldo' : 'Sin llegadas pendientes' : 'Sin datos'}</small></article>
+      <article><span><LogOut size={14}/> Salidas hoy</span><strong>{hasReservations ? departures : '—'}</strong><small>{hasReservations ? 'Check-out antes de 11:00' : 'Sin datos'}</small></article>
+      <article><span><UserRound size={14}/> Hospedados</span><strong>{hasReservations ? inHouse : '—'}</strong><small>{hasReservations ? 'Actualmente en el hotel' : 'Sin datos'}</small></article>
+      <article><span><BedDouble size={14}/> Próximas</span><strong>{hasReservations ? future : '—'}</strong><small>{hasReservations ? 'Después de hoy' : 'Sin datos'}</small></article>
+      <article className={balance > 0 ? 'summary-warning' : ''}><span><CircleDollarSign size={14}/> Saldo pendiente</span><strong>{hasReservations ? money(balance) : '—'}</strong><small>{hasReservations ? `${attention} reservas requieren atención` : 'Sin datos'}</small></article>
     </section>
 
     <section className="reservation-viewbar">
@@ -102,7 +103,7 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
     {view === 'Calendario' && <ReservationsCalendar dates={calendarDates} reservations={calendarReservations} roomType={roomType} onOpen={setSelectedId}/>}
 
     {view === 'Lista' && <section className="panel reservations-table-panel">
-      <header><div><span>RESERVAS EN EL PERIODO</span><h2>{filtered.length} resultados</h2></div><span className="simulation-label">DATOS SIMULADOS</span></header>
+      <header><div><span>RESERVAS EN EL PERIODO</span><h2>{filtered.length} resultados</h2></div><span className="simulation-label">SIN DATOS CONECTADOS</span></header>
       <div className="table-scroll"><table className="reservations-table">
         <thead><tr><th>Reserva</th><th>Huésped</th><th>Estancia</th><th>Habitación</th><th>Personas</th><th>Estado</th><th>Canal</th><th>Total</th><th>Saldo</th><th>Pago</th><th/></tr></thead>
         <tbody>{filtered.map(reservation => {
@@ -184,7 +185,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reser
 
       <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 ? 'negative' : 'positive'}>{money(due)}</b></div></div>{due > 0 && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { onUpdate(reservation.id, { paid: reservation.paid + requestedPayment }, `pago de ${money(requestedPayment)} registrado`); setPaymentAmount('') }}>Registrar</button></div>}</section>
 
-      <footer className="reservation-actions"><button onClick={() => onUpdate(reservation.id, { cleaningRequested: !reservation.cleaningRequested }, reservation.cleaningRequested ? 'solicitud de limpieza retirada' : 'limpieza solicitada') }><Sparkles size={14}/>{reservation.cleaningRequested ? 'Retirar limpieza' : 'Solicitar limpieza'}</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => onUpdate(reservation.id, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => onUpdate(reservation.id, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('Vista simulada: el enlace directo a Cloudbeds se activará con la API')}>Abrir en Cloudbeds</button></footer>
+      <footer className="reservation-actions"><button onClick={() => onUpdate(reservation.id, { cleaningRequested: !reservation.cleaningRequested }, reservation.cleaningRequested ? 'solicitud de limpieza retirada' : 'limpieza solicitada') }><Sparkles size={14}/>{reservation.cleaningRequested ? 'Retirar limpieza' : 'Solicitar limpieza'}</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => onUpdate(reservation.id, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => onUpdate(reservation.id, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
     </aside>
   </div>
 }

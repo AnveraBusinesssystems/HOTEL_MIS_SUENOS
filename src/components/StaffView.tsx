@@ -174,17 +174,17 @@ export function StaffView({ role, staff, schedules, timeEntries, requests, onSch
     onNotify(`Solicitud ${status.toLowerCase()}`)
   }
 
-  if (!canManage && !currentEmployee) return <section className="page"><div className="page-heading"><div><p className="eyebrow">PERSONAL</p><h1>Mi horario</h1><p>Tu rol todavía no está vinculado con un empleado de demostración.</p></div></div><div className="access-note">La vinculación individual se configurará cuando conectemos usuarios y personal.</div></section>
+  if (!canManage && !currentEmployee) return <section className="page"><div className="page-heading"><div><p className="eyebrow">PERSONAL</p><h1>Mi horario</h1><p>Tu rol todavía no está vinculado con un empleado.</p></div></div><div className="access-note">La vinculación individual se configurará cuando conectemos usuarios y personal.</div></section>
 
   return <section className="page staff-page">
     <section className="page-heading staff-heading"><div><p className="eyebrow">PERSONAL Y ASISTENCIA</p><h1>{canManage ? 'Equipo y nómina semanal' : 'Mi semana'}</h1><p>{canManage ? 'Horarios, asistencia, solicitudes y estimación del pago de lunes a domingo.' : 'Consulta tus turnos, registra tu asistencia y solicita cambios.'}</p></div><WeekPicker monday={weekStart} sunday={weekEnd} onPrevious={() => updateWeek(-1)} onNext={() => updateWeek(1)} onToday={() => setWeekStart(mondayOf(TODAY))}/></section>
 
     {canManage ? <>
       <section className="staff-summary">
-        <article><span><Users size={14}/>Personal activo</span><strong>{activeStaff.length}</strong><small>{todayScheduled.length} programados hoy</small></article>
-        <article><span><Clock3 size={14}/>En turno</span><strong>{workingNow.length}</strong><small>{notStarted.length} sin iniciar</small></article>
-        <article><span><ReceiptText size={14}/>Solicitudes</span><strong>{pendingRequests.length}</strong><small>Pendientes de revisión</small></article>
-        <article><span><WalletCards size={14}/>Pago estimado</span><strong>{money(weeklyPayroll)}</strong><small>Se paga el domingo · sujeto a revisión</small></article>
+        <article><span><Users size={14}/>Personal activo</span><strong>{staff.length ? activeStaff.length : '—'}</strong><small>{staff.length ? `${todayScheduled.length} programados hoy` : 'Sin datos'}</small></article>
+        <article><span><Clock3 size={14}/>En turno</span><strong>{staff.length ? workingNow.length : '—'}</strong><small>{staff.length ? `${notStarted.length} sin iniciar` : 'Sin datos'}</small></article>
+        <article><span><ReceiptText size={14}/>Solicitudes</span><strong>{staff.length ? pendingRequests.length : '—'}</strong><small>{staff.length ? 'Pendientes de revisión' : 'Sin datos'}</small></article>
+        <article><span><WalletCards size={14}/>Pago estimado</span><strong>{staff.length ? money(weeklyPayroll) : '—'}</strong><small>{staff.length ? 'Se paga el domingo · sujeto a revisión' : 'Sin datos'}</small></article>
       </section>
       <div className="staff-management-layout">
         <aside className="panel staff-roster"><header><div><span>EQUIPO</span><h2>{activeStaff.length} empleados</h2></div></header><div>{activeStaff.map(employee => {
