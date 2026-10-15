@@ -20,6 +20,21 @@ type SessionUser = { id: string; name: string; role: Role }
 // Temporary session identity until Apps Script returns the authenticated user.
 // The rest of the application already consumes this role as server-owned data.
 const DEMO_SESSION_USER: SessionUser = { id: 'USR-OWNER', name: 'Cuenta principal', role: 'Dueño' }
+const AUTH_STORAGE_KEY = 'hms_demo_auth'
+const LAST_ACTIVITY_STORAGE_KEY = 'hms_last_activity'
+const INACTIVITY_LIMIT_MS = 5 * 60 * 1000
+
+const initialSession = (): SessionUser | null => {
+  if (localStorage.getItem(AUTH_STORAGE_KEY) !== 'true') return null
+  const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY))
+  if (lastActivity && Date.now() - lastActivity >= INACTIVITY_LIMIT_MS) {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY)
+    return null
+  }
+  localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now()))
+  return DEMO_SESSION_USER
+}
 
 const menu = [
   ['Resumen', LayoutDashboard, true],
@@ -57,7 +72,7 @@ function App() {
   const [selectedRecommendationId, setSelectedRecommendationId] = useState<string>()
   const [cashPurchaseRequestId, setCashPurchaseRequestId] = useState<string>()
   const [toast, setToast] = useState('')
-  const [sessionUser, setSessionUser] = useState<SessionUser | null>(() => localStorage.getItem('hms_demo_auth') === 'true' ? DEMO_SESSION_USER : null)
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialSession)
   const role = sessionUser?.role ?? DEMO_SESSION_USER.role
 
   const load = async () => {
@@ -81,6 +96,47 @@ function App() {
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [mobileNavOpen])
+  useEffect(() => {
+    if (!sessionUser) return
+
+    let timeoutId: number
+    let lastStorageWrite = Number(localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY)) || Date.now()
+    const expireSession = () => {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY)
+      setNotificationsOpen(false)
+      setMobileNavOpen(false)
+      setSessionUser(null)
+    }
+    const scheduleExpiration = (lastActivity: number) => {
+      window.clearTimeout(timeoutId)
+      timeoutId = window.setTimeout(expireSession, Math.max(0, INACTIVITY_LIMIT_MS - (Date.now() - lastActivity)))
+    }
+    const registerActivity = () => {
+      const now = Date.now()
+      if (now - lastStorageWrite >= 10_000) {
+        localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(now))
+        lastStorageWrite = now
+      }
+      scheduleExpiration(now)
+    }
+    const checkAfterVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY)) || lastStorageWrite
+      if (Date.now() - lastActivity >= INACTIVITY_LIMIT_MS) expireSession()
+      else registerActivity()
+    }
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart']
+    activityEvents.forEach(eventName => window.addEventListener(eventName, registerActivity, { passive: true }))
+    document.addEventListener('visibilitychange', checkAfterVisibilityChange)
+    scheduleExpiration(lastStorageWrite)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      activityEvents.forEach(eventName => window.removeEventListener(eventName, registerActivity))
+      document.removeEventListener('visibilitychange', checkAfterVisibilityChange)
+    }
+  }, [sessionUser])
 
   const openRms = (recommendationId?: string) => {
     setSelectedRecommendationId(recommendationId)
@@ -134,10 +190,10 @@ function App() {
     setData(current => current ? { ...current, userAccounts: updater(current.userAccounts) } : current)
   }
 
-  if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem('hms_demo_auth', 'true'); setSessionUser(DEMO_SESSION_USER) }}/>
+  if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem('hms_demo_auth'); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setSessionUser(null); setMobileNavOpen(false) }
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
     <aside className="sidebar">
