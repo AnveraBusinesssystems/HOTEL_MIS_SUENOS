@@ -15,6 +15,11 @@ import { hotelService } from './services/hotelService'
 import type { DashboardData, Role } from './types'
 
 type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Inventario' | 'Personal' | 'Configuración'
+type SessionUser = { id: string; name: string; role: Role }
+
+// Temporary session identity until Apps Script returns the authenticated user.
+// The rest of the application already consumes this role as server-owned data.
+const DEMO_SESSION_USER: SessionUser = { id: 'USR-OWNER', name: 'Cuenta principal', role: 'Dueño' }
 
 const menu = [
   ['Resumen', LayoutDashboard, true],
@@ -45,7 +50,6 @@ const pagesByRole: Record<Role, ActivePage[]> = {
 function App() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [active, setActive] = useState<ActivePage>('Resumen')
-  const [role, setRole] = useState<Role>('Dueño')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -53,7 +57,8 @@ function App() {
   const [selectedRecommendationId, setSelectedRecommendationId] = useState<string>()
   const [cashPurchaseRequestId, setCashPurchaseRequestId] = useState<string>()
   const [toast, setToast] = useState('')
-  const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('hms_demo_auth') === 'true')
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(() => localStorage.getItem('hms_demo_auth') === 'true' ? DEMO_SESSION_USER : null)
+  const role = sessionUser?.role ?? DEMO_SESSION_USER.role
 
   const load = async () => {
     setLoading(true)
@@ -129,10 +134,10 @@ function App() {
     setData(current => current ? { ...current, userAccounts: updater(current.userAccounts) } : current)
   }
 
-  if (!authenticated) return <LoginScreen onLogin={() => { localStorage.setItem('hms_demo_auth', 'true'); setAuthenticated(true) }}/>
+  if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem('hms_demo_auth', 'true'); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem('hms_demo_auth'); setAuthenticated(false); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem('hms_demo_auth'); setSessionUser(null); setMobileNavOpen(false) }
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
     <aside className="sidebar">
@@ -140,7 +145,7 @@ function App() {
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
       <nav>{menu.filter(([label]) => pagesByRole[role].includes(label)).map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => { if (enabled) { setActive(label as ActivePage); setMobileNavOpen(false) } }}><Icon size={18}/><span>{label}</span>{!enabled && <em>PRÓX.</em>}</button>)}</nav>
       <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>
-      <div className="mobile-nav-footer"><span>Sesión como</span><strong>{role}</strong><button onClick={signOut}>Cerrar sesión</button></div>
+      <div className="mobile-nav-footer"><span>Sesión de</span><strong>{sessionUser.name}</strong><small>{role}</small><button onClick={signOut}>Cerrar sesión</button></div>
     </aside>
     <button className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"/>
 
@@ -151,8 +156,8 @@ function App() {
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
           <button className="icon-button" onClick={async () => { await load(); setToast('Datos actualizados') }} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
+          <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
           <button className="logout-button" onClick={signOut}>Salir</button>
-          <select value={role} onChange={event => { setRole(event.target.value as Role); setNotificationsOpen(false) }} aria-label="Rol simulado"><option>Dueño</option><option>Gerencia</option><option>Administración</option><option>Recepción</option><option>Cocina</option><option>Limpieza</option><option>Alberca</option></select>
         </div>
       </header>
 
