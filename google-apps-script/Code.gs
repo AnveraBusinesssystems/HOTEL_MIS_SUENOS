@@ -21,6 +21,10 @@ function doPost(event) {
         return jsonResponse_({ ok: true, data: getSummary_() });
       case 'indicators.get':
         return jsonResponse_({ ok: true, data: getIndicators_(request.includeMonthly === true) });
+      case 'reservations.get':
+        return jsonResponse_({ ok: true, data: getReservations_(request.refresh === true) });
+      case 'reservations.update':
+        return jsonResponse_({ ok: true, data: updateReservation_(request) });
       default:
         return jsonResponse_({
           ok: false,

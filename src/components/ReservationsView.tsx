@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, BedDouble, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
   CircleDollarSign, Cloud, List, LogIn, LogOut, Search, Sparkles, UserRound, X,
@@ -12,6 +12,7 @@ const ACTIVE_STATUSES: ReservationStatus[] = ['Confirmada', 'Hospedado']
 type Props = {
   reservations: Reservation[]
   onChange: (updater: (rows: Reservation[]) => Reservation[]) => void
+  onPersist?: (reservationKey: string, changes: Partial<Reservation>) => Promise<Reservation>
   onNotify: (message: string) => void
 }
 
@@ -27,8 +28,8 @@ const shiftDate = (date: string, amount: number) => {
 }
 const calendarLabel = (date: string) => new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`)).replace('.', '').toUpperCase()
 
-export function ReservationsView({ reservations, onChange, onNotify }: Props) {
-  const [selectedId, setSelectedId] = useState<string>()
+export function ReservationsView({ reservations, onChange, onPersist, onNotify }: Props) {
+  const [selectedKey, setSelectedKey] = useState<string>()
   const [view, setView] = useState<'Calendario' | 'Lista'>('Calendario')
   const [calendarStart, setCalendarStart] = useState(TODAY)
   const [calendarLength, setCalendarLength] = useState(14)
@@ -42,6 +43,12 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
   const [lastSync, setLastSync] = useState('Sin sincronizar')
   const hasReservations = reservations.length > 0
 
+  useEffect(() => {
+    if (hasReservations) {
+      setLastSync(new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date()).replace('.', ''))
+    }
+  }, [hasReservations])
+
   const baseFiltered = useMemo(() => reservations.filter(reservation => {
     const normalizedQuery = query.trim().toLowerCase()
     const matchesQuery = !normalizedQuery || [reservation.id, reservation.guestName, reservation.roomNumber ?? '', reservation.phone].some(value => value.toLowerCase().includes(normalizedQuery))
@@ -51,7 +58,7 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
   const calendarDates = useMemo(() => Array.from({ length: calendarLength }, (_, index) => shiftDate(calendarStart, index)), [calendarLength, calendarStart])
   const calendarReservations = useMemo(() => baseFiltered.filter(reservation => reservation.status !== 'Cancelada' && reservation.status !== 'No show' && reservation.checkOut > calendarDates[0] && reservation.checkIn < shiftDate(calendarDates.at(-1)!, 1)), [baseFiltered, calendarDates])
 
-  const selected = reservations.find(reservation => reservation.id === selectedId)
+  const selected = reservations.find(reservation => reservation.subReservationId === selectedKey)
   const arrivals = reservations.filter(row => row.checkIn === TODAY && row.status === 'Confirmada').length
   const departures = reservations.filter(row => row.checkOut === TODAY && row.status === 'Hospedado').length
   const inHouse = reservations.filter(row => row.status === 'Hospedado').length
@@ -68,9 +75,16 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
     }, 800)
   }
 
-  const updateReservation = (id: string, changes: Partial<Reservation>, message: string) => {
-    onChange(rows => rows.map(row => row.id === id ? { ...row, ...changes } : row))
-    onNotify(`${message}. El cambio es local hasta conectar Cloudbeds`)
+  const updateReservation = async (reservationKey: string, changes: Partial<Reservation>, message: string) => {
+    const localOnly = Object.keys(changes).every(key => key === 'cleaningRequested')
+    try {
+      const saved = !localOnly && onPersist ? await onPersist(reservationKey, changes) : undefined
+      onChange(rows => rows.map(row => row.subReservationId === reservationKey ? (saved ?? { ...row, ...changes }) : row))
+      onNotify(saved ? `${message}. Google Sheets actualizado` : `${message}. Cambio local`)
+    } catch (error) {
+      console.warn('No fue posible actualizar la reserva.', error)
+      onNotify('No fue posible guardar el cambio en Google Sheets')
+    }
   }
 
   return <div className="page reservations-page">
@@ -100,16 +114,16 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
       <label>Pago<select value={payment} onChange={event => setPayment(event.target.value as typeof payment)}><option>Todos</option><option>Pagada</option><option>Parcial</option><option>Pendiente</option></select></label>
     </section>
 
-    {view === 'Calendario' && <ReservationsCalendar dates={calendarDates} reservations={calendarReservations} roomType={roomType} onOpen={setSelectedId}/>}
+    {view === 'Calendario' && <ReservationsCalendar dates={calendarDates} reservations={calendarReservations} roomType={roomType} onOpen={setSelectedKey}/>}
 
     {view === 'Lista' && <section className="panel reservations-table-panel">
-      <header><div><span>RESERVAS EN EL PERIODO</span><h2>{filtered.length} resultados</h2></div><span className="simulation-label">SIN DATOS CONECTADOS</span></header>
+      <header><div><span>RESERVAS EN EL PERIODO</span><h2>{filtered.length} resultados</h2></div><span className="simulation-label">{hasReservations ? 'GOOGLE SHEETS' : 'SIN DATOS'}</span></header>
       <div className="table-scroll"><table className="reservations-table">
         <thead><tr><th>Reserva</th><th>Huésped</th><th>Estancia</th><th>Habitación</th><th>Personas</th><th>Estado</th><th>Canal</th><th>Total</th><th>Saldo</th><th>Pago</th><th/></tr></thead>
         <tbody>{filtered.map(reservation => {
           const due = Math.max(0, reservation.total - reservation.paid)
           const paymentLabel = paymentState(reservation)
-          return <tr key={reservation.subReservationId} className={!reservation.roomNumber && ACTIVE_STATUSES.includes(reservation.status) ? 'row-attention' : ''} onClick={() => setSelectedId(reservation.id)}>
+          return <tr key={reservation.subReservationId} className={!reservation.roomNumber && ACTIVE_STATUSES.includes(reservation.status) ? 'row-attention' : ''} onClick={() => setSelectedKey(reservation.subReservationId)}>
             <td><b>{reservation.id}</b><small>{reservation.subReservationId}</small></td>
             <td><b>{reservation.guestName}</b><small>{reservation.phone}</small></td>
             <td><b>{shortDate(reservation.checkIn)} → {shortDate(reservation.checkOut)}</b><small>{nights(reservation)} noches</small></td>
@@ -123,7 +137,10 @@ export function ReservationsView({ reservations, onChange, onNotify }: Props) {
       </table>{!filtered.length && <div className="empty-reservations"><Search size={22}/><b>No encontramos reservaciones</b><span>Prueba otro rango o elimina algunos filtros.</span></div>}</div>
     </section>}
 
-    {selected && <ReservationDrawer reservation={selected} onClose={() => setSelectedId(undefined)} onUpdate={updateReservation} onNotify={onNotify}/>} 
+    {selected && <ReservationDrawer
+      reservation={selected} onClose={() => setSelectedKey(undefined)}
+      onUpdate={updateReservation} onNotify={onNotify}
+    />}
   </div>
 }
 
@@ -156,12 +173,12 @@ function CalendarRoomRow({ label, dates, reservations, columns, onOpen }: { labe
       const endIndex = visibleEnd === afterLastDay ? dates.length : dates.findIndex(date => date >= visibleEnd)
       if (startIndex < 0 || endIndex <= startIndex) return null
       const due = reservation.total > reservation.paid
-      return <button key={reservation.subReservationId} className={`calendar-reservation ${reservation.status.toLowerCase().replace(' ', '-')} ${due ? 'has-balance' : ''}`} style={{ gridColumn: `${startIndex + 2} / ${endIndex + 2}` }} onClick={() => onOpen(reservation.id)} title={`${reservation.guestName} · ${reservation.id}`}><span>{reservation.guestName}</span>{due && <i title="Saldo pendiente"/>}{reservation.cleaningRequested && <Sparkles size={11}/>}</button>
+      return <button key={reservation.subReservationId} className={`calendar-reservation ${reservation.status.toLowerCase().replace(' ', '-')} ${due ? 'has-balance' : ''}`} style={{ gridColumn: `${startIndex + 2} / ${endIndex + 2}` }} onClick={() => onOpen(reservation.subReservationId)} title={`${reservation.guestName} · ${reservation.id}`}><span>{reservation.guestName}</span>{due && <i title="Saldo pendiente"/>}{reservation.cleaningRequested && <Sparkles size={11}/>}</button>
     })}
   </div>
 }
 
-function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reservation: Reservation; onClose: () => void; onUpdate: (id: string, changes: Partial<Reservation>, message: string) => void; onNotify: (message: string) => void }) {
+function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reservation: Reservation; onClose: () => void; onUpdate: (reservationKey: string, changes: Partial<Reservation>, message: string) => Promise<void>; onNotify: (message: string) => void }) {
   const [room, setRoom] = useState(reservation.roomNumber ?? '')
   const [paymentAmount, setPaymentAmount] = useState('')
   const due = Math.max(0, reservation.total - reservation.paid)
@@ -179,13 +196,13 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reser
 
       <section className="drawer-section"><span className="drawer-label">ESTANCIA</span><div className="reservation-stay"><div><small>Check-in</small><b>{longDate(reservation.checkIn)}</b><em>15:00</em></div><div><small>Check-out</small><b>{longDate(reservation.checkOut)}</b><em>11:00</em></div></div><div className="reservation-facts"><div><small>Noches</small><b>{nights(reservation)}</b></div><div><small>Huéspedes</small><b>{reservation.adults + reservation.children}</b></div><div><small>Tipo</small><b>{reservation.roomType}</b></div><div><small>Canal</small><b>{reservation.channel}</b></div></div></section>
 
-      <section className="drawer-section"><span className="drawer-label">HABITACIÓN</span><div className="room-assignment"><select value={room} onChange={event => setRoom(event.target.value)}><option value="">Sin asignar</option>{roomNumbers[reservation.roomType].map(item => <option key={item}>{item}</option>)}</select><button disabled={room === (reservation.roomNumber ?? '')} onClick={() => onUpdate(reservation.id, { roomNumber: room || undefined }, room ? `habitación asignada: ${room}` : 'habitación desasignada')}>Guardar asignación</button></div><small className="field-help">En la integración real se validará disponibilidad antes de enviar el cambio.</small></section>
+      <section className="drawer-section"><span className="drawer-label">HABITACIÓN</span><div className="room-assignment"><select value={room} onChange={event => setRoom(event.target.value)}><option value="">Sin asignar</option>{roomNumbers[reservation.roomType].map(item => <option key={item}>{item}</option>)}</select><button disabled={room === (reservation.roomNumber ?? '')} onClick={() => void onUpdate(reservation.subReservationId, { roomNumber: room || undefined }, room ? `habitación asignada: ${room}` : 'habitación desasignada')}>Guardar asignación</button></div><small className="field-help">La asignación se guarda en Google Sheets; reservas multihabitación requieren revisión manual.</small></section>
 
       <section className="drawer-section"><span className="drawer-label">HUÉSPED</span><div className="guest-contact"><b>{reservation.email}</b><span>{reservation.phone}</span></div>{reservation.notes && <p className="reservation-notes">{reservation.notes}</p>}</section>
 
-      <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 ? 'negative' : 'positive'}>{money(due)}</b></div></div>{due > 0 && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { onUpdate(reservation.id, { paid: reservation.paid + requestedPayment }, `pago de ${money(requestedPayment)} registrado`); setPaymentAmount('') }}>Registrar</button></div>}</section>
+      <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 ? 'negative' : 'positive'}>{money(due)}</b></div></div>{due > 0 && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { void onUpdate(reservation.subReservationId, { paid: reservation.paid + requestedPayment }, `pago de ${money(requestedPayment)} registrado`); setPaymentAmount('') }}>Registrar</button></div>}</section>
 
-      <footer className="reservation-actions"><button onClick={() => onUpdate(reservation.id, { cleaningRequested: !reservation.cleaningRequested }, reservation.cleaningRequested ? 'solicitud de limpieza retirada' : 'limpieza solicitada') }><Sparkles size={14}/>{reservation.cleaningRequested ? 'Retirar limpieza' : 'Solicitar limpieza'}</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => onUpdate(reservation.id, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => onUpdate(reservation.id, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
+      <footer className="reservation-actions"><button onClick={() => void onUpdate(reservation.subReservationId, { cleaningRequested: !reservation.cleaningRequested }, reservation.cleaningRequested ? 'solicitud de limpieza retirada' : 'limpieza solicitada') }><Sparkles size={14}/>{reservation.cleaningRequested ? 'Retirar limpieza' : 'Solicitar limpieza'}</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
     </aside>
   </div>
 }

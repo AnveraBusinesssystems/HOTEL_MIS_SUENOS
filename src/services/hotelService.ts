@@ -1,6 +1,7 @@
 import { emptyDashboard } from '../data/emptyData'
 import type { DashboardData } from '../types'
 import { indicatorsService } from './indicatorsService'
+import { reservationsService } from './reservationsService'
 import { summaryService } from './summaryService'
 
 export const hotelService = {
@@ -21,5 +22,13 @@ export const hotelService = {
 
   getIndicators(includeMonthly = false) {
     return indicatorsService.get(includeMonthly)
+  },
+
+  getReservations(refresh = false) {
+    return reservationsService.get(refresh)
+  },
+
+  updateReservation(reservationKey: string, changes: Partial<DashboardData['reservations'][number]>) {
+    return reservationsService.update(reservationKey, changes)
   },
 }

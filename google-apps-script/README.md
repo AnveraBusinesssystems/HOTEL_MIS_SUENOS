@@ -5,7 +5,7 @@ Este directorio contiene el código que se copiará manualmente al proyecto de A
 ## Instalación manual
 
 1. Crea un proyecto de Apps Script ligado a la cuenta propietaria del hotel.
-2. Crea los archivos `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs` e `Indicators.gs`; copia su contenido desde esta carpeta.
+2. Crea los archivos `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs` y `Reservations.gs`; copia su contenido desde esta carpeta.
 3. En **Configuración del proyecto**, activa la visualización del archivo de manifiesto y reemplaza `appsscript.json`.
 4. Implementa como **Aplicación web**, ejecutando como el propietario. Copia la URL que termina en `/exec`.
 5. Antes de activar datos reales en GitHub Pages, completa el módulo de autenticación. No uses la URL pública como si fuera una contraseña.
@@ -31,6 +31,8 @@ La respuesta contiene `monthly`, `performance`, `rateDays` y `generatedAt`. Cost
 ```
 
 La entrada normal trae solamente `roomPerformance` y `roomMonthly`; reutiliza en el navegador los datos mensuales recibidos por `summary.get`. En una actualización manual, `includeMonthly: true` refresca todo lo necesario para Indicadores dentro de esa única petición.
+
+`Reservas` usa `reservations.get` al abrir la pestaña y `reservations.update` para cambios puntuales. La lectura incluye desde 30 días antes hasta 180 días después de la fecha operativa, con un máximo de 500 filas. Las actualizaciones aceptadas son estado, habitación y monto pagado; cada una localiza la fila por `Clave de reserva`.
 
 ## Seguridad
 
