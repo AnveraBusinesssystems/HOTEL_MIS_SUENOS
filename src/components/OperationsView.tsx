@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, BedDouble, CalendarDays, CheckCircle2, Clock3, LogIn, LogOut,
-  MapPinned, PackageOpen, Play, RefreshCw, Sparkles, UserRound, Wrench, X,
+  AlertTriangle, BedDouble, CalendarDays, CheckCircle2, Clock3, Download, FileText, LogIn, LogOut,
+  Mail, MapPinned, PackageOpen, Play, RefreshCw, Send, Sparkles, TrendingUp, UserRound, WalletCards, Wrench, X,
 } from 'lucide-react'
 import type {
-  CashMovement, OperationDay, OperationTask, Reservation, Role, RoomAccessStatus, RoomIssueType, RoomState, TourBooking,
+  CashMovement, OperationDay, OperationTask, Reservation, Role, RoomAccessStatus, RoomIssueType, RoomState, StaffMember, StaffTimeEntry, TourBooking,
 } from '../types'
-import { longDate, number, shortDate } from '../utils'
+import { longDate, money, number, percent, shortDate } from '../utils'
 import { ToursView } from './ToursView'
 
 const hotelDate = () => {
@@ -19,7 +19,7 @@ const TODAY = hotelDate()
 const completedNow = () => `${TODAY} · ${hotelTime()}`
 const completionTime = (value?: string) => value?.includes(' · ') ? value.split(' · ')[1] : value
 
-type OperationTab = 'Hoy' | 'Habitaciones' | 'Limpieza' | 'Tours'
+type OperationTab = 'Hoy' | 'Habitaciones' | 'Limpieza' | 'Tours' | 'Cierre diario'
 type CleaningQueue = 'Salidas' | 'Limpieza' | 'Check'
 type PriorityItem = {
   id: string
@@ -48,6 +48,8 @@ type Props = {
   days: OperationDay[]
   tours: TourBooking[]
   cashMovements: CashMovement[]
+  staff: StaffMember[]
+  staffTimeEntries: StaffTimeEntry[]
   onReservationsChange: (updater: (rows: Reservation[]) => Reservation[]) => void
   onRoomsChange: (updater: (rows: RoomState[]) => RoomState[]) => void
   onTasksChange: (updater: (rows: OperationTask[]) => OperationTask[]) => void
@@ -71,7 +73,7 @@ const issueTaskMeta = (issue: RoomIssueType) => {
   const technical = issue === 'Luces no funcionan' || issue === 'A/C no funciona bien'
   return { type: (technical ? 'Mantenimiento' : 'Reposición') as OperationTask['type'], priority: (issue === 'No hay llaves' ? 'Crítica' : technical ? 'Alta' : 'Normal') as OperationTask['priority'], assignedTo: technical ? 'Gerencia' : 'Limpieza' }
 }
-const allowedTabsFor = (role: Role): OperationTab[] => role === 'Limpieza' ? ['Limpieza', 'Habitaciones'] : role === 'Recepción' ? ['Hoy', 'Habitaciones', 'Tours'] : ['Cocina', 'Alberca'].includes(role) ? ['Hoy'] : ['Hoy', 'Habitaciones', 'Limpieza', 'Tours']
+const allowedTabsFor = (role: Role): OperationTab[] => role === 'Limpieza' ? ['Limpieza', 'Habitaciones'] : role === 'Recepción' ? ['Hoy', 'Habitaciones', 'Tours', 'Cierre diario'] : ['Cocina', 'Alberca'].includes(role) ? ['Hoy'] : ['Hoy', 'Habitaciones', 'Limpieza', 'Tours', 'Cierre diario']
 const canUpdateOperation = (role: Role) => ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
 const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms.map(room => {
   if (room.occupancy === 'Bloqueada') return room
@@ -81,7 +83,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, tours, cashMovements, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onToursChange, onCashMovementsChange, onNotify } = props
+  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onToursChange, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
@@ -177,7 +179,7 @@ export function OperationsView(props: Props) {
 
     {(tab === 'Hoy' || tab === 'Tours') && <section className="operation-date-strip" ref={dateStripRef}>{dayStrip.map(day => <button key={day.date} className={`${day.date === selectedDate ? 'active' : ''} ${day.date === TODAY ? 'today' : ''}`} onClick={() => setSelectedDate(day.date)}><span>{shortDate(day.date)}</span><b>{number(day.occupancy, 0)}%</b><small>{day.arrivals} lleg. · {day.departures} sal.</small><em>{day.cleaningLoad} limp.</em></button>)}</section>}
 
-    <section className="operation-controls"><div className="operation-tabs">{allowedTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => chooseTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : item === 'Tours' ? <MapPinned size={15}/> : <Sparkles size={15}/>} {item === 'Hoy' ? 'Control de hoy' : item}</button>)}</div><div className="day-actions">{(tab === 'Hoy' || tab === 'Tours') && !isLiveDate && <button onClick={() => setSelectedDate(TODAY)}><CalendarDays size={14}/>Volver a hoy</button>}{tab === 'Hoy' && isLiveDate && canUpdateOperation(role) && <button className="primary-action" onClick={syncOperation}><RefreshCw size={14}/>{selectedDay.status === 'Abierto' ? 'Actualizar operación' : 'Iniciar operación'}</button>}</div></section>
+    <section className="operation-controls"><div className="operation-tabs">{allowedTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => chooseTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : item === 'Tours' ? <MapPinned size={15}/> : item === 'Cierre diario' ? <FileText size={15}/> : <Sparkles size={15}/>} {item === 'Hoy' ? 'Control de hoy' : item}</button>)}</div><div className="day-actions">{(tab === 'Hoy' || tab === 'Tours') && !isLiveDate && <button onClick={() => setSelectedDate(TODAY)}><CalendarDays size={14}/>Volver a hoy</button>}{tab === 'Hoy' && isLiveDate && canUpdateOperation(role) && <button className="primary-action" onClick={syncOperation}><RefreshCw size={14}/>{selectedDay.status === 'Abierto' ? 'Actualizar operación' : 'Iniciar operación'}</button>}</div></section>
 
     {tab === 'Hoy' && <TodayView date={selectedDate} isLive={isLiveDate} metrics={displayMetrics} arrivals={arrivals} departures={departures} stays={stays} priorities={priorities} onPriority={runPriorityAction}/>}
     {tab === 'Habitaciones' && <RoomsView role={role} rooms={liveRooms} reservations={reservations} tasks={tasks} filter={roomFilter} setFilter={setRoomFilter} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onOpenCleaning={() => chooseTab('Limpieza')} onNotify={onNotify}/>}
@@ -190,7 +192,91 @@ export function OperationsView(props: Props) {
       role={role} date={selectedDate} tours={tours} reservations={reservations} cashMovements={cashMovements}
       onToursChange={onToursChange} onCashMovementsChange={onCashMovementsChange} onNotify={onNotify}
     />}
+    {tab === 'Cierre diario' && <DailyCloseView
+      role={role} reservations={reservations} rooms={liveRooms} cashMovements={cashMovements}
+      staff={staff} staffTimeEntries={staffTimeEntries} onNotify={onNotify}
+    />}
   </div>
+}
+
+const addDays = (date: string, amount: number) => {
+  const value = new Date(`${date}T12:00:00`)
+  value.setDate(value.getDate() + amount)
+  return value.toISOString().slice(0, 10)
+}
+
+function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staffTimeEntries, onNotify }: {
+  role: Role
+  reservations: Reservation[]
+  rooms: RoomState[]
+  cashMovements: CashMovement[]
+  staff: StaffMember[]
+  staffTimeEntries: StaffTimeEntry[]
+  onNotify: (message: string) => void
+}) {
+  const [notes, setNotes] = useState('')
+  const activeCash = cashMovements.filter(item => item.date === TODAY && item.status !== 'Anulado')
+  const cashIn = activeCash.filter(item => item.type === 'Entrada').reduce((sum, item) => sum + item.amount, 0)
+  const cashOut = activeCash.filter(item => item.type === 'Salida').reduce((sum, item) => sum + item.amount, 0)
+  const occupied = reservations.filter(item => occupiedOn(item, TODAY))
+  const roomRevenue = occupied.reduce((sum, reservation) => sum + reservation.nights.filter(night => night.date === TODAY).reduce((nightSum, night) => nightSum + night.rate, 0), 0)
+  const createdToday = reservations.filter(item => item.createdAt.startsWith(TODAY)).length
+  const attendance = staffTimeEntries.filter(item => item.date === TODAY)
+  const staffNames = attendance.map(entry => staff.find(employee => employee.id === entry.employeeId)?.name).filter(Boolean)
+  const hasReservations = reservations.length > 0
+  const hasRooms = rooms.length > 0
+  const hasCash = cashMovements.length > 0
+  const hasAttendance = staffTimeEntries.length > 0
+  const canSend = ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
+  const forecast = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(TODAY, index + 1)
+    const active = reservations.filter(item => occupiedOn(item, date))
+    const revenue = active.reduce((sum, reservation) => sum + reservation.nights.filter(night => night.date === date).reduce((nightSum, night) => nightSum + night.rate, 0), 0)
+    return {
+      date,
+      occupied: active.length,
+      arrivals: reservations.filter(item => !['Cancelada', 'No show'].includes(item.status) && item.checkIn === date).length,
+      departures: reservations.filter(item => !['Cancelada', 'No show'].includes(item.status) && item.checkOut === date).length,
+      adr: active.length ? revenue / active.length : 0,
+      revpar: revenue / 17,
+    }
+  })
+  const previewUnavailable = () => onNotify('El envío y el PDF se habilitarán al conectar Apps Script')
+
+  return <section className="daily-close-view">
+    <div className="daily-close-hero">
+      <div><p className="eyebrow">CIERRE DE {shortDate(TODAY)}</p><h2>Reporte diario</h2><p>Revisa la operación completa, agrega observaciones y envía una copia permanente del cierre.</p></div>
+      <div className="daily-close-state"><span>ESTADO</span><strong>Pendiente</strong><small>Sin enviar</small></div>
+    </div>
+
+    <div className="daily-close-metrics">
+      <article><span><WalletCards size={14}/>Entradas</span><strong className="positive">{hasCash ? money(cashIn) : '—'}</strong><small>{hasCash ? `${activeCash.filter(item => item.type === 'Entrada').length} movimientos` : 'Sin datos'}</small></article>
+      <article><span><WalletCards size={14}/>Salidas</span><strong className="negative">{hasCash ? money(cashOut) : '—'}</strong><small>{hasCash ? `${activeCash.filter(item => item.type === 'Salida').length} movimientos` : 'Sin datos'}</small></article>
+      <article><span><TrendingUp size={14}/>Neto</span><strong>{hasCash ? money(cashIn - cashOut) : '—'}</strong><small>Resultado de caja</small></article>
+      <article><span><UserRound size={14}/>Personal</span><strong>{hasAttendance ? attendance.length : '—'}</strong><small>{hasAttendance ? staffNames.join(', ') || 'Asistencia registrada' : 'Sin asistencia registrada'}</small></article>
+      <article><span><BedDouble size={14}/>Ocupados</span><strong>{hasRooms || hasReservations ? occupied.length : '—'}</strong><small>{hasReservations ? `${percent(occupied.length / 17 * 100)} ocupación` : 'Sin datos'}</small></article>
+      <article><span><CalendarDays size={14}/>Reservas hoy</span><strong>{hasReservations ? createdToday : '—'}</strong><small>Reservas creadas</small></article>
+      <article><span><X size={14}/>Canceladas hoy</span><strong>—</strong><small>Requiere historial de eventos</small></article>
+      <article><span><TrendingUp size={14}/>ADR / RevPAR</span><strong>{hasReservations && occupied.length ? `${money(roomRevenue / occupied.length)} / ${money(roomRevenue / 17)}` : '—'}</strong><small>Tarifa y rendimiento de hoy</small></article>
+    </div>
+
+    <div className="daily-close-grid">
+      <article className="panel daily-forecast">
+        <header><div><span>PRONÓSTICO</span><h2>Cómo se ven los siguientes 7 días</h2></div><span className="data-state">AUTOMÁTICO</span></header>
+        <div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Ocupación</th><th>Llegadas</th><th>Salidas</th><th>ADR</th><th>RevPAR</th></tr></thead><tbody>{forecast.map(day => <tr key={day.date}><td><b>{shortDate(day.date)}</b><small>{longDate(day.date).split(',')[0]}</small></td><td>{hasReservations ? `${day.occupied}/17 · ${percent(day.occupied / 17 * 100, 0)}` : '—'}</td><td>{hasReservations ? day.arrivals : '—'}</td><td>{hasReservations ? day.departures : '—'}</td><td>{hasReservations && day.occupied ? money(day.adr) : '—'}</td><td>{hasReservations && day.occupied ? money(day.revpar) : '—'}</td></tr>)}</tbody></table></div>
+      </article>
+
+      <aside className="panel daily-send-panel">
+        <header><div><span>ENTREGA</span><h2>Preparar y enviar</h2></div><Mail size={17}/></header>
+        <div className="daily-recipient"><span>DESTINATARIO PRINCIPAL</span><strong>newrduenas14@gmail.com</strong><small>Configurado para todos los cierres diarios</small></div>
+        <label><span>Observaciones del día</span><textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Pendientes, incidencias o información importante…"/></label>
+        <div className="daily-send-actions"><button onClick={previewUnavailable}><Download size={14}/>Descargar PDF</button><button className="primary-action" disabled={!canSend} onClick={previewUnavailable}><Send size={14}/>Enviar cierre diario</button></div>
+        <p><CheckCircle2 size={13}/>El reporte quedará registrado con usuario, fecha, hora y versión.</p>
+      </aside>
+    </div>
+
+    <article className="panel daily-close-history"><header><div><span>HISTORIAL</span><h2>Cierres enviados</h2></div><button onClick={() => onNotify('El historial aparecerá al conectar REPORTES_DIARIOS')}>Ver todos</button></header><div className="daily-history-empty"><FileText size={25}/><b>Todavía no hay reportes enviados</b><span>Los cierres aparecerán aquí después de conectar Apps Script.</span></div></article>
+  </section>
 }
 
 function TodayView({ date, isLive, metrics, arrivals, departures, stays, priorities, onPriority }: { date: string; isLive: boolean; metrics: OperationMetric[]; arrivals: Reservation[]; departures: Reservation[]; stays: Reservation[]; priorities: PriorityItem[]; onPriority: (item: PriorityItem) => void }) {

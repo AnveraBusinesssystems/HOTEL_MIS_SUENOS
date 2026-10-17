@@ -224,6 +224,7 @@ function App() {
       {active === 'Operación diaria' && <OperationsView
         role={role} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
         days={data.operationDays} tours={data.tours} cashMovements={data.cashMovements}
+        staff={data.staff} staffTimeEntries={data.staffTimeEntries}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
         onDaysChange={updateOperationDays} onToursChange={updateTours}
         onCashMovementsChange={updateCashMovements} onNotify={setToast}
