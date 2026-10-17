@@ -9,7 +9,7 @@ type Props = {
   onNotify: (message: string) => void
 }
 
-const roomOrder: RoomCode[] = ['NAY', "NA'", 'CHA', 'KAA', 'MUU']
+const roomOrder: RoomCode[] = ['NAY', 'NA', 'CHA', 'KAA', 'MUU']
 
 export function RatesView({ data, initialRecommendationId, onNotify }: Props) {
   const [horizon, setHorizon] = useState(30)

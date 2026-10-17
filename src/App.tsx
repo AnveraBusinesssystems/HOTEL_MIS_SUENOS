@@ -68,6 +68,8 @@ function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
+  const [indicatorsLoading, setIndicatorsLoading] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [selectedRecommendationId, setSelectedRecommendationId] = useState<string>()
   const [cashPurchaseRequestId, setCashPurchaseRequestId] = useState<string>()
@@ -77,13 +79,44 @@ function App() {
 
   const load = async () => {
     setLoading(true)
-    setData(await hotelService.getDashboard())
+    const next = await hotelService.getDashboard()
+    setData(current => current ? {
+      ...next,
+      roomPerformance: current.roomPerformance,
+      roomMonthly: current.roomMonthly,
+    } : next)
     setLoading(false)
+  }
+
+  const loadIndicators = async (includeMonthly = false) => {
+    if (!hotelService.isConfigured || indicatorsLoading) return false
+    setIndicatorsLoading(true)
+    try {
+      const indicators = await hotelService.getIndicators(includeMonthly)
+      setData(current => current ? {
+        ...current,
+        ...indicators,
+        monthly: indicators.monthly ?? current.monthly,
+      } : current)
+      setIndicatorsLoaded(true)
+      return true
+    } catch (error) {
+      console.warn('No fue posible cargar Indicadores; se conservan los datos actuales.', error)
+      setIndicatorsLoaded(true)
+      return false
+    } finally {
+      setIndicatorsLoading(false)
+    }
   }
 
   useEffect(() => {
     if (sessionUser) void load()
   }, [sessionUser])
+  useEffect(() => {
+    if (active === 'Indicadores' && data && !indicatorsLoaded && !indicatorsLoading) {
+      void loadIndicators(data.monthly.length === 0)
+    }
+  }, [active, data, indicatorsLoaded, indicatorsLoading])
   useEffect(() => {
     if (!toast) return
     const timeout = window.setTimeout(() => setToast(''), 2800)
@@ -109,6 +142,7 @@ function App() {
       setNotificationsOpen(false)
       setMobileNavOpen(false)
       setData(null)
+      setIndicatorsLoaded(false)
       setSessionUser(null)
     }
     const scheduleExpiration = (lastActivity: number) => {
@@ -196,11 +230,21 @@ function App() {
   if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
+
+  const refreshActivePage = async () => {
+    if (active === 'Indicadores' && hotelService.isConfigured) {
+      const updated = await loadIndicators(true)
+      setToast(updated ? 'Indicadores actualizados' : 'No se pudieron actualizar los indicadores')
+      return
+    }
+    await load()
+    setToast('Datos actualizados')
+  }
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">MS</div><div className="brand-copy"><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.15.0</small></div><button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20}/></button></div>
+      <div className="brand"><div className="brand-mark">MS</div><div className="brand-copy"><strong>MIS SUEÑOS</strong><span>HOLBOX · RMS</span><small className="build-tag">BUILD 1.16.0</small></div><button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20}/></button></div>
       <button className="collapse-btn" onClick={() => setCollapsed(value => !value)} aria-label="Contraer navegación"><Menu size={18}/></button>
       <nav>{menu.filter(([label]) => pagesByRole[role].includes(label)).map(([label, Icon, enabled]) => <button key={label} disabled={!enabled} className={active === label ? 'active' : ''} onClick={() => { if (enabled) { setActive(label as ActivePage); setMobileNavOpen(false) } }}><Icon size={18}/><span>{label}</span>{!enabled && <em>PRÓX.</em>}</button>)}</nav>
       <div className="property-meta"><span>PROPIEDAD</span><strong>17 habitaciones</strong><small>Isla Holbox · Q. Roo</small></div>
@@ -213,7 +257,7 @@ function App() {
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
-          <button className="icon-button" onClick={async () => { await load(); setToast('Datos actualizados') }} title="Actualizar datos"><RefreshCw size={16}/></button>
+          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
           <button className="logout-button" onClick={signOut}>Salir</button>
@@ -269,7 +313,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('Contraseña incorrecta')
   }
   return <div className="login-shell">
-    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.15.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
+    <section className="login-brand-panel"><div className="login-monogram">MS</div><small className="login-version">BUILD 1.16.0</small><p>ISLA HOLBOX · QUINTANA ROO</p><h1>Hotel Mis Sueños</h1><span>Sistema interno de operación y revenue management</span><div className="login-property-line"><b>17</b><small>habitaciones</small></div></section>
     <section className="login-form-panel"><form className="login-form" onSubmit={submit}><p className="eyebrow">ACCESO INTERNO</p><h2>Bienvenido</h2><p className="login-copy">Ingresa la clave temporal para acceder al panel administrativo.</p><label htmlFor="password">Contraseña</label><input id="password" autoFocus type="password" inputMode="numeric" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••"/>{error && <div className="login-error">{error}</div>}<button type="submit">Entrar al sistema</button><small className="demo-note">Acceso temporal de demostración · No sustituye autenticación real</small></form></section>
   </div>
 }

@@ -1,6 +1,6 @@
 export type Role = 'Dueño' | 'Gerencia' | 'Administración' | 'Recepción' | 'Cocina' | 'Limpieza' | 'Alberca'
 
-export type RoomCode = 'NAY' | "NA'" | 'CHA' | 'KAA' | 'MUU'
+export type RoomCode = 'NAY' | 'NA' | 'CHA' | 'KAA' | 'MUU'
 export type RateMetric = 'recommendedRate' | 'currentRate' | 'difference' | 'occupancy'
 
 export interface HotelSnapshot {

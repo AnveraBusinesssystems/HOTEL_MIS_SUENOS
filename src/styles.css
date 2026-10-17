@@ -243,5 +243,5 @@ tbody tr:hover{background:#f4ede3}
 @media(max-width:1000px){.purchase-request-list{grid-template-columns:1fr}}
 @media(max-width:760px){.purchase-requests-heading{align-items:flex-start}.purchase-requests-heading p{display:none}.purchase-request-card>footer{align-items:flex-start;flex-direction:column}.purchase-request-card>footer>div,.purchase-request-card>footer button{width:100%}.purchase-request-card>footer button{min-height:44px;justify-content:center}}
 
-/* Build 1.15 · intentional empty-data presentation */
+/* Build 1.16 · intentional empty-data presentation */
 .empty-value{color:#a39a90!important}.empty-panel-state{min-height:170px;display:grid;place-items:center;padding:24px;text-align:center;color:#958b81;font-size:9px}.empty-panel-state.compact{min-height:105px}.empty-panel-state.chart-empty{min-height:285px}.notification-empty{margin:0;padding:18px 14px;color:#8c8177;font-size:8px;text-align:center}

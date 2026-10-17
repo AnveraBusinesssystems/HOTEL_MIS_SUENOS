@@ -270,8 +270,8 @@ function RoomMatrix({ rows, metric, names }: { rows: RoomMonthlyPerformance[]; m
     if (!row) return '—'
     if (metric === 'revenue') return money(row.revenue)
     if (metric === 'occupancy') return percent(row.soldNights / row.availableNights * 100, 0)
-    if (metric === 'adr') return money(row.revenue / row.soldNights)
-    return money(row.revenue / row.availableNights)
+    if (metric === 'adr') return row.soldNights ? money(row.revenue / row.soldNights) : '—'
+    return row.availableNights ? money(row.revenue / row.availableNights) : '—'
   }
   return <div className="room-matrix-wrap"><table className="room-matrix"><thead><tr><th>Habitación</th>{MONTHS.map(month => <th key={month}>{month}</th>)}</tr></thead><tbody>{codes.map(code => <tr key={code}><td><b>{code}</b><small>{names.get(code)}</small></td>{MONTHS.map((_, index) => { const row = rows.find(item => item.code === code && item.month === index + 1); const occupancy = row ? row.soldNights / row.availableNights * 100 : 0; return <td key={index} className={occupancy >= 75 ? 'strong' : occupancy < 55 ? 'weak' : ''}>{value(row)}</td> })}</tr>)}</tbody></table></div>
 }

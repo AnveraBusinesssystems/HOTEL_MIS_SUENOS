@@ -19,6 +19,8 @@ function doPost(event) {
     switch (request.action) {
       case 'summary.get':
         return jsonResponse_({ ok: true, data: getSummary_() });
+      case 'indicators.get':
+        return jsonResponse_({ ok: true, data: getIndicators_(request.includeMonthly === true) });
       default:
         return jsonResponse_({
           ok: false,

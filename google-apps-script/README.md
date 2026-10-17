@@ -5,7 +5,7 @@ Este directorio contiene el código que se copiará manualmente al proyecto de A
 ## Instalación manual
 
 1. Crea un proyecto de Apps Script ligado a la cuenta propietaria del hotel.
-2. Crea los archivos `Config.gs`, `Code.gs`, `Utils.gs` y `Summary.gs`; copia su contenido desde esta carpeta.
+2. Crea los archivos `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs` e `Indicators.gs`; copia su contenido desde esta carpeta.
 3. En **Configuración del proyecto**, activa la visualización del archivo de manifiesto y reemplaza `appsscript.json`.
 4. Implementa como **Aplicación web**, ejecutando como el propietario. Copia la URL que termina en `/exec`.
 5. Antes de activar datos reales en GitHub Pages, completa el módulo de autenticación. No uses la URL pública como si fuera una contraseña.
@@ -20,6 +20,17 @@ Este directorio contiene el código que se copiará manualmente al proyecto de A
 ```
 
 La respuesta contiene `monthly`, `performance`, `rateDays` y `generatedAt`. Costos y resultado operativo se mantienen sin datos hasta conectar una fuente real de costos.
+
+`Indicadores` usa una segunda acción únicamente cuando se abre esa pestaña:
+
+```json
+{
+  "action": "indicators.get",
+  "includeMonthly": false
+}
+```
+
+La entrada normal trae solamente `roomPerformance` y `roomMonthly`; reutiliza en el navegador los datos mensuales recibidos por `summary.get`. En una actualización manual, `includeMonthly: true` refresca todo lo necesario para Indicadores dentro de esa única petición.
 
 ## Seguridad
 
