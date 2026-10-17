@@ -241,12 +241,20 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
       revpar: revenue / 17,
     }
   })
-  const previewUnavailable = () => onNotify('El envío y el PDF se habilitarán al conectar Apps Script')
+  const averageForecastOccupancy = forecast.reduce((sum, day) => sum + day.occupied / 17 * 100, 0) / forecast.length
+  const downloadPdf = () => {
+    const originalTitle = document.title
+    document.title = `Cierre diario ${TODAY} - Hotel Mis Sueños`
+    window.addEventListener('afterprint', () => { document.title = originalTitle }, { once: true })
+    window.print()
+  }
+  const sendUnavailable = () => onNotify('El envío por correo se habilitará al conectar Apps Script')
 
   return <section className="daily-close-view">
     <div className="daily-close-hero">
       <div><p className="eyebrow">CIERRE DE {shortDate(TODAY)}</p><h2>Reporte diario</h2><p>Revisa la operación completa, agrega observaciones y envía una copia permanente del cierre.</p></div>
       <div className="daily-close-state"><span>ESTADO</span><strong>Pendiente</strong><small>Sin enviar</small></div>
+      <div className="daily-print-meta"><span>Hotel Mis Sueños Holbox</span><span>Preparado por: {role}</span><span>Generado: {longDate(TODAY)} · {hotelTime()}</span></div>
     </div>
 
     <div className="daily-close-metrics">
@@ -260,6 +268,8 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
       <article><span><TrendingUp size={14}/>ADR / RevPAR</span><strong>{hasReservations && occupied.length ? `${money(roomRevenue / occupied.length)} / ${money(roomRevenue / 17)}` : '—'}</strong><small>Tarifa y rendimiento de hoy</small></article>
     </div>
 
+    <div className="daily-owner-summary"><span><TrendingUp size={15}/>LECTURA PARA DIRECCIÓN</span><p>{hasCash || hasReservations || hasAttendance ? <>El cierre registra un neto de <b>{hasCash ? money(cashIn - cashOut) : '—'}</b>, una ocupación actual de <b>{hasReservations ? percent(occupied.length / 17 * 100) : '—'}</b> y una ocupación promedio prevista de <b>{hasReservations ? percent(averageForecastOccupancy) : '—'}</b> para los próximos siete días.</> : <>La lectura ejecutiva aparecerá automáticamente cuando existan movimientos, reservas y asistencia del día.</>}</p></div>
+
     <div className="daily-close-grid">
       <article className="panel daily-forecast">
         <header><div><span>PRONÓSTICO</span><h2>Cómo se ven los siguientes 7 días</h2></div><span className="data-state">AUTOMÁTICO</span></header>
@@ -270,7 +280,8 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
         <header><div><span>ENTREGA</span><h2>Preparar y enviar</h2></div><Mail size={17}/></header>
         <div className="daily-recipient"><span>DESTINATARIO PRINCIPAL</span><strong>newrduenas14@gmail.com</strong><small>Configurado para todos los cierres diarios</small></div>
         <label><span>Observaciones del día</span><textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Pendientes, incidencias o información importante…"/></label>
-        <div className="daily-send-actions"><button onClick={previewUnavailable}><Download size={14}/>Descargar PDF</button><button className="primary-action" disabled={!canSend} onClick={previewUnavailable}><Send size={14}/>Enviar cierre diario</button></div>
+        <div className="daily-print-notes"><span>OBSERVACIONES DEL DÍA</span><p>{notes.trim() || 'Sin observaciones.'}</p></div>
+        <div className="daily-send-actions"><button onClick={downloadPdf}><Download size={14}/>Guardar como PDF</button><button className="primary-action" disabled={!canSend} onClick={sendUnavailable}><Send size={14}/>Enviar cierre diario</button></div>
         <p><CheckCircle2 size={13}/>El reporte quedará registrado con usuario, fecha, hora y versión.</p>
       </aside>
     </div>
