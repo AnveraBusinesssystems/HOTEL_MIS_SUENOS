@@ -1,11 +1,18 @@
 import { emptyDashboard } from '../data/emptyData'
 import type { DashboardData } from '../types'
-
-const delay = (ms = 220) => new Promise(resolve => setTimeout(resolve, ms))
+import { summaryService } from './summaryService'
 
 export const hotelService = {
   async getDashboard(): Promise<DashboardData> {
-    await delay()
-    return emptyDashboard()
+    const dashboard = emptyDashboard()
+    if (!summaryService.isConfigured) return dashboard
+
+    try {
+      const summary = await summaryService.get()
+      return { ...dashboard, ...summary }
+    } catch (error) {
+      console.warn('No fue posible cargar Resumen; se conserva el estado vacío.', error)
+      return dashboard
+    }
   },
 }

@@ -20,6 +20,7 @@ const COST_COLORS = ['#4e6248', '#7d8f6c', '#b99157', '#9b6b58', '#526b7d', '#88
 function KpiCards({ kpis, empty = false }: { kpis: KPI[]; empty?: boolean }) {
   return <section className="kpi-grid">
     {kpis.map(kpi => {
+      const unavailable = empty || kpi.available === false
       const difference = kpi.value - kpi.previous
       const relative = kpi.previous ? difference / kpi.previous * 100 : 0
       const neutral = Math.abs(difference) < 0.001
@@ -28,9 +29,9 @@ function KpiCards({ kpis, empty = false }: { kpis: KPI[]; empty?: boolean }) {
         : `${difference >= 0 ? '+' : ''}${number(relative, 1)}%`
       return <article className="kpi-card" key={kpi.id} title={kpi.helper}>
         <span>{kpi.label}</span>
-        <strong className={empty ? 'empty-value' : ''}>{empty ? '—' : kpiValue(kpi)}</strong>
+        <strong className={unavailable ? 'empty-value' : ''}>{unavailable ? '—' : kpiValue(kpi)}</strong>
         <div className="kpi-comparison">
-          {empty ? <><b className="neutral">—</b><small>Sin datos</small></> : <><b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
+          {unavailable ? <><b className="neutral">—</b><small>Sin datos</small></> : <><b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
             {neutral ? '—' : difference > 0 ? '▲' : '▼'} {neutral ? 'Sin cambio' : comparison}
           </b><small>Mes anterior {kpiValue(kpi, kpi.previous)}</small></>}
         </div>
@@ -43,8 +44,11 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
   if (!data.monthly.length) return <EmptySummaryView role={role} onOpenRms={onOpenRms}/>
 
   const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
-  const current = data.monthly.find(row => row.key === '2026-10') ?? data.monthly.at(-1)!
-  const previous = data.monthly.find(row => row.key === '2026-09') ?? data.monthly.at(-2)!
+  const now = new Date()
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const current = data.monthly.find(row => row.key === currentKey) ?? data.monthly.at(-1)!
+  const currentIndex = data.monthly.indexOf(current)
+  const previous = data.monthly[currentIndex - 1] ?? current
   const currentMetrics = monthlyMetrics(current)
   const previousMetrics = monthlyMetrics(previous)
   const executiveKpis: KPI[] = [
@@ -52,12 +56,12 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
     { id: 'occupancy', label: 'Ocupación', value: currentMetrics.occupancy, previous: previousMetrics.occupancy, format: 'percent', comparisonMode: 'points', helper: 'Noches vendidas / disponibles.' },
     { id: 'adr', label: 'ADR', value: currentMetrics.adr, previous: previousMetrics.adr, format: 'mxn', helper: 'Precio promedio por noche vendida.' },
     { id: 'revpar', label: 'RevPAR', value: currentMetrics.revpar, previous: previousMetrics.revpar, format: 'mxn', helper: 'Ingreso por habitación disponible.' },
-    { id: 'costs', label: 'Costos', value: current.costs, previous: previous.costs, format: 'mxn', helper: 'Gastos registrados en el periodo.' },
-    { id: 'result', label: 'Resultado operativo', value: currentMetrics.operatingResult, previous: previousMetrics.operatingResult, format: 'mxn', helper: 'Ingresos menos costos.' },
+    { id: 'costs', label: 'Costos', value: current.costs, previous: previous.costs, format: 'mxn', helper: 'Gastos registrados en el periodo.', available: current.costsAvailable === true },
+    { id: 'result', label: 'Resultado operativo', value: currentMetrics.operatingResult, previous: previousMetrics.operatingResult, format: 'mxn', helper: 'Ingresos menos costos.', available: current.costsAvailable === true },
   ]
   const nextSeven = data.rateDays.slice(0, 7)
   const occupied = nextSeven.reduce((sum, day) => sum + day.occupied, 0)
-  const capacity = nextSeven.length * 17
+  const capacity = nextSeven.reduce((sum, day) => sum + day.occupied + day.available, 0)
   const forwardOccupancy = capacity ? occupied / capacity * 100 : 0
 
   return <div className="page summary-page">
@@ -140,8 +144,10 @@ export function IndicatorsView(props: { data: DashboardData; role: Role }) {
 function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Role }) {
   const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
   const years = [...new Set(data.monthly.map(row => row.year))].sort((a, b) => b - a)
-  const [year, setYear] = useState(years[0])
-  const [month, setMonth] = useState(10)
+  const today = new Date()
+  const currentPeriod = data.monthly.find(row => row.year === today.getFullYear() && row.month === today.getMonth() + 1)
+  const [year, setYear] = useState(currentPeriod?.year ?? years[0])
+  const [month, setMonth] = useState(currentPeriod?.month ?? data.monthly.at(-1)!.month)
   const [tab, setTab] = useState<IndicatorTab>('Rendimiento')
   const [roomCode, setRoomCode] = useState<'TODAS' | RoomCode>('TODAS')
   const [roomMetric, setRoomMetric] = useState<RoomMetric>('revenue')
@@ -151,6 +157,7 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
   const previousYear = data.monthly.find(row => row.year === year - 1 && row.month === month) ?? selected
   const selectedMetrics = monthlyMetrics(selected)
   const previousMetrics = monthlyMetrics(previousMonth)
+  const costsAvailable = selected.costsAvailable === true
   const yearRows = data.monthly.filter(row => row.year === year).sort((a, b) => a.month - b.month)
   const performanceTrend = yearRows.map(row => {
     const prior = data.monthly.find(item => item.year === year - 1 && item.month === row.month)
@@ -181,12 +188,12 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
   }).sort((a, b) => b.volatility - a.volatility)
 
   const kpis = [
-    { label: 'Ingresos', value: money(selected.revenue), mom: (selected.revenue / previousMonth.revenue - 1) * 100, yoy: (selected.revenue / previousYear.revenue - 1) * 100 },
-    { label: 'Ocupación', value: percent(selectedMetrics.occupancy), mom: selectedMetrics.occupancy - previousMetrics.occupancy, yoy: selectedMetrics.occupancy - monthlyMetrics(previousYear).occupancy, points: true },
-    { label: 'ADR', value: money(selectedMetrics.adr), mom: (selectedMetrics.adr / previousMetrics.adr - 1) * 100, yoy: (selectedMetrics.adr / monthlyMetrics(previousYear).adr - 1) * 100 },
-    { label: 'RevPAR', value: money(selectedMetrics.revpar), mom: (selectedMetrics.revpar / previousMetrics.revpar - 1) * 100, yoy: (selectedMetrics.revpar / monthlyMetrics(previousYear).revpar - 1) * 100 },
-    { label: 'Costos', value: financialAccess ? money(selected.costs) : 'Restringido', mom: (selected.costs / previousMonth.costs - 1) * 100, yoy: (selected.costs / previousYear.costs - 1) * 100 },
-    { label: 'Resultado', value: financialAccess ? money(selectedMetrics.operatingResult) : 'Restringido', mom: (selectedMetrics.operatingResult / previousMetrics.operatingResult - 1) * 100, yoy: (selectedMetrics.operatingResult / monthlyMetrics(previousYear).operatingResult - 1) * 100 },
+    { label: 'Ingresos', value: money(selected.revenue), mom: (selected.revenue / previousMonth.revenue - 1) * 100, yoy: (selected.revenue / previousYear.revenue - 1) * 100, available: true },
+    { label: 'Ocupación', value: percent(selectedMetrics.occupancy), mom: selectedMetrics.occupancy - previousMetrics.occupancy, yoy: selectedMetrics.occupancy - monthlyMetrics(previousYear).occupancy, points: true, available: true },
+    { label: 'ADR', value: money(selectedMetrics.adr), mom: (selectedMetrics.adr / previousMetrics.adr - 1) * 100, yoy: (selectedMetrics.adr / monthlyMetrics(previousYear).adr - 1) * 100, available: true },
+    { label: 'RevPAR', value: money(selectedMetrics.revpar), mom: (selectedMetrics.revpar / previousMetrics.revpar - 1) * 100, yoy: (selectedMetrics.revpar / monthlyMetrics(previousYear).revpar - 1) * 100, available: true },
+    { label: 'Costos', value: financialAccess ? money(selected.costs) : 'Restringido', mom: (selected.costs / previousMonth.costs - 1) * 100, yoy: (selected.costs / previousYear.costs - 1) * 100, available: !financialAccess || costsAvailable },
+    { label: 'Resultado', value: financialAccess ? money(selectedMetrics.operatingResult) : 'Restringido', mom: (selectedMetrics.operatingResult / previousMetrics.operatingResult - 1) * 100, yoy: (selectedMetrics.operatingResult / monthlyMetrics(previousYear).operatingResult - 1) * 100, available: !financialAccess || costsAvailable },
   ]
 
   const bestRoom = [...roomSummary].sort((a, b) => b.revpar - a.revpar)[0]
@@ -199,11 +206,11 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
       <div className="indicator-filters"><label>Año<select value={year} onChange={event => setYear(Number(event.target.value))}>{years.map(item => <option key={item}>{item}</option>)}</select></label><label>Mes<select value={month} onChange={event => setMonth(Number(event.target.value))}>{MONTHS.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select></label></div>
     </section>
 
-    <section className="executive-kpis">{kpis.map(item => <article key={item.label}><span>{item.label}</span><strong>{item.value}</strong><div><small className={item.mom >= 0 ? 'positive' : 'negative'}>{item.mom >= 0 ? '▲' : '▼'} {item.points ? `${number(Math.abs(item.mom), 1)} pts` : percent(Math.abs(item.mom))} vs mes</small><small className={item.yoy >= 0 ? 'positive' : 'negative'}>{item.yoy >= 0 ? '▲' : '▼'} {item.points ? `${number(Math.abs(item.yoy), 1)} pts` : percent(Math.abs(item.yoy))} vs año</small></div></article>)}</section>
+    <section className="executive-kpis">{kpis.map(item => <article key={item.label}><span>{item.label}</span><strong className={!item.available ? 'empty-value' : ''}>{item.available ? item.value : '—'}</strong><div>{item.available ? <><small className={item.mom >= 0 ? 'positive' : 'negative'}>{item.mom >= 0 ? '▲' : '▼'} {item.points ? `${number(Math.abs(item.mom), 1)} pts` : percent(Math.abs(item.mom))} vs mes</small><small className={item.yoy >= 0 ? 'positive' : 'negative'}>{item.yoy >= 0 ? '▲' : '▼'} {item.points ? `${number(Math.abs(item.yoy), 1)} pts` : percent(Math.abs(item.yoy))} vs año</small></> : <><small className="neutral">— vs mes</small><small className="neutral">Sin datos</small></>}</div></article>)}</section>
 
     <nav className="indicator-tabs" aria-label="Secciones de indicadores">{(['Rendimiento', 'Habitaciones', 'Costos'] as IndicatorTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'Rendimiento' ? <BarChart3 size={16}/> : item === 'Habitaciones' ? <BedDouble size={16}/> : <WalletCards size={16}/>}<span>{item}</span></button>)}</nav>
 
-    {tab === 'Rendimiento' && <PerformanceAnalytics data={performanceTrend} year={year} selected={selected} previousYear={previousYear}/>}
+    {tab === 'Rendimiento' && <PerformanceAnalytics data={performanceTrend} year={year} selected={selected} previousYear={previousYear} costsAvailable={costsAvailable}/>}
     {tab === 'Habitaciones' && <section className="analytics-section">
       <div className="section-toolbar"><div><span>DESEMPEÑO POR TIPO</span><h2>{MONTHS[month - 1]} {year}</h2></div><label>Habitación<select value={roomCode} onChange={event => setRoomCode(event.target.value as 'TODAS' | RoomCode)}><option value="TODAS">Todas</option>{data.roomPerformance.map(room => <option key={room.code} value={room.code}>{room.code} · {room.name}</option>)}</select></label></div>
       <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {bestRoom ? `${bestRoom.code} tiene el mejor RevPAR (${money(bestRoom.revpar)}).` : 'Sin datos.'} {weakRoom && bestRoom?.code !== weakRoom.code ? `${weakRoom.code} requiere atención por su ocupación de ${percent(weakRoom.occupancy)}.` : ''}</p></div>
@@ -213,12 +220,12 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
       <article className="panel room-table"><header><div><span>DETALLE DEL PERIODO</span><h2>Rentabilidad por habitación</h2></div></header><div className="table-scroll"><table><thead><tr><th>Tipo</th><th>Noches vendidas</th><th>Ocupación</th><th>ADR</th><th>RevPAR</th><th>Ingreso</th><th>Aporte</th></tr></thead><tbody>{roomSummary.map(room => <tr key={room.code}><td><b>{room.code}</b><small>{roomNames.get(room.code)}</small></td><td>{room.soldNights}</td><td>{percent(room.occupancy)}</td><td>{money(room.adr)}</td><td>{money(room.revpar)}</td><td>{money(room.revenue)}</td><td>{percent(totalRoomRevenue ? room.revenue / totalRoomRevenue * 100 : 0)}</td></tr>)}</tbody></table></div></article>
     </section>}
 
-    {tab === 'Costos' && (financialAccess ? <section className="analytics-section">
+    {tab === 'Costos' && (financialAccess ? costsAvailable ? <section className="analytics-section">
       <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> cada noche ocupada cuesta {money(costPerOccupiedRoom)}. La categoría más variable es <b>{volatility[0]?.name}</b> ({percent(volatility[0]?.volatility ?? 0)} de fluctuación); conviene revisar compras o contratos.</p></div>
       <div className="analytics-grid cost-main-grid"><article className="panel"><header><div><span>COSTOS Y DEMANDA</span><h2>¿Los gastos se mueven con la ocupación?</h2></div></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={costTrend}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis yAxisId="money" tickFormatter={value => `${Math.round(value / 1000)}k`}/><YAxis yAxisId="percent" orientation="right" domain={[0, 100]} tickFormatter={value => `${value}%`}/><Tooltip formatter={(value: number, name: string) => name === 'Ocupación' ? percent(value) : money(value)}/><Legend/>{categoryPeriod.map((category, index) => <Bar key={category.name} yAxisId="money" stackId="cost" dataKey={category.name} name={category.name} fill={COST_COLORS[index % COST_COLORS.length]}/>)}<Line yAxisId="percent" dataKey="occupancy" name="Ocupación" stroke="#2e4657" strokeWidth={2.5}/></ComposedChart></ResponsiveContainer></div></article>
         <article className="panel"><header><div><span>DESGLOSE</span><h2>¿En qué se gastó?</h2></div></header><DonutChart data={categoryPeriod} colors={COST_COLORS} center={money(selected.costs)}/></article></div>
       <article className="panel"><header><div><span>CONTROL DE VARIACIONES</span><h2>Gastos que más cambian</h2></div></header><div className="table-scroll"><table><thead><tr><th>Categoría</th><th>{MONTHS[month - 1]} {year}</th><th>Variación anual</th><th>Fluctuación</th><th>Lectura</th></tr></thead><tbody>{volatility.map(row => <tr key={row.name}><td><b>{row.name}</b></td><td>{money(row.value)}</td><td className={row.variation > 0 ? 'negative' : 'positive'}>{row.variation > 0 ? '+' : ''}{percent(row.variation)}</td><td>{percent(row.volatility)}</td><td><span className={`control-tag ${row.volatility > 6 ? 'watch' : ''}`}>{row.volatility > 6 ? 'Revisar' : 'Estable'}</span></td></tr>)}</tbody></table></div></article>
-    </section> : <section className="access-note">El desglose de costos está disponible únicamente para Dueño, Gerencia y Administración.</section>)}
+    </section> : <section className="analytics-section"><div className="empty-panel-state chart-empty">Sin datos de costos disponibles</div></section> : <section className="access-note">El desglose de costos está disponible únicamente para Dueño, Gerencia y Administración.</section>)}
   </div>
 }
 
@@ -238,18 +245,18 @@ function EmptyIndicatorsView({ role }: { role: Role }) {
   </div>
 }
 
-function PerformanceAnalytics({ data, year, selected, previousYear }: { data: Array<Record<string, number | string>>; year: number; selected: DashboardData['monthly'][number]; previousYear: DashboardData['monthly'][number] }) {
+function PerformanceAnalytics({ data, year, selected, previousYear, costsAvailable }: { data: Array<Record<string, number | string>>; year: number; selected: DashboardData['monthly'][number]; previousYear: DashboardData['monthly'][number]; costsAvailable: boolean }) {
   const selectedMetrics = monthlyMetrics(selected)
   const priorMetrics = monthlyMetrics(previousYear)
   const rateSignal = selectedMetrics.occupancy > priorMetrics.occupancy && selectedMetrics.adr < priorMetrics.adr
   const costGrowth = (selected.costs / previousYear.costs - 1) * 100
   return <section className="analytics-section">
-    <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {rateSignal ? 'la ocupación creció, pero el ADR bajó; existe espacio para proteger mejor la tarifa.' : `el RevPAR está ${selectedMetrics.revpar >= priorMetrics.revpar ? 'por encima' : 'por debajo'} del mismo mes del año anterior.`} Los costos cambiaron {percent(Math.abs(costGrowth))} anual.</p></div>
+    <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {rateSignal ? 'la ocupación creció, pero el ADR bajó; existe espacio para proteger mejor la tarifa.' : `el RevPAR está ${selectedMetrics.revpar >= priorMetrics.revpar ? 'por encima' : 'por debajo'} del mismo mes del año anterior.`} {costsAvailable ? `Los costos cambiaron ${percent(Math.abs(costGrowth))} anual.` : 'Los costos todavía no están conectados.'}</p></div>
     <div className="analytics-grid performance-grid">
       <article className="panel"><header><div><span>PRECIO VS. DEMANDA</span><h2>Ocupación y ADR mensual</h2></div><span className="data-state">{year}</span></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis yAxisId="percent" domain={[0, 100]} tickFormatter={value => `${value}%`}/><YAxis yAxisId="money" orientation="right" tickFormatter={value => `$${Math.round(value / 100) / 10}k`}/><Tooltip formatter={(value: number, name: string) => name === 'Ocupación' ? percent(value) : money(value)}/><Legend/><Bar yAxisId="percent" dataKey="occupancy" name="Ocupación" fill="#7d8f6c"/><Line yAxisId="money" dataKey="adr" name="ADR" stroke="#9b6b58" strokeWidth={2.5}/></ComposedChart></ResponsiveContainer></div></article>
       <article className="panel"><header><div><span>RENTABILIDAD DEL INVENTARIO</span><h2>RevPAR vs. {year - 1}</h2></div></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis tickFormatter={value => `$${Math.round(value / 100) / 10}k`}/><Tooltip formatter={(value: number) => money(value)}/><Legend/><Line type="monotone" dataKey="previousRevpar" name={`${year - 1}`} stroke="#b9aa96" strokeWidth={2}/><Line type="monotone" dataKey="revpar" name={`${year}`} stroke="#526b7d" strokeWidth={3}/></ComposedChart></ResponsiveContainer></div></article>
     </div>
-    <article className="panel financial-trend"><header><div><span>RESULTADO OPERATIVO</span><h2>Ingresos, costos y resultado mensual</h2></div></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis tickFormatter={value => `${Math.round(value / 1000)}k`}/><Tooltip formatter={(value: number) => money(value)}/><Legend/><Bar dataKey="revenue" name="Ingresos" fill="#526b7d"/><Bar dataKey="costs" name="Costos" fill="#b99157"/><Bar dataKey="result" name="Resultado" fill="#667858"/></BarChart></ResponsiveContainer></div></article>
+    <article className="panel financial-trend"><header><div><span>RESULTADO OPERATIVO</span><h2>Ingresos, costos y resultado mensual</h2></div></header>{costsAvailable ? <div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis tickFormatter={value => `${Math.round(value / 1000)}k`}/><Tooltip formatter={(value: number) => money(value)}/><Legend/><Bar dataKey="revenue" name="Ingresos" fill="#526b7d"/><Bar dataKey="costs" name="Costos" fill="#b99157"/><Bar dataKey="result" name="Resultado" fill="#667858"/></BarChart></ResponsiveContainer></div> : <div className="empty-panel-state chart-empty">—</div>}</article>
   </section>
 }
 

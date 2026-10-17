@@ -18,6 +18,7 @@ export interface KPI {
   format: 'mxn' | 'percent' | 'integer' | 'decimal'
   helper: string
   comparisonMode?: 'relative' | 'points'
+  available?: boolean
 }
 
 export interface DailyPerformance {
@@ -79,6 +80,7 @@ export interface MonthlySummary {
   bookings: number
   cancellations: number
   costs: number
+  costsAvailable?: boolean
   forecastRevenue: number
   forecastOccupancy: number
 }

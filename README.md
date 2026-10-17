@@ -2,7 +2,7 @@
 
 Frontend profesional para el sistema interno de Hotel Mis Sueños Holbox.
 
-## Alcance actual · Build 1.14
+## Alcance actual · Build 1.15
 
 - React + TypeScript + Vite
 - Resumen ejecutivo orientado a decisiones
@@ -42,6 +42,8 @@ src/
   styles.css  sistema visual
 ```
 
-## Conexión futura
+## Conexión Google Sheets
 
-La interfaz consume `hotelService`, que actualmente entrega un estado vacío. En la siguiente fase puede conectarse con Google Apps Script, Google Sheets y Cloudbeds sin reconstruir las pantallas. El algoritmo real de precios se conectará después desde el RMS desarrollado en Python.
+La interfaz consume `hotelService`. Si `VITE_APPS_SCRIPT_URL` está vacía o la API no responde, conserva el estado visual vacío. Cuando la variable apunta a una implementación `/exec`, `Resumen` carga todo su paquete con una sola petición.
+
+El código del puente está en `google-apps-script/` y se copia manualmente al proyecto de Apps Script. Consulta su README antes de publicar datos: la autenticación de servidor debe completarse antes del uso definitivo.
