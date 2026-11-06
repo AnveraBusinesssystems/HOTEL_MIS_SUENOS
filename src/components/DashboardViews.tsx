@@ -132,7 +132,7 @@ const aggregateRooms = (rows: RoomMonthlyPerformance[]) => {
     const revenue = items.reduce((sum, item) => sum + item.revenue, 0)
     const soldNights = items.reduce((sum, item) => sum + item.soldNights, 0)
     const availableNights = items.reduce((sum, item) => sum + item.availableNights, 0)
-    return { code, revenue, soldNights, availableNights, occupancy: soldNights / availableNights * 100, adr: revenue / soldNights, revpar: revenue / availableNights }
+    return { code, revenue, soldNights, availableNights, occupancy: availableNights ? soldNights / availableNights * 100 : 0, adr: soldNights ? revenue / soldNights : 0, revpar: availableNights ? revenue / availableNights : 0 }
   })
 }
 
@@ -144,25 +144,33 @@ export function IndicatorsView(props: { data: DashboardData; role: Role }) {
 function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Role }) {
   const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
   const years = [...new Set(data.monthly.map(row => row.year))].sort((a, b) => b - a)
-  const today = new Date()
-  const currentPeriod = data.monthly.find(row => row.year === today.getFullYear() && row.month === today.getMonth() + 1)
-  const [year, setYear] = useState(currentPeriod?.year ?? years[0])
-  const [month, setMonth] = useState(currentPeriod?.month ?? data.monthly.at(-1)!.month)
+  // El servidor entrega los periodos ordenados; no seleccionar automáticamente
+  // meses futuros precalculados en la hoja ni depender del huso del navegador.
+  const todayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Cancun', year: 'numeric', month: '2-digit',
+  }).format(new Date())
+  const latestAvailable = data.monthly.filter(row => row.key <= todayKey).at(-1) ?? data.monthly[0]
+  const [year, setYear] = useState(latestAvailable.year)
+  const [month, setMonth] = useState(latestAvailable.month)
   const [tab, setTab] = useState<IndicatorTab>('Rendimiento')
   const [roomCode, setRoomCode] = useState<'TODAS' | RoomCode>('TODAS')
   const [roomMetric, setRoomMetric] = useState<RoomMetric>('revenue')
 
-  const selected = data.monthly.find(row => row.year === year && row.month === month) ?? data.monthly.filter(row => row.year === year).at(-1)!
-  const previousMonth = data.monthly.find(row => row.key === `${month === 1 ? year - 1 : year}-${String(month === 1 ? 12 : month - 1).padStart(2, '0')}`) ?? selected
-  const previousYear = data.monthly.find(row => row.year === year - 1 && row.month === month) ?? selected
+  const yearPeriods = data.monthly.filter(row => row.year === year)
+  const effectiveMonth = yearPeriods.some(row => row.month === month) ? month : yearPeriods[0]?.month ?? month
+  const selected = data.monthly.find(row => row.year === year && row.month === effectiveMonth) ?? data.monthly[0]
+  const previousMonth = data.monthly.find(row => row.key === `${effectiveMonth === 1 ? year - 1 : year}-${String(effectiveMonth === 1 ? 12 : effectiveMonth - 1).padStart(2, '0')}`)
+  const previousYear = data.monthly.find(row => row.year === year - 1 && row.month === effectiveMonth)
+  const changePercent = (now: number, previous?: number) => previous == null || previous === 0 ? null : (now / previous - 1) * 100
+  const changePoints = (now: number, previous?: number) => previous == null ? null : now - previous
   const selectedMetrics = monthlyMetrics(selected)
-  const previousMetrics = monthlyMetrics(previousMonth)
+  const previousMetrics = previousMonth ? monthlyMetrics(previousMonth) : null
   const costsAvailable = selected.costsAvailable === true
   const yearRows = data.monthly.filter(row => row.year === year).sort((a, b) => a.month - b.month)
   const performanceTrend = yearRows.map(row => {
     const prior = data.monthly.find(item => item.year === year - 1 && item.month === row.month)
     const metrics = monthlyMetrics(row)
-    return { month: MONTHS[row.month - 1], revenue: row.revenue, costs: row.costs, result: metrics.operatingResult, occupancy: metrics.occupancy, adr: metrics.adr, revpar: metrics.revpar, previousRevpar: prior ? monthlyMetrics(prior).revpar : 0 }
+    return { month: MONTHS[row.month - 1], revenue: row.revenue, costs: row.costs, result: metrics.operatingResult, occupancy: metrics.occupancy, adr: metrics.adr, revpar: metrics.revpar, previousRevpar: prior ? monthlyMetrics(prior).revpar : null }
   })
 
   const roomPeriodRows = data.roomMonthly.filter(row => row.year === year && row.month === month && (roomCode === 'TODAS' || row.code === roomCode))
@@ -188,12 +196,12 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
   }).sort((a, b) => b.volatility - a.volatility)
 
   const kpis = [
-    { label: 'Ingresos', value: money(selected.revenue), mom: (selected.revenue / previousMonth.revenue - 1) * 100, yoy: (selected.revenue / previousYear.revenue - 1) * 100, available: true },
-    { label: 'Ocupación', value: percent(selectedMetrics.occupancy), mom: selectedMetrics.occupancy - previousMetrics.occupancy, yoy: selectedMetrics.occupancy - monthlyMetrics(previousYear).occupancy, points: true, available: true },
-    { label: 'ADR', value: money(selectedMetrics.adr), mom: (selectedMetrics.adr / previousMetrics.adr - 1) * 100, yoy: (selectedMetrics.adr / monthlyMetrics(previousYear).adr - 1) * 100, available: true },
-    { label: 'RevPAR', value: money(selectedMetrics.revpar), mom: (selectedMetrics.revpar / previousMetrics.revpar - 1) * 100, yoy: (selectedMetrics.revpar / monthlyMetrics(previousYear).revpar - 1) * 100, available: true },
-    { label: 'Costos', value: financialAccess ? money(selected.costs) : 'Restringido', mom: (selected.costs / previousMonth.costs - 1) * 100, yoy: (selected.costs / previousYear.costs - 1) * 100, available: !financialAccess || costsAvailable },
-    { label: 'Resultado', value: financialAccess ? money(selectedMetrics.operatingResult) : 'Restringido', mom: (selectedMetrics.operatingResult / previousMetrics.operatingResult - 1) * 100, yoy: (selectedMetrics.operatingResult / monthlyMetrics(previousYear).operatingResult - 1) * 100, available: !financialAccess || costsAvailable },
+    { label: 'Ingresos', value: money(selected.revenue), mom: changePercent(selected.revenue, previousMonth?.revenue), yoy: changePercent(selected.revenue, previousYear?.revenue), available: true },
+    { label: 'Ocupación', value: percent(selectedMetrics.occupancy), mom: changePoints(selectedMetrics.occupancy, previousMetrics?.occupancy), yoy: changePoints(selectedMetrics.occupancy, previousYear ? monthlyMetrics(previousYear).occupancy : undefined), points: true, available: true },
+    { label: 'ADR', value: money(selectedMetrics.adr), mom: changePercent(selectedMetrics.adr, previousMetrics?.adr), yoy: changePercent(selectedMetrics.adr, previousYear ? monthlyMetrics(previousYear).adr : undefined), available: true },
+    { label: 'RevPAR', value: money(selectedMetrics.revpar), mom: changePercent(selectedMetrics.revpar, previousMetrics?.revpar), yoy: changePercent(selectedMetrics.revpar, previousYear ? monthlyMetrics(previousYear).revpar : undefined), available: true },
+    { label: 'Costos', value: financialAccess ? money(selected.costs) : 'Restringido', mom: changePercent(selected.costs, previousMonth?.costsAvailable ? previousMonth.costs : undefined), yoy: changePercent(selected.costs, previousYear?.costsAvailable ? previousYear.costs : undefined), available: !financialAccess || costsAvailable },
+    { label: 'Resultado', value: financialAccess ? money(selectedMetrics.operatingResult) : 'Restringido', mom: changePercent(selectedMetrics.operatingResult, previousMonth?.costsAvailable ? monthlyMetrics(previousMonth).operatingResult : undefined), yoy: changePercent(selectedMetrics.operatingResult, previousYear?.costsAvailable ? monthlyMetrics(previousYear).operatingResult : undefined), available: !financialAccess || costsAvailable },
   ]
 
   const bestRoom = [...roomSummary].sort((a, b) => b.revpar - a.revpar)[0]
@@ -203,10 +211,10 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
   return <div className="page indicators-page">
     <section className="page-heading indicator-heading">
       <div><p className="eyebrow">INTELIGENCIA DEL NEGOCIO</p><h1>Indicadores</h1><p>Compara demanda, precio, habitaciones y costos para tomar decisiones.</p></div>
-      <div className="indicator-filters"><label>Año<select value={year} onChange={event => setYear(Number(event.target.value))}>{years.map(item => <option key={item}>{item}</option>)}</select></label><label>Mes<select value={month} onChange={event => setMonth(Number(event.target.value))}>{MONTHS.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select></label></div>
+      <div className="indicator-filters"><label>Año<select value={year} onChange={event => setYear(Number(event.target.value))}>{years.map(item => <option key={item}>{item}</option>)}</select></label><label>Mes<select value={effectiveMonth} onChange={event => setMonth(Number(event.target.value))}>{MONTHS.map((label, index) => <option key={label} value={index + 1} disabled={!yearPeriods.some(row => row.month === index + 1)}>{label}</option>)}</select></label></div>
     </section>
 
-    <section className="executive-kpis">{kpis.map(item => <article key={item.label}><span>{item.label}</span><strong className={!item.available ? 'empty-value' : ''}>{item.available ? item.value : '—'}</strong><div>{item.available ? <><small className={item.mom >= 0 ? 'positive' : 'negative'}>{item.mom >= 0 ? '▲' : '▼'} {item.points ? `${number(Math.abs(item.mom), 1)} pts` : percent(Math.abs(item.mom))} vs mes</small><small className={item.yoy >= 0 ? 'positive' : 'negative'}>{item.yoy >= 0 ? '▲' : '▼'} {item.points ? `${number(Math.abs(item.yoy), 1)} pts` : percent(Math.abs(item.yoy))} vs año</small></> : <><small className="neutral">— vs mes</small><small className="neutral">Sin datos</small></>}</div></article>)}</section>
+    <section className="executive-kpis">{kpis.map(item => <article key={item.label}><span>{item.label}</span><strong className={!item.available ? 'empty-value' : ''}>{item.available ? item.value : '—'}</strong><div>{item.available ? <><small className={item.mom == null ? 'neutral' : item.mom >= 0 ? 'positive' : 'negative'}>{item.mom == null ? '—' : `${item.mom >= 0 ? '▲' : '▼'} ${item.points ? `${number(Math.abs(item.mom), 1)} pts` : percent(Math.abs(item.mom))}`} vs mes</small><small className={item.yoy == null ? 'neutral' : item.yoy >= 0 ? 'positive' : 'negative'}>{item.yoy == null ? '—' : `${item.yoy >= 0 ? '▲' : '▼'} ${item.points ? `${number(Math.abs(item.yoy), 1)} pts` : percent(Math.abs(item.yoy))}`} vs año</small></> : <><small className="neutral">— vs mes</small><small className="neutral">Sin datos</small></>}</div></article>)}</section>
 
     <nav className="indicator-tabs" aria-label="Secciones de indicadores">{(['Rendimiento', 'Habitaciones', 'Costos'] as IndicatorTab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'Rendimiento' ? <BarChart3 size={16}/> : item === 'Habitaciones' ? <BedDouble size={16}/> : <WalletCards size={16}/>}<span>{item}</span></button>)}</nav>
 
@@ -245,13 +253,13 @@ function EmptyIndicatorsView({ role }: { role: Role }) {
   </div>
 }
 
-function PerformanceAnalytics({ data, year, selected, previousYear, costsAvailable }: { data: Array<Record<string, number | string>>; year: number; selected: DashboardData['monthly'][number]; previousYear: DashboardData['monthly'][number]; costsAvailable: boolean }) {
+function PerformanceAnalytics({ data, year, selected, previousYear, costsAvailable }: { data: Array<Record<string, number | string>>; year: number; selected: DashboardData['monthly'][number]; previousYear: DashboardData['monthly'][number] | undefined; costsAvailable: boolean }) {
   const selectedMetrics = monthlyMetrics(selected)
-  const priorMetrics = monthlyMetrics(previousYear)
-  const rateSignal = selectedMetrics.occupancy > priorMetrics.occupancy && selectedMetrics.adr < priorMetrics.adr
-  const costGrowth = (selected.costs / previousYear.costs - 1) * 100
+  const priorMetrics = previousYear ? monthlyMetrics(previousYear) : null
+  const rateSignal = previousYear != null && selectedMetrics.occupancy > (priorMetrics?.occupancy ?? Infinity) && selectedMetrics.adr < (priorMetrics?.adr ?? -Infinity)
+  const costGrowth = previousYear?.costsAvailable && previousYear.costs ? (selected.costs / previousYear.costs - 1) * 100 : null
   return <section className="analytics-section">
-    <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {rateSignal ? 'la ocupación creció, pero el ADR bajó; existe espacio para proteger mejor la tarifa.' : `el RevPAR está ${selectedMetrics.revpar >= priorMetrics.revpar ? 'por encima' : 'por debajo'} del mismo mes del año anterior.`} {costsAvailable ? `Los costos cambiaron ${percent(Math.abs(costGrowth))} anual.` : 'Los costos todavía no están conectados.'}</p></div>
+    <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {rateSignal ? 'la ocupación creció, pero el ADR bajó; existe espacio para proteger mejor la tarifa.' : `${priorMetrics ? `el RevPAR está ${selectedMetrics.revpar >= priorMetrics.revpar ? 'por encima' : 'por debajo'} del mismo mes del año anterior.` : 'no hay comparativo anual disponible.'}`} {costsAvailable ? `${costGrowth == null ? 'No hay comparativo anual de costos.' : `Los costos cambiaron ${percent(Math.abs(costGrowth))} anual.`}` : 'Los costos todavía no están conectados.'}</p></div>
     <div className="analytics-grid performance-grid">
       <article className="panel"><header><div><span>PRECIO VS. DEMANDA</span><h2>Ocupación y ADR mensual</h2></div><span className="data-state">{year}</span></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis yAxisId="percent" domain={[0, 100]} tickFormatter={value => `${value}%`}/><YAxis yAxisId="money" orientation="right" tickFormatter={value => `$${Math.round(value / 100) / 10}k`}/><Tooltip formatter={(value: number, name: string) => name === 'Ocupación' ? percent(value) : money(value)}/><Legend/><Bar yAxisId="percent" dataKey="occupancy" name="Ocupación" fill="#7d8f6c"/><Line yAxisId="money" dataKey="adr" name="ADR" stroke="#9b6b58" strokeWidth={2.5}/></ComposedChart></ResponsiveContainer></div></article>
       <article className="panel"><header><div><span>RENTABILIDAD DEL INVENTARIO</span><h2>RevPAR vs. {year - 1}</h2></div></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis tickFormatter={value => `$${Math.round(value / 100) / 10}k`}/><Tooltip formatter={(value: number) => money(value)}/><Legend/><Line type="monotone" dataKey="previousRevpar" name={`${year - 1}`} stroke="#b9aa96" strokeWidth={2}/><Line type="monotone" dataKey="revpar" name={`${year}`} stroke="#526b7d" strokeWidth={3}/></ComposedChart></ResponsiveContainer></div></article>
