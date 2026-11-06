@@ -173,16 +173,16 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
     return { month: MONTHS[row.month - 1], revenue: row.revenue, costs: row.costs, result: metrics.operatingResult, occupancy: metrics.occupancy, adr: metrics.adr, revpar: metrics.revpar, previousRevpar: prior ? monthlyMetrics(prior).revpar : null }
   })
 
-  const roomPeriodRows = data.roomMonthly.filter(row => row.year === year && row.month === month && (roomCode === 'TODAS' || row.code === roomCode))
+  const roomPeriodRows = data.roomMonthly.filter(row => row.year === year && row.month === effectiveMonth && (roomCode === 'TODAS' || row.code === roomCode))
   const roomSummary = aggregateRooms(roomPeriodRows)
   const totalRoomRevenue = roomSummary.reduce((sum, room) => sum + room.revenue, 0)
   const roomNames = new Map(data.roomPerformance.map(room => [room.code, room.name]))
 
   const categoryPeriod = useMemo(() => {
     const grouped = new Map<ExpenseCategory, number>()
-    data.expenses.filter(row => row.year === year && row.month === month).forEach(row => grouped.set(row.category, (grouped.get(row.category) ?? 0) + row.amount))
+    data.expenses.filter(row => row.year === year && row.month === effectiveMonth).forEach(row => grouped.set(row.category, (grouped.get(row.category) ?? 0) + row.amount))
     return [...grouped.entries()].map(([name, value]) => ({ name, value }))
-  }, [data.expenses, month, year])
+  }, [data.expenses, effectiveMonth, year])
   const costTrend = yearRows.map(row => {
     const categories = Object.fromEntries(data.expenses.filter(expense => expense.year === year && expense.month === row.month).map(expense => [expense.category, expense.amount]))
     return { month: MONTHS[row.month - 1], occupancy: monthlyMetrics(row).occupancy, ...categories }
@@ -191,7 +191,7 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
     const values = data.expenses.filter(row => row.year === year && row.category === category.name).map(row => row.amount)
     const average = values.reduce((sum, value) => sum + value, 0) / values.length
     const deviation = Math.sqrt(values.reduce((sum, value) => sum + (value - average) ** 2, 0) / values.length)
-    const prior = data.expenses.find(row => row.year === year - 1 && row.month === month && row.category === category.name)?.amount ?? category.value
+    const prior = data.expenses.find(row => row.year === year - 1 && row.month === effectiveMonth && row.category === category.name)?.amount ?? category.value
     return { ...category, variation: prior ? (category.value / prior - 1) * 100 : 0, volatility: average ? deviation / average * 100 : 0 }
   }).sort((a, b) => b.volatility - a.volatility)
 
@@ -220,7 +220,7 @@ function PopulatedIndicatorsView({ data, role }: { data: DashboardData; role: Ro
 
     {tab === 'Rendimiento' && <PerformanceAnalytics data={performanceTrend} year={year} selected={selected} previousYear={previousYear} costsAvailable={costsAvailable}/>}
     {tab === 'Habitaciones' && <section className="analytics-section">
-      <div className="section-toolbar"><div><span>DESEMPEÑO POR TIPO</span><h2>{MONTHS[month - 1]} {year}</h2></div><label>Habitación<select value={roomCode} onChange={event => setRoomCode(event.target.value as 'TODAS' | RoomCode)}><option value="TODAS">Todas</option>{data.roomPerformance.map(room => <option key={room.code} value={room.code}>{room.code} · {room.name}</option>)}</select></label></div>
+      <div className="section-toolbar"><div><span>DESEMPEÑO POR TIPO</span><h2>{MONTHS[effectiveMonth - 1]} {year}</h2></div><label>Habitación<select value={roomCode} onChange={event => setRoomCode(event.target.value as 'TODAS' | RoomCode)}><option value="TODAS">Todas</option>{data.roomPerformance.map(room => <option key={room.code} value={room.code}>{room.code} · {room.name}</option>)}</select></label></div>
       <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {bestRoom ? `${bestRoom.code} tiene el mejor RevPAR (${money(bestRoom.revpar)}).` : 'Sin datos.'} {weakRoom && bestRoom?.code !== weakRoom.code ? `${weakRoom.code} requiere atención por su ocupación de ${percent(weakRoom.occupancy)}.` : ''}</p></div>
       <div className="analytics-grid room-main-grid"><article className="panel"><header><div><span>COMPARACIÓN</span><h2>Ingreso, ADR y noches vendidas</h2></div></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={roomSummary}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="code"/><YAxis yAxisId="money" tickFormatter={value => `${Math.round(value / 1000)}k`}/><YAxis yAxisId="nights" orientation="right"/><Tooltip formatter={(value: number, name: string) => name.includes('Noches') ? number(value, 0) : money(value)}/><Legend/><Bar yAxisId="money" dataKey="revenue" name="Ingreso" fill="#526b7d"/><Line yAxisId="money" dataKey="adr" name="ADR" stroke="#b17c45" strokeWidth={2.5}/><Line yAxisId="nights" dataKey="soldNights" name="Noches vendidas" stroke="#667858" strokeWidth={2.5}/></ComposedChart></ResponsiveContainer></div></article>
         <article className="panel"><header><div><span>CONTRIBUCIÓN</span><h2>Distribución del ingreso</h2></div></header><DonutChart data={roomSummary.map(room => ({ name: room.code, value: room.revenue }))} colors={ROOM_COLORS} center={money(totalRoomRevenue)}/></article></div>
@@ -253,13 +253,13 @@ function EmptyIndicatorsView({ role }: { role: Role }) {
   </div>
 }
 
-function PerformanceAnalytics({ data, year, selected, previousYear, costsAvailable }: { data: Array<Record<string, number | string>>; year: number; selected: DashboardData['monthly'][number]; previousYear: DashboardData['monthly'][number] | undefined; costsAvailable: boolean }) {
+function PerformanceAnalytics({ data, year, selected, previousYear, costsAvailable }: { data: Array<Record<string, number | string | null>>; year: number; selected: DashboardData['monthly'][number]; previousYear: DashboardData['monthly'][number] | undefined; costsAvailable: boolean }) {
   const selectedMetrics = monthlyMetrics(selected)
   const priorMetrics = previousYear ? monthlyMetrics(previousYear) : null
   const rateSignal = previousYear != null && selectedMetrics.occupancy > (priorMetrics?.occupancy ?? Infinity) && selectedMetrics.adr < (priorMetrics?.adr ?? -Infinity)
   const costGrowth = previousYear?.costsAvailable && previousYear.costs ? (selected.costs / previousYear.costs - 1) * 100 : null
   return <section className="analytics-section">
-    <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {rateSignal ? 'la ocupación creció, pero el ADR bajó; existe espacio para proteger mejor la tarifa.' : `${priorMetrics ? `el RevPAR está ${selectedMetrics.revpar >= priorMetrics.revpar ? 'por encima' : 'por debajo'} del mismo mes del año anterior.` : 'no hay comparativo anual disponible.'}`} {costsAvailable ? `${costGrowth == null ? 'No hay comparativo anual de costos.' : `Los costos cambiaron ${percent(Math.abs(costGrowth))} anual.`}` : 'Los costos todavía no están conectados.'}</p></div>
+    <div className="owner-insight"><Lightbulb size={17}/><p><b>Lectura del periodo:</b> {rateSignal ? 'la ocupación creció, pero el ADR bajó; existe espacio para proteger mejor la tarifa.' : (priorMetrics ? `el RevPAR está ${selectedMetrics.revpar >= priorMetrics.revpar ? 'por encima' : 'por debajo'} del mismo mes del año anterior.` : 'no hay comparativo anual disponible.')} {costsAvailable ? (costGrowth == null ? 'No hay comparativo anual de costos.' : `Los costos cambiaron ${percent(Math.abs(costGrowth))} anual.`) : 'Los costos todavía no están conectados.'}</p></div>
     <div className="analytics-grid performance-grid">
       <article className="panel"><header><div><span>PRECIO VS. DEMANDA</span><h2>Ocupación y ADR mensual</h2></div><span className="data-state">{year}</span></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis yAxisId="percent" domain={[0, 100]} tickFormatter={value => `${value}%`}/><YAxis yAxisId="money" orientation="right" tickFormatter={value => `$${Math.round(value / 100) / 10}k`}/><Tooltip formatter={(value: number, name: string) => name === 'Ocupación' ? percent(value) : money(value)}/><Legend/><Bar yAxisId="percent" dataKey="occupancy" name="Ocupación" fill="#7d8f6c"/><Line yAxisId="money" dataKey="adr" name="ADR" stroke="#9b6b58" strokeWidth={2.5}/></ComposedChart></ResponsiveContainer></div></article>
       <article className="panel"><header><div><span>RENTABILIDAD DEL INVENTARIO</span><h2>RevPAR vs. {year - 1}</h2></div></header><div className="chart-wrap tall"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="month"/><YAxis tickFormatter={value => `$${Math.round(value / 100) / 10}k`}/><Tooltip formatter={(value: number) => money(value)}/><Legend/><Line type="monotone" dataKey="previousRevpar" name={`${year - 1}`} stroke="#b9aa96" strokeWidth={2}/><Line type="monotone" dataKey="revpar" name={`${year}`} stroke="#526b7d" strokeWidth={3}/></ComposedChart></ResponsiveContainer></div></article>
