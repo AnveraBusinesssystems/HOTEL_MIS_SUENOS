@@ -4,6 +4,7 @@ function getSummary_() {
   if (cached) return JSON.parse(cached);
 
   var spreadsheet = SpreadsheetApp.openById(HMS_CONFIG.SPREADSHEET_ID);
+  // Solo lee resultados ya calculados en las hojas: no recorre RESERVAS.
   var monthly = readMonthlySummary_(spreadsheet);
   var daily = readDailyOperation_(spreadsheet);
   var today = todayKey_();
@@ -38,6 +39,10 @@ function readMonthlySummary_(spreadsheet) {
   var sheet = spreadsheet.getSheetByName(HMS_CONFIG.SHEETS.INDICATORS);
   if (!sheet) throw new Error('Falta la hoja ' + HMS_CONFIG.SHEETS.INDICATORS + '.');
 
+  assertSummaryHeaders_(sheet, {
+    1: 'Mes', 2: 'Noches-habitación disponibles', 3: 'Noches-habitación ocupadas',
+    5: 'Ingreso de habitaciones', 8: 'Reservas activas', 9: 'Reservas canceladas'
+  });
   var firstDataRow = 7;
   var rowCount = Math.max(0, sheet.getLastRow() - firstDataRow + 1);
   if (!rowCount) return [];
@@ -62,12 +67,17 @@ function readMonthlySummary_(spreadsheet) {
         forecastRevenue: 0,
         forecastOccupancy: 0
       };
-    });
+    })
+    .sort(function (a, b) { return a.key.localeCompare(b.key); });
 }
 
 function readDailyOperation_(spreadsheet) {
   var sheet = spreadsheet.getSheetByName(HMS_CONFIG.SHEETS.DAILY_OPERATION);
   if (!sheet) throw new Error('Falta la hoja ' + HMS_CONFIG.SHEETS.DAILY_OPERATION + '.');
+  assertSummaryHeaders_(sheet, {
+    1: 'Fecha', 3: 'Habitaciones disponibles', 4: 'Habitaciones ocupadas',
+    5: 'Ocupación', 14: 'Ingreso estimado de habitaciones'
+  });
 
   var firstDataRow = 7;
   var rowCount = Math.max(0, sheet.getLastRow() - firstDataRow + 1);
@@ -90,4 +100,16 @@ function readDailyOperation_(spreadsheet) {
 /** Run manually after correcting source data if an immediate refresh is needed. */
 function clearSummaryCache() {
   CacheService.getScriptCache().remove(HMS_CONFIG.SUMMARY_CACHE_KEY);
+}
+
+/** Detecta cambios de estructura antes de asociar datos a columnas incorrectas. */
+function assertSummaryHeaders_(sheet, expected) {
+  var headers = sheet.getRange(6, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  Object.keys(expected).forEach(function (column) {
+    var actual = String(headers[Number(column) - 1] || '').trim();
+    if (actual !== expected[column]) {
+      throw new Error('Estructura inesperada en ' + sheet.getName() +
+        ', columna ' + column + ': se esperaba "' + expected[column] + '" y se encontró "' + actual + '".');
+    }
+  });
 }
