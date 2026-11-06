@@ -36,6 +36,14 @@ function readRoomIndicators_(spreadsheet) {
   var sheet = spreadsheet.getSheetByName(HMS_CONFIG.SHEETS.ROOM_INDICATORS);
   if (!sheet) throw new Error('Falta la hoja ' + HMS_CONFIG.SHEETS.ROOM_INDICATORS + '.');
 
+  // La fila 6 identifica la estructura; las filas 7+ ya contienen fórmulas.
+  // Se leen sus resultados, no los registros de RESERVAS.
+  assertIndicatorsHeaders_(sheet, {
+    1: 'Mes', 2: 'Año', 3: 'Número de mes', 4: 'Código',
+    5: 'Tipo', 6: 'Habitaciones activas', 7: 'Noches disponibles',
+    8: 'Noches vendidas', 10: 'Ingreso asignado'
+  });
+
   var firstDataRow = 7;
   var rowCount = Math.max(0, sheet.getLastRow() - firstDataRow + 1);
   if (!rowCount) return { roomPerformance: [], roomMonthly: [] };
@@ -43,7 +51,8 @@ function readRoomIndicators_(spreadsheet) {
   var validCodes = { NAY: true, NA: true, CHA: true, KAA: true, MUU: true };
   var rows = sheet.getRange(firstDataRow, 1, rowCount, 12).getValues()
     .filter(function (row) {
-      return row[0] instanceof Date && validCodes[String(row[3]).trim()] === true;
+      return row[0] instanceof Date && validCodes[String(row[3] || '').trim()] === true &&
+        numberOrZero_(row[1]) >= 2020 && numberOrZero_(row[2]) >= 1 && numberOrZero_(row[2]) <= 12;
     })
     .map(function (row) {
       var year = numberOrZero_(row[1]);
@@ -65,6 +74,8 @@ function readRoomIndicators_(spreadsheet) {
         revenue: revenue
       };
     });
+
+  rows.sort(function (a, b) { return a.key.localeCompare(b.key); });
 
   var todayMonth = Utilities.formatDate(new Date(), HMS_CONFIG.TIME_ZONE, 'yyyy-MM');
   var periods = rows.map(function (row) {
@@ -109,4 +120,21 @@ function readRoomIndicators_(spreadsheet) {
 /** Run manually after correcting room indicator data. */
 function clearIndicatorsCache() {
   CacheService.getScriptCache().remove(HMS_CONFIG.INDICATORS_CACHE_KEY);
+}
+
+/**
+ * Confirma que las posiciones de las columnas siguen siendo compatibles.
+ * Compartido conceptualmente con la validación de Resumen, pero sin
+ * depender del nombre de su helper al copiar módulos por separado.
+ */
+function assertIndicatorsHeaders_(sheet, expected) {
+  var headers = sheet.getRange(6, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  Object.keys(expected).forEach(function (column) {
+    var actual = String(headers[Number(column) - 1] || '').trim();
+    if (actual !== expected[column]) {
+      throw new Error('Estructura inesperada en ' + sheet.getName() +
+        ', columna ' + column + ': se esperaba "' + expected[column] +
+        '" y se encontró "' + actual + '".');
+    }
+  });
 }
