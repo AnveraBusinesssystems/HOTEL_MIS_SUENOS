@@ -4,7 +4,7 @@ import {
   Mail, MapPinned, PackageOpen, Play, RefreshCw, Send, Sparkles, TrendingUp, UserRound, WalletCards, Wrench, X,
 } from 'lucide-react'
 import type {
-  CashMovement, OperationDay, OperationTask, Reservation, Role, RoomAccessStatus, RoomIssueType, RoomState, StaffMember, StaffTimeEntry, TourBooking,
+  CashMovement, DailyOperationMetric, OperationDay, OperationTask, Reservation, Role, RoomAccessStatus, RoomIssueType, RoomState, StaffMember, StaffTimeEntry, TourBooking,
 } from '../types'
 import { longDate, money, number, percent, shortDate } from '../utils'
 import { ToursView } from './ToursView'
@@ -50,6 +50,7 @@ type Props = {
   cashMovements: CashMovement[]
   staff: StaffMember[]
   staffTimeEntries: StaffTimeEntry[]
+  dailyOperation: DailyOperationMetric[]
   onReservationsChange: (updater: (rows: Reservation[]) => Reservation[]) => void
   onPersistReservation: (reservationKey: string, changes: Partial<Reservation>) => Promise<Reservation>
   onRoomsChange: (updater: (rows: RoomState[]) => RoomState[]) => void
@@ -85,7 +86,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onCashMovementsChange, onNotify } = props
+  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, dailyOperation, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
@@ -124,8 +125,9 @@ export function OperationsView(props: Props) {
     const dayArrivals = active.filter(row => row.checkIn === day.date).length
     const dayDepartures = active.filter(row => row.checkOut === day.date).length
     const occupied = active.filter(row => occupiedOn(row, day.date)).length
-    return { ...day, arrivals: dayArrivals, departures: dayDepartures, occupancy: occupied / 17 * 100, cleaningLoad: dayDepartures }
-  }), [days, reservations])
+    const calculated = dailyOperation.find(row => row.date === day.date)
+    return { ...day, arrivals: calculated?.arrivals ?? dayArrivals, departures: calculated?.departures ?? dayDepartures, occupancy: calculated?.capacity ? calculated.occupied / calculated.capacity * 100 : occupied / 17 * 100, cleaningLoad: calculated?.departures ?? dayDepartures }
+  }), [days, reservations, dailyOperation])
 
   const priorityCandidates: PriorityItem[] = [
     ...departures.map(reservation => ({ id: `exit-${reservation.id}`, roomNumber: reservation.roomNumber, level: 'Crítica' as const, title: `Confirmar salida · ${reservation.roomNumber}`, text: `${reservation.guestName}${reservation.checkOut < selectedDate ? ` tiene salida vencida desde ${shortDate(reservation.checkOut)}` : ' tiene salida programada hoy'}.`, action: 'Confirmar salida', reservation })),
@@ -213,7 +215,7 @@ export function OperationsView(props: Props) {
     />}
     {tab === 'Cierre diario' && <DailyCloseView
       role={role} reservations={reservations} rooms={liveRooms} cashMovements={cashMovements}
-      staff={staff} staffTimeEntries={staffTimeEntries} onNotify={onNotify}
+      staff={staff} staffTimeEntries={staffTimeEntries} dailyOperation={dailyOperation} onNotify={onNotify}
     />}
   </div>
 }
@@ -224,7 +226,7 @@ const addDays = (date: string, amount: number) => {
   return value.toISOString().slice(0, 10)
 }
 
-function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staffTimeEntries, onNotify }: {
+function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staffTimeEntries, dailyOperation, onNotify }: {
   role: Role
   reservations: Reservation[]
   rooms: RoomState[]
@@ -238,11 +240,12 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
   const cashIn = activeCash.filter(item => item.type === 'Entrada').reduce((sum, item) => sum + item.amount, 0)
   const cashOut = activeCash.filter(item => item.type === 'Salida').reduce((sum, item) => sum + item.amount, 0)
   const occupied = reservations.filter(item => occupiedOn(item, TODAY))
-  const roomRevenue = occupied.reduce((sum, reservation) => sum + reservation.nights.filter(night => night.date === TODAY).reduce((nightSum, night) => nightSum + night.rate, 0), 0)
+  const todayOperation = dailyOperation.find(row => row.date === TODAY)
+  const roomRevenue = todayOperation?.revenue ?? null
   const createdToday = reservations.filter(item => item.createdAt.startsWith(TODAY)).length
   const attendance = staffTimeEntries.filter(item => item.date === TODAY)
   const staffNames = attendance.map(entry => staff.find(employee => employee.id === entry.employeeId)?.name).filter(Boolean)
-  const hasReservations = reservations.length > 0
+  const hasReservations = reservations.length > 0 || dailyOperation.length > 0
   const hasRooms = rooms.length > 0
   const hasCash = cashMovements.length > 0
   const hasAttendance = staffTimeEntries.length > 0
@@ -250,17 +253,19 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
   const forecast = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(TODAY, index + 1)
     const active = reservations.filter(item => occupiedOn(item, date))
-    const revenue = active.reduce((sum, reservation) => sum + reservation.nights.filter(night => night.date === date).reduce((nightSum, night) => nightSum + night.rate, 0), 0)
+    const daily = dailyOperation.find(row => row.date === date)
+    const revenue = daily?.revenue ?? null
     return {
       date,
-      occupied: active.length,
-      arrivals: reservations.filter(item => !['Cancelada', 'No show'].includes(item.status) && item.checkIn === date).length,
-      departures: reservations.filter(item => !['Cancelada', 'No show'].includes(item.status) && item.checkOut === date).length,
-      adr: active.length ? revenue / active.length : 0,
-      revpar: revenue / 17,
+      occupied: daily?.occupied ?? active.length,
+      capacity: daily?.capacity ?? 17,
+      arrivals: daily?.arrivals ?? reservations.filter(item => !['Cancelada', 'No show'].includes(item.status) && item.checkIn === date).length,
+      departures: daily?.departures ?? reservations.filter(item => !['Cancelada', 'No show'].includes(item.status) && item.checkOut === date).length,
+      adr: daily?.adr ?? (revenue != null && active.length ? revenue / active.length : null),
+      revpar: daily?.revpar ?? (revenue != null ? revenue / 17 : null),
     }
   })
-  const averageForecastOccupancy = forecast.reduce((sum, day) => sum + day.occupied / 17 * 100, 0) / forecast.length
+  const averageForecastOccupancy = forecast.reduce((sum, day) => sum + (day.capacity ? day.occupied / day.capacity * 100 : 0), 0) / forecast.length
   const downloadPdf = () => {
     const originalTitle = document.title
     document.title = `Cierre diario ${TODAY} - Hotel Mis Sueños`
@@ -284,7 +289,7 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
       <article><span><BedDouble size={14}/>Ocupados</span><strong>{hasRooms || hasReservations ? occupied.length : '—'}</strong><small>{hasReservations ? `${percent(occupied.length / 17 * 100)} ocupación` : 'Sin datos'}</small></article>
       <article><span><CalendarDays size={14}/>Reservas hoy</span><strong>{hasReservations ? createdToday : '—'}</strong><small>Reservas creadas</small></article>
       <article><span><X size={14}/>Canceladas hoy</span><strong>—</strong><small>Requiere historial de eventos</small></article>
-      <article><span><TrendingUp size={14}/>ADR / RevPAR</span><strong>{hasReservations && occupied.length ? `${money(roomRevenue / occupied.length)} / ${money(roomRevenue / 17)}` : '—'}</strong><small>Tarifa y rendimiento de hoy</small></article>
+      <article><span><TrendingUp size={14}/>ADR / RevPAR</span><strong>{todayOperation ? `${money(todayOperation.adr)} / ${money(todayOperation.revpar)}` : '—'}</strong><small>Tarifa y rendimiento de hoy</small></article>
     </div>
 
     <div className="daily-owner-summary"><span><TrendingUp size={15}/>LECTURA PARA DIRECCIÓN</span><p>{hasCash || hasReservations || hasAttendance ? <>El cierre registra un neto de <b>{hasCash ? money(cashIn - cashOut) : '—'}</b>, una ocupación actual de <b>{hasReservations ? percent(occupied.length / 17 * 100) : '—'}</b> y una ocupación promedio prevista de <b>{hasReservations ? percent(averageForecastOccupancy) : '—'}</b> para los próximos siete días.</> : <>La lectura ejecutiva aparecerá automáticamente cuando existan movimientos, reservas y asistencia del día.</>}</p></div>
@@ -292,7 +297,7 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
     <div className="daily-close-grid">
       <article className="panel daily-forecast">
         <header><div><span>PRONÓSTICO</span><h2>Cómo se ven los siguientes 7 días</h2></div><span className="data-state">AUTOMÁTICO</span></header>
-        <div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Ocupación</th><th>Llegadas</th><th>Salidas</th><th>ADR</th><th>RevPAR</th></tr></thead><tbody>{forecast.map(day => <tr key={day.date}><td><b>{shortDate(day.date)}</b><small>{longDate(day.date).split(',')[0]}</small></td><td>{hasReservations ? `${day.occupied}/17 · ${percent(day.occupied / 17 * 100, 0)}` : '—'}</td><td>{hasReservations ? day.arrivals : '—'}</td><td>{hasReservations ? day.departures : '—'}</td><td>{hasReservations && day.occupied ? money(day.adr) : '—'}</td><td>{hasReservations && day.occupied ? money(day.revpar) : '—'}</td></tr>)}</tbody></table></div>
+        <div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Ocupación</th><th>Llegadas</th><th>Salidas</th><th>ADR</th><th>RevPAR</th></tr></thead><tbody>{forecast.map(day => <tr key={day.date}><td><b>{shortDate(day.date)}</b><small>{longDate(day.date).split(',')[0]}</small></td><td>{day.capacity ? `${day.occupied}/${day.capacity} · ${percent(day.occupied / day.capacity * 100, 0)}` : '—'}</td><td>{hasReservations ? day.arrivals : '—'}</td><td>{hasReservations ? day.departures : '—'}</td><td>{day.adr != null && day.occupied ? money(day.adr) : '—'}</td><td>{day.revpar != null && day.occupied ? money(day.revpar) : '—'}</td></tr>)}</tbody></table></div>
       </article>
 
       <aside className="panel daily-send-panel">
