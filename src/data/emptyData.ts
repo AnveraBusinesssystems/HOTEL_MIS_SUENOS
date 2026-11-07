@@ -14,6 +14,7 @@ export const emptyDashboard = (): DashboardData => ({
   operationTasks: [],
   operationDays: [],
   cleaningHistory: [],
+  dailyOperation: [],
   tours: [],
   staff: [],
   staffSchedules: [],
