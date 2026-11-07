@@ -34,7 +34,7 @@ export interface RoomPerformance {
   occupancy: number
   adr: number
   revpar: number
-  currentRate: number
+  historicalAdr: number
 }
 
 export interface RoomTypeConfig {
