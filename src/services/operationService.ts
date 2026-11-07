@@ -1,4 +1,4 @@
-import type { CleaningHistory, OperationDay, OperationTask, RoomState } from '../types'
+import type { CashMovement, TourBooking, CleaningHistory, OperationDay, OperationTask, RoomState } from '../types'
 import { apiClient } from './apiClient'
 
 export type OperationPayload = {
@@ -6,6 +6,8 @@ export type OperationPayload = {
   operationTasks: OperationTask[]
   operationDays: OperationDay[]
   cleaningHistory: CleaningHistory[]
+  tours: TourBooking[]
+  cashMovements: CashMovement[]
   generatedAt: string
 }
 
