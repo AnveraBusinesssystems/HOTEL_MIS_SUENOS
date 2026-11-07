@@ -70,6 +70,9 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
+  const [inventoryLoaded, setInventoryLoaded] = useState(false)
+  const [inventoryReady, setInventoryReady] = useState(false)
+  const [inventoryLoading, setInventoryLoading] = useState(false)
   const [cashLoaded, setCashLoaded] = useState(false)
   const [cashReady, setCashReady] = useState(false)
   const [cashLoading, setCashLoading] = useState(false)
@@ -103,9 +106,40 @@ function App() {
       tours: current.tours,
       cashMovements: current.cashMovements,
       cashDays: current.cashDays,
+      inventory: current.inventory,
+      purchaseRequests: current.purchaseRequests,
       reservations: current.reservations,
     } : next)
     setLoading(false)
+  }
+
+  const loadInventory = async (refresh = false) => {
+    if (!hotelService.isConfigured || inventoryLoading) return false
+    setInventoryLoading(true)
+    try {
+      const result = await hotelService.getInventory(refresh)
+      setData(current => current ? { ...current, inventory: result.items } : current)
+      setInventoryLoaded(true)
+      setInventoryReady(true)
+      return true
+    } catch (error) {
+      console.warn('No se pudo cargar Inventory.', error)
+      setInventoryLoaded(true)
+      setInventoryReady(false)
+      return false
+    } finally {
+      setInventoryLoading(false)
+    }
+  }
+
+  const saveInventoryCount = async (
+    changes: Parameters<typeof hotelService.saveInventoryCount>[0],
+    countId: string,
+  ) => {
+    await hotelService.saveInventoryCount(changes,countId)
+    const result = await hotelService.getInventory(true)
+    setData(current => current ? {...current,inventory:result.items} : current)
+    return true
   }
 
   const loadCash = async (refresh = false) => {
@@ -291,6 +325,11 @@ function App() {
     if (sessionUser) void load()
   }, [sessionUser])
   useEffect(() => {
+    if (active === 'Inventario' && data && !inventoryLoaded && !inventoryLoading) {
+      void loadInventory()
+    }
+  }, [active, data, inventoryLoaded, inventoryLoading])
+  useEffect(() => {
     if (active === 'Caja' && data && !cashLoaded && !cashLoading) {
       void loadCash()
     }
@@ -441,9 +480,14 @@ function App() {
   if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setCashLoaded(false); setCashReady(false); setOperationReady(false); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setCashLoaded(false); setCashReady(false); setOperationReady(false); setInventoryLoaded(false); setInventoryReady(false); setSessionUser(null); setMobileNavOpen(false) }
 
   const refreshActivePage = async () => {
+    if (active === 'Inventario' && hotelService.isConfigured) {
+      const ok = await loadInventory(true)
+      setToast(ok ? 'Inventario actualizado' : 'Error al leer Inventory')
+      return
+    }
     if (active === 'Caja' && hotelService.isConfigured) {
       const updated = await loadCash(true)
       setToast(updated ? 'Caja actualizada' : 'No se pudo actualizar Caja')
@@ -488,7 +532,7 @@ function App() {
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
-          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading || cashLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
+          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading || cashLoading || inventoryLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
           <button className="logout-button" onClick={signOut}>Salir</button>
@@ -527,6 +571,8 @@ function App() {
       {active === 'Inventario' && <InventoryView
         role={role} items={data.inventory} requests={data.purchaseRequests}
         onChange={updateInventory} onRequestsChange={updatePurchaseRequests}
+        canWrite={hotelService.isConfigured && inventoryReady && !inventoryLoading}
+        onSaveCount={saveInventoryCount}
         onOpenCash={openPurchaseRequestInCash} onNotify={setToast}
       />}
       {active === 'Personal' && <StaffView
