@@ -124,16 +124,34 @@ function App() {
       setToast('Google Apps Script todavía no está conectado')
       return false
     }
+    // Las pantallas operativas todavía realizan algunos cambios optimistas.
+    // Conservar una referencia anterior para recuperar el estado si la
+    // escritura es rechazada; no confirmar sin respuesta del servidor.
+    const roomSnapshot = data?.roomStates ?? []
+    const taskSnapshot = data?.operationTasks ?? []
     try {
       await hotelService.recordOperationEvent(event)
-      const payload = await hotelService.getOperation(true)
-      setData(current => current ? { ...current, ...payload } : current)
-      return true
     } catch (error) {
-      console.warn('No se pudo registrar evento de operación.', error)
-      setToast('No se guardó el evento de operación')
+      console.warn('Escritura operativa no confirmada.', error)
+      try {
+        const payload = await hotelService.getOperation(true)
+        setData(current => current ? { ...current, ...payload } : current)
+      } catch {
+        setData(current => current ? {
+          ...current, roomStates: roomSnapshot, operationTasks: taskSnapshot,
+        } : current)
+      }
+      setToast('Evento no confirmado. Se recuperó el estado anterior o el registrado.')
       return false
     }
+    try {
+      const payload = await hotelService.getOperation(true)
+      setData(current => current ? { ...current, ...payload } : current)
+    } catch (error) {
+      console.warn('Evento guardado, pero no se pudo refrescar Operación.', error)
+      setToast('Evento guardado; actualiza la pantalla para recuperar su estado')
+    }
+    return true
   }
 
   const loadRms = async (refresh = false) => {
