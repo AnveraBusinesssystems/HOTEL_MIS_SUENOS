@@ -5,6 +5,7 @@ import { rmsService } from './rmsService'
 import { operationService } from './operationService'
 import { reservationsService } from './reservationsService'
 import { cashService } from './cashService'
+import { tourPaymentsService } from './tourPaymentsService'
 import { summaryService } from './summaryService'
 
 export const hotelService = {
@@ -24,6 +25,12 @@ export const hotelService = {
   },
 
   getCash(refresh = false) { return cashService.get(refresh) },
+  recordTourPayment(...args: Parameters<typeof tourPaymentsService.payment>) {
+    return tourPaymentsService.payment(...args)
+  },
+  updateTourStatus(...args: Parameters<typeof tourPaymentsService.updateStatus>) {
+    return tourPaymentsService.updateStatus(...args)
+  },
   createCashMovement(movement: Parameters<typeof cashService.create>[0], movementId: string) {
     return cashService.create(movement, movementId)
   },
