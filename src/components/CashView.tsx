@@ -9,6 +9,7 @@ import type {
 } from '../types'
 import { longDate, money } from '../utils'
 import type { CashNewMovement } from '../services/cashService'
+import type { InventoryPurchaseInput } from '../services/inventoryService'
 
 interface CashViewProps {
   role: Role
@@ -25,6 +26,8 @@ interface CashViewProps {
   onPurchaseRequestsChange: (updater: (rows: PurchaseRequest[]) => PurchaseRequest[]) => void
   onPurchaseRequestOpened: () => void
   canWrite: boolean
+  inventoryReady: boolean
+  onInventoryPurchase: (input: InventoryPurchaseInput, purchaseId: string) => Promise<boolean>
   onCreateCash: (movement: CashNewMovement, movementId: string) => Promise<boolean>
   onPayReservation: (reservationKey: string, amount: number, method: CashPaymentMethod, paymentId: string, category: 'Pago de reserva' | 'Anticipo de reserva') => Promise<boolean>
   onAnnulCash: (movementId: string, reason: string) => Promise<boolean>
@@ -41,6 +44,8 @@ type Draft = {
   description: string
   reservationId: string
   purchaseRequestId: string
+  supplier: string
+  place: string
   purchaseItems: Array<{ id: string; product: string; quantity: string; unit: string; total: string }>
 }
 
@@ -94,6 +99,8 @@ const freshDraft = (type: CashMovementType): Draft => ({
   description: '',
   reservationId: '',
   purchaseRequestId: '',
+  supplier: '',
+  place: '',
   purchaseItems: type === 'Salida' ? [newPurchaseItem()] : [],
 })
 
@@ -103,7 +110,7 @@ const balance = (reservation: Reservation) => Math.max(0, reservation.total - re
 export function CashView({
   role, reservations, movements, days, inventory, purchaseRequests, initialPurchaseRequestId,
   onReservationsChange, onMovementsChange, onDaysChange, onInventoryChange,
-  onPurchaseRequestsChange, onPurchaseRequestOpened, canWrite, onCreateCash, onPayReservation, onAnnulCash, onSaveCashDay, onCloseCashDay, onNotify,
+  onPurchaseRequestsChange, onPurchaseRequestOpened, canWrite, inventoryReady, onInventoryPurchase, onCreateCash, onPayReservation, onAnnulCash, onSaveCashDay, onCloseCashDay, onNotify,
 }: CashViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -201,7 +208,10 @@ export function CashView({
 
   const saveMovement = async () => {
     if (!draft || saving || !allowCashWrite) return
-    const amount = Number(draft.amount)
+    const isInventory = draft.type === 'Salida' && draft.category === 'Compra de inventario'
+    const amount = isInventory
+      ? Math.round(draft.purchaseItems.reduce((sum,item) => sum + Number(item.total),0)*100)/100
+      : Number(draft.amount)
     if (!Number.isFinite(amount) || amount <= 0 || Math.abs(Math.round(amount * 100) - amount * 100) > .00001) {
       setFormError('Ingresa un monto válido de hasta dos decimales.')
       return
@@ -224,19 +234,45 @@ export function CashView({
       setFormError('Indica un concepto para el movimiento.')
       return
     }
+    if (isInventory) {
+      if (selectedDate !== today || !inventoryReady) {
+        setFormError('La compra de Inventario requiere los productos cargados y la fecha actual.')
+        return
+      }
+      if (!draft.purchaseItems.length || draft.purchaseItems.some(item =>
+        !item.product || !item.quantity || !item.total ||
+        !Number.isFinite(Number(item.quantity)) || Number(item.quantity)<=0 ||
+        !Number.isFinite(Number(item.total)) || Number(item.total)<0 ||
+        Math.abs(Number(item.quantity)*100-Math.round(Number(item.quantity)*100))>0.00001 ||
+        Math.abs(Number(item.total)*100-Math.round(Number(item.total)*100))>0.00001) ||
+        new Set(draft.purchaseItems.map(item => item.product)).size !== draft.purchaseItems.length) {
+        setFormError('Revisa los productos, cantidades, totales y posibles duplicados de la factura.')
+        return
+      }
+      if (draft.purchaseItems.some(item => !inventory.some(stock => stock.name===item.product))) {
+        setFormError('Selecciona únicamente productos existentes en Inventory.')
+        return
+      }
+    }
     const allowedIndependent = draft.type === 'Entrada'
       ? ['Venta de restaurante', 'Otro ingreso']
       : ['Mantenimiento','Lavandería','Servicios','Gastos externos','Retiro de efectivo','Otro gasto']
-    if (!linksReservation && !allowedIndependent.includes(draft.category)) {
+    if (!linksReservation && !isInventory && !allowedIndependent.includes(draft.category)) {
       setFormError('Este movimiento requiere conectar Inventario, Tours o el flujo especializado correspondiente.')
       return
     }
     const key = JSON.stringify({draft,selectedDate,amount})
-    const id = retry.current?.key === key ? retry.current.id : 'HMS-CASH-' + crypto.randomUUID()
+    const id = retry.current?.key === key ? retry.current.id :
+      (isInventory ? 'HMS-BUY-' : 'HMS-CASH-') + crypto.randomUUID()
     retry.current = {key,id}
     setSaving(true)
     try {
-      const ok = linksReservation && reservation
+      const ok = isInventory
+        ? await onInventoryPurchase({
+            items:draft.purchaseItems.map(item => ({product:item.product,quantity:Number(item.quantity),unit:item.unit,total:Number(item.total)})),
+            method:draft.paymentMethod, description:draft.description.trim(), supplier:draft.supplier.trim(), place:draft.place.trim(),
+          }, id)
+        : linksReservation && reservation
         ? await onPayReservation(reservation.subReservationId,amount,draft.paymentMethod,id,
             draft.category as 'Pago de reserva' | 'Anticipo de reserva')
         : await onCreateCash({
@@ -385,18 +421,19 @@ export function CashView({
       </aside>
     </section>
 
-    {draft && <MovementDialog draft={draft} reservations={pendingReservations} inventory={inventory} error={formError} saving={saving} canWrite={allowCashWrite} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => {setDraft(null);retry.current=null}} onSave={() => void saveMovement()}/>}
+    {draft && <MovementDialog draft={draft} reservations={pendingReservations} inventory={inventory} error={formError} saving={saving} canWrite={allowCashWrite} inventoryReady={inventoryReady} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => {setDraft(null);retry.current=null}} onSave={() => void saveMovement()}/>}
     {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul && allowCashWrite && !saving} onClose={() => setSelectedMovement(null)} onAnnul={reason => void annul(selectedMovement,reason)}/>}
   </section>
 }
 
-function MovementDialog({ draft, reservations, inventory, error, saving, canWrite, onChange, onSwitchType, onClose, onSave }: {
+function MovementDialog({ draft, reservations, inventory, error, saving, canWrite, inventoryReady, onChange, onSwitchType, onClose, onSave }: {
   draft: Draft
   reservations: Reservation[]
   inventory: InventoryItem[]
   error: string
   saving: boolean
   canWrite: boolean
+  inventoryReady: boolean
   onChange: (draft: Draft) => void
   onSwitchType: (type: CashMovementType) => void
   onClose: () => void
@@ -407,8 +444,8 @@ function MovementDialog({ draft, reservations, inventory, error, saving, canWrit
   const needsReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
   const isInventory = draft.type === 'Salida' && draft.category === 'Compra de inventario'
   const invoiceTotal = draft.purchaseItems.reduce((sum, item) => sum + Number(item.total || 0), 0)
-  const inventoryUnits = { ...fallbackInventoryUnits, ...Object.fromEntries(inventory.map(item => [item.name, item.unit])) }
-  const inventoryProducts = Object.keys(inventoryUnits)
+  const inventoryUnits = Object.fromEntries(inventory.map(item => [item.name, item.unit]))
+  const inventoryProducts = Object.keys(inventoryUnits).sort()
   const changeCategory = (category: CashMovementCategory) => onChange({
     ...draft,
     category,
@@ -431,9 +468,10 @@ function MovementDialog({ draft, reservations, inventory, error, saving, canWrit
     <div className="cash-type-switch"><button className={draft.type === 'Entrada' ? 'active income' : ''} onClick={() => onSwitchType('Entrada')}>Entrada</button><button className={draft.type === 'Salida' ? 'active expense' : ''} onClick={() => onSwitchType('Salida')}>Salida</button></div>
     <div className="cash-form">
       {draft.purchaseRequestId && <div className="linked-purchase-request full"><FileText size={16}/><p><b>Compra ligada a {draft.purchaseRequestId}</b><span>Esta factura es editable: ajusta, elimina o añade productos según lo comprado realmente. La solicitud original no cambiará.</span></p></div>}
-      <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item} disabled={item === 'Compra de inventario' || item === 'Reembolso'}>{item}{item === 'Compra de inventario' || item === 'Reembolso' ? ' · pendiente' : ''}</option>)}</select></label>
+      <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item} disabled={(item === 'Compra de inventario' && !inventoryReady) || item === 'Reembolso'}>{item}{(item === 'Compra de inventario' && !inventoryReady) || item === 'Reembolso' ? ' · pendiente' : ''}</option>)}</select></label>
       {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.subReservationId} value={item.subReservationId}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
+      {isInventory && <label className="full"><span>Proveedor (opcional)</span><input value={draft.supplier} maxLength={100} onChange={event => onChange({...draft,supplier:event.target.value})} placeholder="Proveedor"/><span>Establecimiento (opcional)</span><input value={draft.place} maxLength={100} onChange={event => onChange({...draft,place:event.target.value})} placeholder="Lugar de compra"/></label>}
       {isInventory ? <section className="invoice-items full">
         <header><div><span>PRODUCTO</span><span>CANTIDAD</span><span>UNIDAD</span><span>TOTAL</span><span></span></div></header>
         {draft.purchaseItems.map((item, index) => <div className="invoice-item" key={item.id}>
