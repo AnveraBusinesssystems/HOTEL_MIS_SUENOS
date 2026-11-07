@@ -114,10 +114,13 @@ function saveInventoryCount_(request) {
       used[name]=true;
       var old=inventoryNumber_(catalog[name][3]);
       if(old===null) throw new Error('Stock no registrado: '+name);
+      var previouslySeen=Number(item.previous);
+      if(!isFinite(previouslySeen) || Math.abs(old-previouslySeen)>0.001)
+        throw new Error('El stock de '+name+' cambió desde que se abrió el conteo. Actualiza antes de guardar.');
       var delta=Math.round((wanted-old)*100)/100;
       if(!delta)return;
       updates.push([cashDate_(todayKey_()),delta>0?'compras':'uso',
-        name,Math.abs(delta),'','',0,'Ajuste de conteo HMS','Inventario',
+        name,Math.abs(delta),'','','','Ajuste de conteo HMS','Inventario',
         'AJUSTE CONTEO | ID:'+id+' | antes:'+old+' | contado:'+wanted]);
     });
     if(!updates.length)return {countId:id,changed:0};
