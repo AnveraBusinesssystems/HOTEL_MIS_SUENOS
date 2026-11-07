@@ -105,10 +105,8 @@ export function OperationsView(props: Props) {
     if (container && active) container.scrollLeft = active.offsetLeft - container.clientWidth / 2 + active.clientWidth / 2
   }, [selectedDate])
 
-  const persistEvent = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work = '', note = '') => {
-    const eventId = 'HMS-OP-' + crypto.randomUUID()
-    void onOperationEvent({ roomNumber, actionType, work, note, worker: role, eventId })
-  }
+  const persistEvent = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work = '', note = '') =>
+    onOperationEvent({ roomNumber, actionType, work, note, worker: role, eventId: 'HMS-OP-' + crypto.randomUUID() })
 
   const isLiveDate = selectedDate === TODAY
   const selectedDay = days.find(day => day.date === selectedDate) ?? { date: selectedDate, status: 'No iniciado' as const }
@@ -154,37 +152,34 @@ export function OperationsView(props: Props) {
   const displayMetrics = hasOperationData ? metrics : metrics.map(metric => ({ ...metric, value: '—', detail: 'Sin datos' }))
 
   const syncOperation = () => {
-    const syncedAt = hotelTime()
-    onDaysChange(rows => rows.some(day => day.date === TODAY) ? rows.map(day => day.date === TODAY ? { ...day, status: 'Abierto', openedBy: role, openedAt: syncedAt } : day) : [...rows, { date: TODAY, status: 'Abierto', openedBy: role, openedAt: syncedAt }])
-    onNotify('Marca local de inicio de operación; Cloudbeds todavía no está conectado')
+    // No hay fuente para apertura de jornada. Evitar fingir que se guardó.
+    onNotify('Apertura de jornada pendiente: todavía no existe conexión de escritura')
   }
   const confirmDeparture = async (reservation: Reservation) => {
     try {
       const saved = await onPersistReservation(reservation.subReservationId, { status: 'Salida' })
       onReservationsChange(rows => rows.map(row =>
-        row.subReservationId === reservation.subReservationId ? saved : row,
-      ))
+        row.subReservationId === reservation.subReservationId ? saved : row))
       if (reservation.roomNumber) {
-        // El egreso es fuente RESERVAS Q; la limpieza se registra como evento
-        // independiente sin alterar ESTADO_HABITACIONES B:F (fórmulas).
-        persistEvent(reservation.roomNumber, 'Limpieza solicitada', 'Limpieza de salida',
-          'Salida confirmada desde Operación diaria')
-        onRoomsChange(rows => rows.map(item => item.roomNumber === reservation.roomNumber
-          ? { ...item, cleaning: 'Sucia' } : item))
-      }
-      onNotify('Salida confirmada en RESERVAS; limpieza enviada al registro')
+        const recorded = await persistEvent(reservation.roomNumber, 'Limpieza solicitada',
+          'Limpieza de salida', 'Salida confirmada desde Operación diaria')
+        onNotify(recorded
+          ? 'Salida guardada y limpieza registrada'
+          : 'Salida guardada. Falta registrar la limpieza; revisa la habitación')
+      } else onNotify('Salida confirmada en RESERVAS')
     } catch (error) {
       console.warn('No se pudo confirmar la salida.', error)
       onNotify('No se pudo guardar la salida en Google Sheets')
     }
   }
-  const markRoomReady = (roomNumber: string) => {
+  const markRoomReady = async (roomNumber: string) => {
     const room = liveRooms.find(item => item.roomNumber === roomNumber)
-    if (room?.issues?.some(issue => issue.status === 'Pendiente')) { onNotify(`${roomNumber} todavía tiene incidencias pendientes`); return }
-    onRoomsChange(rows => rows.map(item => item.roomNumber === roomNumber ? { ...item, cleaning: 'Limpia' } : item))
-    onTasksChange(rows => rows.map(task => task.date <= TODAY && task.roomNumber === roomNumber && task.type === 'Revisión' && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: completedNow() } : task))
-    persistEvent(roomNumber, 'Habitación aprobada', 'Revisión')
-    onNotify(`${roomNumber}: se solicitó registrar la aprobación`)
+    if (room?.issues?.some(issue => issue.status === 'Pendiente')) {
+      onNotify(`${roomNumber} tiene incidencias pendientes`)
+      return
+    }
+    const ok = await persistEvent(roomNumber, 'Habitación aprobada', 'Revisión')
+    onNotify(ok ? `${roomNumber}: aprobación registrada` : `${roomNumber}: aprobación no guardada`)
   }
   const runPriorityAction = (item: PriorityItem) => {
     if (!isLiveDate) return
@@ -334,40 +329,32 @@ function RoomsView({ role, rooms, reservations, tasks, filter, setFilter, onRoom
   const [issueType, setIssueType] = useState<RoomIssueType>('Falta control de TV')
   const visible = rooms.filter(room => filter === 'Todas' || filter === 'Atención' && (room.cleaning !== 'Limpia' || room.occupancy === 'Bloqueada' || room.occupancy === 'Salida prevista' || hasPendingIssue(room)) || filter === 'Listas' && readyLabel(room) === 'Lista' || filter === 'Ocupadas' && ['Ocupada', 'Salida prevista'].includes(room.occupancy) || filter === 'Bloqueadas' && room.occupancy === 'Bloqueada')
   const guest = (id?: string) => reservations.find(row => row.id === id)
-  const activity = (action: string) => ({ id: `ACT-${Date.now()}-${Math.random().toString(16).slice(2)}`, action, by: role, at: hotelTime() })
-  const persist = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work: string, note = '') => {
-    void onOperationEvent({ roomNumber, actionType, worker: role, work, note, eventId: 'HMS-OP-' + crypto.randomUUID() })
-  }
-  const requestCleaning = (room: RoomState) => {
+  const persist = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work: string, note = '') =>
+    onOperationEvent({ roomNumber, actionType, worker: role, work, note, eventId: 'HMS-OP-' + crypto.randomUUID() })
+  const requestCleaning = async (room: RoomState) => {
     const occupied = room.occupancy === 'Ocupada'
-    onRoomsChange(rows => rows.map(item => item.roomNumber === room.roomNumber ? { ...item, cleaning: 'Sucia', accessStatus: occupied ? 'Limpieza solicitada' : item.accessStatus, activityLog: [...(item.activityLog ?? []), activity(occupied ? 'Solicitó limpieza de estancia' : 'Marcó la habitación como sucia')] } : item))
-    const type: OperationTask['type'] = occupied ? 'Limpieza de estancia' : 'Limpieza general'
-    onTasksChange(rows => rows.some(task => task.date <= TODAY && task.roomNumber === room.roomNumber && CLEANING_TYPES.includes(task.type) && task.status !== 'Terminada') ? rows : [...rows, { id: `OP-${Date.now()}`, date: TODAY, roomNumber: room.roomNumber, roomType: room.roomType, type, status: 'Pendiente', priority: room.nextReservationId && (guest(room.nextReservationId)?.checkIn ?? '9999-12-31') <= TODAY ? 'Alta' : 'Normal', assignedTo: 'Limpieza', requestedAt: hotelTime(), deadline: 'Hoy', note: occupied ? 'Limpieza solicitada durante la estancia.' : 'Habitación enviada a limpieza desde Operación.' }])
-    persist(room.roomNumber, occupied ? 'Limpieza solicitada' : 'Marcar sucia', occupied ? 'Limpieza de estancia' : 'Limpieza general')
-    onNotify(`${room.roomNumber}: solicitud enviada al registro de limpieza`)
+    const ok = await persist(room.roomNumber, occupied ? 'Limpieza solicitada' : 'Marcar sucia',
+      occupied ? 'Limpieza de estancia' : 'Limpieza general')
+    onNotify(ok ? `${room.roomNumber}: limpieza registrada` : `${room.roomNumber}: no se guardó la limpieza`)
   }
-  const approveRoom = (room: RoomState) => {
-    if (room.issues?.some(issue => issue.status === 'Pendiente')) { onNotify(`${room.roomNumber} todavía tiene incidencias pendientes`); return }
-    onRoomsChange(rows => rows.map(item => item.roomNumber === room.roomNumber ? { ...item, cleaning: 'Limpia', activityLog: [...(item.activityLog ?? []), activity('Aprobó la habitación para entrega')] } : item))
-    onTasksChange(rows => rows.map(task => task.date <= TODAY && task.roomNumber === room.roomNumber && task.type === 'Revisión' && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: completedNow() } : task))
-    persist(room.roomNumber, 'Habitación aprobada', 'Revisión')
-    onNotify(`${room.roomNumber}: aprobación enviada al registro`)
+  const approveRoom = async (room: RoomState) => {
+    if (hasPendingIssue(room)) { onNotify(`${room.roomNumber} tiene incidencias pendientes`); return }
+    const ok = await persist(room.roomNumber, 'Habitación aprobada', 'Revisión')
+    onNotify(ok ? `${room.roomNumber}: aprobación guardada` : `${room.roomNumber}: aprobación no guardada`)
   }
-  const reportIssue = () => {
+  const reportIssue = async () => {
     if (!issueRoom) return
-    if (issueRoom.issues?.some(issue => issue.status === 'Pendiente' && issue.type === issueType)) { onNotify(`${issueType} ya está reportado en ${issueRoom.roomNumber}`); setIssueRoom(undefined); return }
-    const taskId = `OP-${Date.now()}`
+    if (issueRoom.issues?.some(issue => issue.status === 'Pendiente' && issue.type === issueType)) {
+      onNotify(`${issueType} ya está reportado en ${issueRoom.roomNumber}`)
+      return
+    }
     const meta = issueTaskMeta(issueType)
-    onRoomsChange(rows => rows.map(room => room.roomNumber === issueRoom.roomNumber ? { ...room, issues: [...(room.issues ?? []), { id: `INC-${Date.now()}`, type: issueType, status: 'Pendiente', reportedAt: hotelTime(), reportedBy: role, taskId }], activityLog: [...(room.activityLog ?? []), activity(`Reportó: ${issueType}`)] } : room))
-    onTasksChange(rows => [...rows, { id: taskId, date: TODAY, roomNumber: issueRoom.roomNumber, roomType: issueRoom.roomType, type: meta.type, status: 'Pendiente', priority: meta.priority, assignedTo: meta.assignedTo, requestedAt: hotelTime(), deadline: 'Hoy', note: `${issueType}.` }])
-    persist(issueRoom.roomNumber, 'Incidencia reportada', meta.type, issueType)
-    onNotify(`${issueType}: incidencia enviada al registro`)
-    setIssueRoom(undefined)
+    const ok = await persist(issueRoom.roomNumber, 'Incidencia reportada', meta.type, issueType)
+    if (ok) setIssueRoom(undefined)
+    onNotify(ok ? `Incidencia registrada: ${issueType}` : 'No se guardó la incidencia')
   }
-  const updateAccess = (roomNumber: string, accessStatus: RoomAccessStatus) => {
-    onRoomsChange(rows => rows.map(room => room.roomNumber === roomNumber ? { ...room, accessStatus, activityLog: [...(room.activityLog ?? []), activity(`Acceso: ${accessStatus}`)] } : room))
-    onNotify(`Acceso de ${roomNumber}: ${accessStatus}`)
-  }
+  const updateAccess = (_roomNumber: string, _accessStatus: RoomAccessStatus) =>
+    onNotify('Control de acceso pendiente de persistencia; no se ha guardado')
   return <section className="operation-section">
     <div className="room-board-toolbar"><div><span>ESTADO EN VIVO</span><h2>{visible.length} de 17 habitaciones</h2></div><select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}><option>Atención</option><option>Todas</option><option>Listas</option><option>Ocupadas</option><option>Bloqueadas</option></select></div>
     <div className="room-board">{visible.map(room => {
@@ -379,7 +366,7 @@ function RoomsView({ role, rooms, reservations, tasks, filter, setFilter, onRoom
         <header><div><span>{room.roomType}</span><h3>{room.roomNumber}</h3></div><b>{readyLabel(room)}</b></header>
         <div className="room-card-status"><span>Ocupación <b>{room.occupancy}</b></span><span>Limpieza <b>{room.cleaning}</b></span></div>
         <div className={`room-access ${roomAccessTone(room)}`}>{roomAccess(room)}</div>
-        {room.occupancy === 'Ocupada' && <select className="room-access-select" value={room.accessStatus ?? 'Normal'} onChange={event => updateAccess(room.roomNumber, event.target.value as RoomAccessStatus)} aria-label={`Acceso ${room.roomNumber}`}><option>Normal</option><option>No molestar</option><option>Limpieza solicitada</option><option>Acceso autorizado</option><option>Intentar más tarde</option></select>}
+        {room.occupancy === 'Ocupada' && <select className="room-access-select" value={room.accessStatus ?? 'Normal'} disabled title="Cambio de acceso pendiente de persistencia" onChange={event => updateAccess(room.roomNumber, event.target.value as RoomAccessStatus)} aria-label={`Acceso ${room.roomNumber}`}><option>Normal</option><option>No molestar</option><option>Limpieza solicitada</option><option>Acceso autorizado</option><option>Intentar más tarde</option></select>}
         {current && <div className="room-guest"><small>Huésped actual</small><b>{current.guestName}</b><span>Salida {shortDate(current.checkOut)}</span></div>}
         {next && <div className="room-guest next"><small>Próxima llegada</small><b>{next.guestName}</b><span>{shortDate(next.checkIn)}</span></div>}
         {room.blockReason && <div className="room-block"><Wrench size={13}/>{room.blockReason}</div>}
