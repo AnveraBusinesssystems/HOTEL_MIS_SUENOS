@@ -14,7 +14,7 @@ export interface KPI {
   id: string
   label: string
   value: number
-  previous: number
+  previous: number | null
   format: 'mxn' | 'percent' | 'integer' | 'decimal'
   helper: string
   comparisonMode?: 'relative' | 'points'
