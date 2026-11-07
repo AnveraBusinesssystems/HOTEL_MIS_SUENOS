@@ -136,6 +136,7 @@ export function CashView({
   const pendingReservations = knownReservations.filter(item => balance(item) > 0).sort((a, b) => balance(b) - balance(a))
   const readyPurchaseRequests = purchaseRequests.filter(item => item.status === 'Tomada en cuenta')
   const hasCashData = movements.length > 0 || days.length > 0
+  const unverifiedMovements = dayMovements.filter(item => item.status === 'Por revisar')
   const allowCashWrite = canWrite && !isClosed
 
   const openPurchaseRequest = (request: PurchaseRequest) => {
@@ -299,7 +300,7 @@ export function CashView({
     } finally {setSaving(false)}
   }
 
-  const annul = async (movement: CashMovement) => {
+  const annul = async (movement: CashMovement, reason: string) => {
     if (saving || !canAnnul || !allowCashWrite) return
     const independent = !movement.reservationId && !movement.tourId && !movement.purchaseId &&
       !['Pago de reserva','Anticipo de reserva','Compra de inventario','Cobro de tour',
@@ -310,7 +311,7 @@ export function CashView({
     }
     setSaving(true)
     try {
-      await onAnnulCash(movement.id,'Anulación administrativa desde Caja')
+      await onAnnulCash(movement.id,reason)
       setSelectedMovement(null)
       onNotify('Movimiento anulado; el historial permanece')
     } catch (error) {
@@ -343,7 +344,7 @@ export function CashView({
         <span>{method === 'Efectivo' ? <Banknote size={14}/> : method === 'Tarjeta' ? <CreditCard size={14}/> : <Landmark size={14}/>} {method}</span>
         <div><b>{hasCashData ? money(methodEntries) : '—'}</b><small>entradas</small></div><div><b>{hasCashData ? money(methodExits) : '—'}</b><small>salidas</small></div>
       </article>)}
-      <p><AlertTriangle size={14}/><span>Los pagos de tours aparecen aquí cuando están registrados en MOVIMIENTOS_CAJA; las operaciones de Tours pendientes siguen sin escritura.</span></p>
+      <p><AlertTriangle size={14}/><span>Solo se contabilizan movimientos con estado Activo. {unverifiedMovements.length ? `${unverifiedMovements.length} movimientos tienen estado por revisar.` : 'Los pagos de Tours se muestran al registrarse en Caja.'}</span></p>
     </section>
 
     <section className="cash-layout">
@@ -356,7 +357,7 @@ export function CashView({
         </div>
         <div className="table-scroll"><table className="cash-table"><thead><tr><th>Hora / ID</th><th>Concepto / categoría</th><th>Método</th><th>Entrada</th><th>Salida</th><th>Responsable</th><th></th></tr></thead><tbody>
           {filtered.map(item => <tr key={item.id} className={item.status === 'Anulado' ? 'annulled' : ''} onClick={() => setSelectedMovement(item)}>
-            <td><b>{item.time}</b><small>{item.id}</small></td><td><b>{item.description}</b><small>{item.category}{item.tourId ? ` · ${item.tourId}` : item.reservationId ? ` · ${item.reservationId}` : ''}</small></td><td><span className={`cash-method ${item.paymentMethod.toLowerCase()}`}>{item.paymentMethod}</span></td><td className="money-cell positive">{item.type === 'Entrada' ? money(item.amount) : '—'}</td><td className="money-cell negative">{item.type === 'Salida' ? money(item.amount) : '—'}</td><td>{item.createdBy}{item.status === 'Anulado' && <small className="annulled-label">ANULADO</small>}</td><td><button className="row-open" aria-label="Ver movimiento"><ChevronRight size={15}/></button></td>
+            <td><b>{item.time}</b><small>{item.id}</small></td><td><b>{item.description}</b><small>{item.category}{item.tourId ? ` · ${item.tourId}` : item.reservationId ? ` · ${item.reservationId}` : ''}</small></td><td><span className={`cash-method ${item.paymentMethod.toLowerCase()}`}>{item.paymentMethod}</span></td><td className="money-cell positive">{item.type === 'Entrada' ? money(item.amount) : '—'}</td><td className="money-cell negative">{item.type === 'Salida' ? money(item.amount) : '—'}</td><td>{item.createdBy}{item.status === 'Anulado' && <small className="annulled-label">ANULADO</small>}{item.status === 'Por revisar' && <small className="annulled-label">ESTADO POR REVISAR</small>}</td><td><button className="row-open" aria-label="Ver movimiento"><ChevronRight size={15}/></button></td>
           </tr>)}
         </tbody></table></div>
         {!filtered.length && <div className="cash-empty"><WalletCards size={24}/><b>Sin movimientos</b><span>No hay registros que coincidan con los filtros.</span></div>}
@@ -382,7 +383,7 @@ export function CashView({
     </section>
 
     {draft && <MovementDialog draft={draft} reservations={pendingReservations} inventory={inventory} error={formError} saving={saving} canWrite={allowCashWrite} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => {setDraft(null);retry.current=null}} onSave={() => void saveMovement()}/>}
-    {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul && allowCashWrite && !saving} onClose={() => setSelectedMovement(null)} onAnnul={() => void annul(selectedMovement)}/>}
+    {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul && allowCashWrite && !saving} onClose={() => setSelectedMovement(null)} onAnnul={reason => void annul(selectedMovement,reason)}/>}
   </section>
 }
 
@@ -449,7 +450,8 @@ function MovementDialog({ draft, reservations, inventory, error, saving, canWrit
   </section></div>
 }
 
-function MovementDetail({ movement, canAnnul, onClose, onAnnul }: { movement: CashMovement; canAnnul: boolean; onClose: () => void; onAnnul: () => void }) {
+function MovementDetail({ movement, canAnnul, onClose, onAnnul }: { movement: CashMovement; canAnnul: boolean; onClose: () => void; onAnnul: (reason: string) => void }) {
+  const [reason, setReason] = useState('')
   return <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}><aside className="drawer cash-detail">
     <header><div><span>DETALLE DEL MOVIMIENTO</span><h2>{movement.description}</h2><p>{movement.id}</p></div><button onClick={onClose} aria-label="Cerrar"><X size={18}/></button></header>
     <section className={`movement-amount ${movement.type.toLowerCase()}`}><span>{movement.type}</span><strong>{movement.type === 'Entrada' ? '+' : '−'} {money(movement.amount)}</strong><small className={movement.status === 'Anulado' ? 'annulled-label' : ''}>{movement.status}</small></section>
@@ -457,6 +459,6 @@ function MovementDetail({ movement, canAnnul, onClose, onAnnul }: { movement: Ca
     {Boolean(movement.purchaseItems?.length) && <section className="drawer-section purchase-detail"><span className="drawer-label">PRODUCTOS DE LA COMPRA</span><div className="purchase-detail-head"><span>Producto</span><span>Cantidad</span><span>Unidad</span><span>Total</span></div>{movement.purchaseItems?.map((item, index) => <div className="purchase-detail-row" key={`${item.product}-${index}`}><b>{item.product}</b><span>{item.quantity}</span><span>{item.unit}</span><strong>{money(item.total)}</strong></div>)}</section>}
     {movement.tourId && movement.status === 'Registrado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Este movimiento se originó en Tours. Las correcciones se harán desde ese flujo para mantener Caja y el tour sincronizados.</p></section>}
     {movement.status === 'Anulado' && <section className="annulment-note"><AlertTriangle size={15}/><p>Anulado por {movement.annulledBy}. El registro se conserva para auditoría.</p></section>}
-    <footer><button onClick={onClose}>Cerrar</button>{canAnnul && movement.status === 'Registrado' && !movement.tourId && <button className="danger-action" onClick={onAnnul}>Anular movimiento</button>}</footer>
+    <footer><button onClick={onClose}>Cerrar</button>{canAnnul && movement.status === 'Registrado' && !movement.tourId && !movement.reservationId && !movement.purchaseId && <><input aria-label="Motivo de anulación" maxLength={250} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obligatorio"/><button className="danger-action" disabled={!reason.trim()} onClick={() => onAnnul(reason.trim())}>Anular movimiento</button></>}</footer>
   </aside></div>
 }
