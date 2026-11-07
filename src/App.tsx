@@ -71,8 +71,10 @@ function App() {
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
   const [cashLoaded, setCashLoaded] = useState(false)
+  const [cashReady, setCashReady] = useState(false)
   const [cashLoading, setCashLoading] = useState(false)
   const [operationLoaded, setOperationLoaded] = useState(false)
+  const [operationReady, setOperationReady] = useState(false)
   const [operationLoading, setOperationLoading] = useState(false)
   const [rmsLoaded, setRmsLoaded] = useState(false)
   const [rmsLoading, setRmsLoading] = useState(false)
@@ -113,9 +115,12 @@ function App() {
       const payload = await hotelService.getCash(refresh)
       setData(current => current ? { ...current, ...payload } : current)
       setCashLoaded(true)
+      setCashReady(true)
       return true
     } catch (error) {
       console.warn('No fue posible cargar Caja.', error)
+      setCashLoaded(true) // Intentado: evita reintentos infinitos desde useEffect
+      setCashReady(false)
       return false
     } finally {
       setCashLoading(false)
@@ -193,9 +198,12 @@ function App() {
       const operation = await hotelService.getOperation(refresh)
       setData(current => current ? { ...current, ...operation } : current)
       setOperationLoaded(true)
+      setOperationReady(true)
       return true
     } catch (error) {
       console.warn('No fue posible cargar Operación diaria.', error)
+      setOperationLoaded(true)
+      setOperationReady(false)
       return false
     } finally {
       setOperationLoading(false)
@@ -337,6 +345,8 @@ function App() {
       setRmsLoaded(false)
       setOperationLoaded(false)
       setCashLoaded(false)
+      setCashReady(false)
+      setOperationReady(false)
       setSessionUser(null)
     }
     const scheduleExpiration = (lastActivity: number) => {
@@ -431,7 +441,7 @@ function App() {
   if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setCashLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setCashLoaded(false); setCashReady(false); setOperationReady(false); setSessionUser(null); setMobileNavOpen(false) }
 
   const refreshActivePage = async () => {
     if (active === 'Caja' && hotelService.isConfigured) {
@@ -496,7 +506,7 @@ function App() {
         onNotify={setToast}
       />}
       {active === 'Operación diaria' && <OperationsView
-        role={role} canWrite={hotelService.isConfigured} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
+        role={role} canWrite={hotelService.isConfigured && operationReady && !operationLoading} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
         days={data.operationDays} tours={data.tours} cashMovements={data.cashMovements}
         staff={data.staff} staffTimeEntries={data.staffTimeEntries} dailyOperation={data.dailyOperation}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
@@ -510,7 +520,7 @@ function App() {
         onReservationsChange={updateReservations} onMovementsChange={updateCashMovements}
         onDaysChange={updateCashDays} onInventoryChange={updateInventory}
         onPurchaseRequestsChange={updatePurchaseRequests} onPurchaseRequestOpened={() => setCashPurchaseRequestId(undefined)}
-        canWrite={hotelService.isConfigured}
+        canWrite={hotelService.isConfigured && cashReady && !cashLoading}
         onCreateCash={createCashMovement} onAnnulCash={annulCashMovement} onSaveCashDay={saveCashDay}
         onCloseCashDay={closeCashDay} onPayReservation={payFromCash} onNotify={setToast}
       />}
