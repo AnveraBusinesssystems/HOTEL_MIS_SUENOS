@@ -146,6 +146,8 @@ export interface Reservation {
   channel: ReservationChannel
   total: number
   paid: number
+  paymentKnown?: boolean
+  multiRoom?: boolean
   createdAt: string
   notes: string
   cleaningRequested: boolean
