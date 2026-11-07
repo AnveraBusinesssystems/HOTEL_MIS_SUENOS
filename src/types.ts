@@ -200,6 +200,17 @@ export interface OperationTask {
   reservationId?: string
 }
 
+export interface CleaningHistory {
+  id: string
+  date: string
+  roomNumber: string
+  action: string
+  worker: string
+  work: string
+  note: string
+  timestamp: string
+}
+
 export interface OperationDay {
   date: string
   status: 'No iniciado' | 'Abierto' | 'Registrado'
@@ -403,6 +414,7 @@ export interface DashboardData {
   roomStates: RoomState[]
   operationTasks: OperationTask[]
   operationDays: OperationDay[]
+  cleaningHistory: CleaningHistory[]
   tours: TourBooking[]
   staff: StaffMember[]
   staffSchedules: StaffScheduleEntry[]
