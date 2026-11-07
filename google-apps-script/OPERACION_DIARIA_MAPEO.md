@@ -13,8 +13,8 @@
 | Ocupación, salida, entrada, trabajo requerido y estado base | ESTADO_HABITACIONES | B:F, **fórmulas de Sheets** | Solo lectura. **Nunca escribir B:F** |
 | Responsable, horas, incidencias | ESTADO_HABITACIONES | G:M, editables | `operation.event` actualiza únicamente campos relacionados |
 | Actividad de limpieza | REGISTRO_LIMPIEZA | A:F, encabezados fila 5, datos 6+ | `operation.event` agrega acciones; `operation.get` puede reconstruir tareas |
-| Tours | TOURS / PAGOS_TOURS | Datos detallados | Se completará como módulo compartido al trabajar Caja/Tours |
-| Entradas y salidas monetarias | MOVIMIENTOS_CAJA | A:U, encabezados fila 5 | Fuente para Cierre; conexión de Caja pendiente |
+| Tours | TOURS A:V | Encabezados fila 5, registros 6+ | Lectura implementada en \`FinanceReaders.gs\`; cobros/edición pendientes |
+| Entradas y salidas monetarias | MOVIMIENTOS_CAJA | A:U, encabezados fila 5 | Lectura implementada en \`FinanceReaders.gs\`; escritura general de Caja pendiente |
 | Asistencia y horarios | PERSONAL / TURNOS_PERSONAL | A:M / A:O | Configuración y turnos existen, pero fichajes reales no se deducen automáticamente |
 | Cierres de caja | CIERRES_CAJA | A:T | Existe fuente de cierre financiero, **no** equivalente a reporte operativo diario enviado |
 
@@ -43,13 +43,14 @@ La reconstrucción de tareas a partir del historial A:F es **aproximada** porque
 1. **Tareas persistentes con ID**, prioridad, asignado, estado y vencimiento: el `REGISTRO_LIMPIEZA` actual permite historial simple, no todo el modelo `OperationTask`.
 2. **Bloqueos, acceso / No molestar, incidencias detalladas y resolución individual**: no hay campos estructurados para mantenerlos con fidelidad. La UI aún tiene algunos cambios locales.
 3. **Inicio y cierre formal de jornada**: el estado `operationDays` se deriva de fechas, pero marcar «Abierto» todavía es local; no se simula Cloudbeds.
-4. **Tours y pagos asociados**: mapear TOURS y PAGOS_TOURS al avanzar con ese flujo compartido.
+4. **Tours y pagos asociados**: lectura básica de TOURS ya conectada; escribir, cobrar, liquidar y registrar pagos en PAGOS_TOURS/Caja pendiente. Las operaciones que aparentaban guardarse solo localmente se han bloqueado hasta conectar escritura.
 5. **Cierre diario por correo, observaciones, versión e historial de envíos**: no existe `REPORTES_DIARIOS`; no confundir con `CIERRES_CAJA`.
 6. **Asistencia real y fichajes**: PERSONAL + TURNOS_PERSONAL no equivalen a entradas/salidas reales de empleados.
 7. **Cancelaciones realizadas hoy**: necesitan historial de eventos; una reserva cancelada ahora no revela cuándo ocurrió la cancelación.
-8. **Información de limpieza en Reservas**: `cleaningRequested` se maneja aún localmente; futura conexión al mismo log de eventos.
+8. **Datos incompletos de TOURS**: no se encontraron columnas estructuradas de **hora programada, proveedor ni número de participantes**. La interfaz indica que no hay registro en lugar de inventar valores.
+9. **Información de limpieza en Reservas**: `cleaningRequested` se maneja aún localmente; futura conexión al mismo log de eventos.
 
-La lectura inicial está preparada; no afirmar que todas las interacciones de cada subvista están persistidas. No se han probado ni desplegado las conexiones.
+La lectura inicial de habitaciones, datos diarios, tours y caja está preparada; no afirmar que todas las interacciones de cada subvista están persistidas. No se han probado ni desplegado las conexiones.
 
 ## Archivos afectados
 
