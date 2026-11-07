@@ -132,6 +132,28 @@ function App() {
     }
   }
 
+  const recordInventoryPurchase = async (
+    input: Parameters<typeof hotelService.purchaseInventory>[0],
+    purchaseId: string,
+  ) => {
+    await hotelService.purchaseInventory(input,purchaseId)
+    // La escritura está confirmada; errores de recarga no deben causar
+    // un segundo intento con un nuevo ID de compra.
+    try {
+      const [inv,cash] = await Promise.all([
+        hotelService.getInventory(true),hotelService.getCash(true),
+      ])
+      setData(current => current ? {...current,inventory:inv.items,...cash} : current)
+    } catch(error) {
+      console.warn('Compra registrada; error al refrescar datos.',error)
+      setInventoryLoaded(false)
+      setCashLoaded(false)
+      setToast('Compra registrada; actualiza la pantalla para ver los nuevos saldos')
+    }
+    setOperationLoaded(false)
+    return true
+  }
+
   const saveInventoryCount = async (
     changes: Parameters<typeof hotelService.saveInventoryCount>[0],
     countId: string,
@@ -325,7 +347,7 @@ function App() {
     if (sessionUser) void load()
   }, [sessionUser])
   useEffect(() => {
-    if (active === 'Inventario' && data && !inventoryLoaded && !inventoryLoading) {
+    if ((active === 'Inventario' || active === 'Caja') && data && !inventoryLoaded && !inventoryLoading) {
       void loadInventory()
     }
   }, [active, data, inventoryLoaded, inventoryLoading])
@@ -565,6 +587,8 @@ function App() {
         onDaysChange={updateCashDays} onInventoryChange={updateInventory}
         onPurchaseRequestsChange={updatePurchaseRequests} onPurchaseRequestOpened={() => setCashPurchaseRequestId(undefined)}
         canWrite={hotelService.isConfigured && cashReady && !cashLoading}
+        inventoryReady={inventoryReady && !inventoryLoading}
+        onInventoryPurchase={recordInventoryPurchase}
         onCreateCash={createCashMovement} onAnnulCash={annulCashMovement} onSaveCashDay={saveCashDay}
         onCloseCashDay={closeCashDay} onPayReservation={payFromCash} onNotify={setToast}
       />}
