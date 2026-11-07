@@ -303,7 +303,7 @@ function App() {
     }
   }, [active, data, operationLoaded, operationLoading])
   useEffect(() => {
-    if ((active === 'Reservas' || active === 'Operación diaria') && data && !reservationsLoaded && !reservationsLoading) {
+    if ((active === 'Reservas' || active === 'Operación diaria' || active === 'Caja') && data && !reservationsLoaded && !reservationsLoading) {
       void loadReservations()
     }
   }, [active, data, reservationsLoaded, reservationsLoading])
