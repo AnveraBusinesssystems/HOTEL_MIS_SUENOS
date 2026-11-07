@@ -22,7 +22,7 @@ function readHotelCashMovements_(ss) {
     var known = ['Pago de reserva','Anticipo de reserva','Venta de restaurante','Otro ingreso',
       'Compra de inventario','Mantenimiento','Lavandería','Servicios','Reembolso',
       'Retiro de efectivo','Gastos externos','Otro gasto','Cobro de tour',
-      'Pago a proveedor de tour','Comisión de tour a recepción'];
+      'Pago a proveedor de tour','Comisión de tour a recepción','Pago al hotel por tour'];
     if (known.indexOf(category)<0) category='Sin clasificar';
     var sourceArea = String(r[5] || '').trim();
     var validAreas = ['Reservas','Recepción','Restaurante','Lavandería','Limpieza','Mantenimiento','Administración','Otros'];
@@ -60,6 +60,10 @@ function readHotelTours_(ss) {
     var collected = numberOrZero_(r[12]);
     var collectedKnown = r[12] !== '' && r[12] !== null;
     var paid = collectedKnown && sale>0 && collected>=sale;
+    var payer=String(r[6] || '');
+    var collectionStatus=String(r[14] || '').trim();
+    if(['Pendiente','Parcial','Pagado','Cancelado'].indexOf(collectionStatus)<0)
+      collectionStatus = !collectedKnown ? 'Sin registro' : paid ? 'Pagado' : collected>0?'Parcial':'Pendiente';
     var status = String(r[19] || 'Agendado').trim();
     if (['Agendado','Realizado','Cancelado'].indexOf(status)<0) status='Agendado';
     return {
@@ -70,9 +74,14 @@ function readHotelTours_(ss) {
       serviceTime:'', // B representa fecha/hora de alta, no horario confirmado del servicio.
       people:0, // No existe columna de número de participantes.
       salePrice:sale, providerAmount:numberOrZero_(r[8]),
-      status:status, paymentStatus:!collectedKnown ? 'Sin registro' : paid?'Pagado':'Pendiente',
+      collectedBy:payer === 'Hotel'||payer==='Recepción'?payer:undefined,
+      guestDue:r[13]===''?undefined:numberOrZero_(r[13]),
+      providerDue:r[15]===''?undefined:numberOrZero_(r[15]),
+      receptionDue:r[16]===''?undefined:numberOrZero_(r[16]),
+      hotelDue:r[17]===''?undefined:numberOrZero_(r[17]),
+      status:status, paymentStatus:collectionStatus,
       providerSettlementStatus:r[15]==='' || r[15]===null ? 'Sin registro' : numberOrZero_(r[15])<=0?'Liquidado':'Pendiente',
-      receptionCommissionStatus:r[16]==='' || r[16]===null ? 'Sin registro' : numberOrZero_(r[16])<=0?'Pagada':'Pendiente',
+      receptionCommissionStatus:payer==='Recepción'?'No aplica':r[16]==='' || r[16]===null ? 'Sin registro' : numberOrZero_(r[16])<=0?'Pagada':'Pendiente',
       settlementDueDate:'', // Plazo no registrado en la hoja.
       createdAt:r[1] instanceof Date?Utilities.formatDate(r[1],HMS_CONFIG.TIME_ZONE,"yyyy-MM-dd HH:mm"):'',
       createdBy:String(r[18] || ''), notes:String(r[20] || '') || undefined
