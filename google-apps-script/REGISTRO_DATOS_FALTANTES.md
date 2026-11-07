@@ -90,8 +90,8 @@ Ver `OPERACION_DIARIA_MAPEO.md`. Se reutilizan las rutas de RESERVAS y se añade
 4. [x] **Reservas** — lectura, filtros locales, validación de asignación, actualización de estados y registro de pagos preparado. Faltan fuente de contacto, persistencia de limpieza, búsqueda histórica fuera de ventana y sincronización Cloudbeds.
 5. [x] **Operación diaria** — lecturas de habitaciones, limpieza, datos diarios, tours y caja preparadas; registro de eventos y salidas preparado. Pendiente: acciones de escritura de Tours, tareas avanzadas, apertura/cierre formal, asistencia y envío de reportes.
 6. [x] **Caja** — lectura del libro de movimientos, cobros de reservas, cobros/liquidaciones de tours existentes, movimientos independientes, anulación, apertura, conteo y cierre preparados. Pendientes dependientes: compras de Inventario, reembolsos y autenticación del servidor.
-7. [ ] **Inventario** — **SIGUIENTE**. Conectar la hoja Inventory y las compras procedentes de Caja.
-8. [ ] **Personal**
+7. [x] **Inventario** — consulta de existencias/PAR, conteos por diferencias y compras reales enlazadas con Caja preparadas. Pendientes: solicitudes persistentes, ajuste estadístico de PAR y automatizaciones de mantenimiento.
+8. [ ] **Personal** — **SIGUIENTE**.
 9. [ ] **Configuración**
 
 Actualizar este archivo al concluir cada pestaña.
@@ -119,3 +119,13 @@ Se corrigieron el tratamiento de datos desconocidos en finanzas, la selección d
 - **Permisos y verificación:** la autenticación del servidor es obligatoria antes de publicar las escrituras. Todas las conexiones están preparadas en GitHub, no desplegadas ni probadas.
 
 Ver `CAJA_MAPEO.md`.
+
+## 8. Inventario — fuentes faltantes (6 nov 2026)
+
+- **Calculables:** Stock desde Inventario!D; nivel PAR desde Inventario!E / Par Calc!H; valor con Stock × último precio; compras recomendadas PAR − stock.
+- **Implementado en código:** Inventory.gs para lectura y conteos, InventoryPurchases.gs para facturas que crean una salida en Caja y filas en Transacciones, sin sobrescribir las fórmulas existentes.
+- **Solicitud/seguimiento de compras:** no existe una pestaña idónea con ID, solicitante, líneas, aprobación y estado. Pending Review tiene un propósito diferente. **Debe diseñarse fuente persistente antes de habilitar solicitudes.**
+- **Conteo y PAR:** la fórmula de Par Calc suma uso, incluidos ajustes negativos. Se necesita excluir las transacciones con nota AJUSTE CONTEO o una clase adicional de transacción para evitar distorsionar el consumo medio. No se editan fórmulas ahora.
+- **Mantenimiento:** Maintenance Items y Maintenance Log ya existen; faltará decidir si se integran en Inventario o en Operación diaria.
+- **Capacidad:** Transacciones!3:1000 es el límite de las fórmulas; los endpoints no sobrepasan esa fila.
+- **No hay despliegue, pruebas ni modificaciones a Sheets.** Ver INVENTARIO_MAPEO.md.
