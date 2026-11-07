@@ -146,22 +146,39 @@ function recordOperationEvent_(request) {
         .matchCase(true).findNext();
       if (old) return {eventId:eventId, recorded:true, duplicate:true};
     }
-    var now = new Date();
-    log.getRange(Math.max(6, last+1),1,1,6).setValues([
-      [now,room,action,person,work,(note ? note + ' | ' : '') + 'ID:' + eventId]
-    ]);
-    // G:M son campos operativos/manuales; evitar sobrescribir B:F (fórmulas).
     var rowNo = match + 6;
-    states.getRange(rowNo, 7).setValue(person);
-    if (action === 'Inició limpieza') states.getRange(rowNo, 8).setValue(now);
-    if (action === 'Terminó limpieza') states.getRange(rowNo, 9).setValue(now);
-    if (action === 'Incidencia reportada') {
-      states.getRange(rowNo, 10).setValue('Sí');
-      states.getRange(rowNo, 11).setValue(note || work);
-      states.getRange(rowNo, 12).setValue(person);
+    var before = states.getRange(rowNo, 7, 1, 7).getValues()[0];
+    if ((action === 'Check confirmado' || action === 'Habitación aprobada') &&
+        /^(s[ií]|true|1)$/i.test(String(stateRows[match][9] || '').trim())) {
+      throw new Error('Debe resolver la incidencia antes de aprobar la habitación.');
     }
-    if (action === 'Incidencia resuelta') states.getRange(rowNo, 10).setValue('No');
-    states.getRange(rowNo, 13).setValue(now);
+    var now = new Date();
+    var logRow = Math.max(6, last + 1);
+    try {
+      log.getRange(logRow,1,1,6).setValues([
+        [now,room,action,person,work,(note ? note + ' | ' : '') + 'ID:' + eventId]
+      ]);
+      // G:M son campos manuales: B:F contienen fórmulas que NO se editan.
+      states.getRange(rowNo, 7).setValue(person);
+      if (action === 'Inició limpieza') states.getRange(rowNo, 8).setValue(now);
+      if (action === 'Terminó limpieza') states.getRange(rowNo, 9).setValue(now);
+      if (action === 'Incidencia reportada') {
+        states.getRange(rowNo, 10).setValue('Sí');
+        states.getRange(rowNo, 11).setValue(note || work);
+        states.getRange(rowNo, 12).setValue(person);
+      }
+      if (action === 'Incidencia resuelta') states.getRange(rowNo, 10).setValue('No');
+      states.getRange(rowNo, 13).setValue(now);
+      SpreadsheetApp.flush();
+    } catch (error) {
+      try {
+        states.getRange(rowNo, 7, 1, 7).setValues([before]);
+        log.getRange(logRow, 1, 1, 6).clearContent();
+      } catch (rollback) {
+        console.error('CONCILIACION MANUAL: ' + eventId + ': ' + rollback);
+      }
+      throw error;
+    }
     clearOperationCache_();
     return {eventId:eventId,recorded:true,duplicate:false};
   } finally {lock.releaseLock();}
