@@ -21,7 +21,8 @@ function KpiCards({ kpis, empty = false }: { kpis: KPI[]; empty?: boolean }) {
   return <section className="kpi-grid">
     {kpis.map(kpi => {
       const unavailable = empty || kpi.available === false
-      const difference = kpi.value - kpi.previous
+      const missingComparison = !empty && kpi.previous === null
+      const difference = kpi.value - (kpi.previous ?? kpi.value)
       const relative = kpi.previous ? difference / kpi.previous * 100 : 0
       const neutral = Math.abs(difference) < 0.001
       const comparison = kpi.comparisonMode === 'points'
@@ -31,7 +32,7 @@ function KpiCards({ kpis, empty = false }: { kpis: KPI[]; empty?: boolean }) {
         <span>{kpi.label}</span>
         <strong className={unavailable ? 'empty-value' : ''}>{unavailable ? '—' : kpiValue(kpi)}</strong>
         <div className="kpi-comparison">
-          {unavailable ? <><b className="neutral">—</b><small>Sin datos</small></> : <><b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
+          {unavailable || missingComparison ? <><b className="neutral">—</b><small>{unavailable ? 'Sin datos' : 'Sin comparativo'}</small></> : <><b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
             {neutral ? '—' : difference > 0 ? '▲' : '▼'} {neutral ? 'Sin cambio' : comparison}
           </b><small>Mes anterior {kpiValue(kpi, kpi.previous)}</small></>}
         </div>
@@ -51,12 +52,12 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
   const currentMetrics = monthlyMetrics(current)
   const previousMetrics = previous ? monthlyMetrics(previous) : null
   const executiveKpis: KPI[] = [
-    { id: 'revenue', label: 'Ingresos', value: current.revenue, previous: previous?.revenue ?? current.revenue, format: 'mxn', available: Boolean(previous), helper: 'Ingresos por hospedaje.' },
-    { id: 'occupancy', label: 'Ocupación', value: currentMetrics.occupancy, previous: previousMetrics?.occupancy ?? currentMetrics.occupancy, format: 'percent', comparisonMode: 'points', helper: 'Noches vendidas / disponibles.' },
-    { id: 'adr', label: 'ADR', value: currentMetrics.adr, previous: previousMetrics?.adr ?? currentMetrics.adr, format: 'mxn', helper: 'Precio promedio por noche vendida.' },
-    { id: 'revpar', label: 'RevPAR', value: currentMetrics.revpar, previous: previousMetrics?.revpar ?? currentMetrics.revpar, format: 'mxn', helper: 'Ingreso por habitación disponible.' },
-    { id: 'costs', label: 'Costos', value: current.costs, previous: previous?.costs ?? current.costs, format: 'mxn', helper: 'Gastos registrados en el periodo.', available: current.costsAvailable === true },
-    { id: 'result', label: 'Resultado operativo', value: currentMetrics.operatingResult, previous: previousMetrics?.operatingResult ?? currentMetrics.operatingResult, format: 'mxn', helper: 'Ingresos menos costos.', available: current.costsAvailable === true },
+    { id: 'revenue', label: 'Ingresos', value: current.revenue, previous: previous?.revenue ?? null, format: 'mxn', helper: 'Ingresos por hospedaje.' },
+    { id: 'occupancy', label: 'Ocupación', value: currentMetrics.occupancy, previous: previousMetrics?.occupancy ?? null, format: 'percent', comparisonMode: 'points', helper: 'Noches vendidas / disponibles.' },
+    { id: 'adr', label: 'ADR', value: currentMetrics.adr, previous: previousMetrics?.adr ?? null, format: 'mxn', helper: 'Precio promedio por noche vendida.' },
+    { id: 'revpar', label: 'RevPAR', value: currentMetrics.revpar, previous: previousMetrics?.revpar ?? null, format: 'mxn', helper: 'Ingreso por habitación disponible.' },
+    { id: 'costs', label: 'Costos', value: current.costs, previous: previous?.costsAvailable ? previous.costs : null, format: 'mxn', helper: 'Gastos registrados en el periodo.', available: current.costsAvailable === true },
+    { id: 'result', label: 'Resultado operativo', value: currentMetrics.operatingResult, previous: previous?.costsAvailable ? previousMetrics?.operatingResult ?? null : null, format: 'mxn', helper: 'Ingresos menos costos.', available: current.costsAvailable === true },
   ]
   const nextSeven = data.rateDays.slice(0, 7)
   const occupied = nextSeven.reduce((sum, day) => sum + day.occupied, 0)
