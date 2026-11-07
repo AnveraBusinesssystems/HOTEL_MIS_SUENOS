@@ -232,9 +232,9 @@ export interface OperationDay {
 }
 
 export type TourStatus = 'Agendado' | 'Realizado' | 'Cancelado'
-export type TourPaymentStatus = 'Pendiente' | 'Pagado'
-export type TourSettlementStatus = 'Pendiente' | 'Liquidado'
-export type TourCommissionStatus = 'Pendiente' | 'Pagada'
+export type TourPaymentStatus = 'Pendiente' | 'Pagado' | 'Sin registro'
+export type TourSettlementStatus = 'Pendiente' | 'Liquidado' | 'Sin registro'
+export type TourCommissionStatus = 'Pendiente' | 'Pagada' | 'Sin registro'
 
 export interface TourBooking {
   id: string
@@ -326,7 +326,7 @@ export type CashMovementCategory =
   | 'Pago de reserva' | 'Anticipo de reserva' | 'Venta de restaurante' | 'Otro ingreso'
   | 'Compra de inventario' | 'Mantenimiento' | 'Lavandería' | 'Servicios'
   | 'Reembolso' | 'Retiro de efectivo' | 'Gastos externos' | 'Otro gasto'
-  | 'Cobro de tour' | 'Pago a proveedor de tour' | 'Comisión de tour a recepción'
+  | 'Cobro de tour' | 'Pago a proveedor de tour' | 'Comisión de tour a recepción' | 'Sin clasificar'
 
 export interface CashPurchaseItem {
   product: string
@@ -341,7 +341,7 @@ export interface CashMovement {
   time: string
   type: CashMovementType
   amount: number
-  paymentMethod: CashPaymentMethod
+  paymentMethod: CashPaymentMethod | 'Sin registro'
   area: CashArea
   category: CashMovementCategory
   description: string
