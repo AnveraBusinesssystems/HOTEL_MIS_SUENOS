@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, ArrowRight, Check, CheckCircle2, ClipboardCheck, ClipboardList,
   Minus, PackageCheck, PackageOpen, Plus, Search, ShoppingCart, SlidersHorizontal,
 } from 'lucide-react'
 import type { InventoryCategory, InventoryItem, PurchaseRequest, Role } from '../types'
 import { money } from '../utils'
+import type { InventoryCountChange } from '../services/inventoryService'
 
 type InventoryTab = 'Existencias' | 'Conteo' | 'Compra recomendada' | 'Solicitudes'
 type StockState = 'Agotado' | 'Bajo' | 'Correcto'
@@ -16,6 +17,8 @@ type Props = {
   onChange: (updater: (rows: InventoryItem[]) => InventoryItem[]) => void
   onRequestsChange: (updater: (rows: PurchaseRequest[]) => PurchaseRequest[]) => void
   onOpenCash: (requestId: string) => void
+  canWrite: boolean
+  onSaveCount: (changes: InventoryCountChange[], countId: string) => Promise<boolean>
   onNotify: (message: string) => void
 }
 
@@ -28,8 +31,10 @@ const requestTime = () => new Intl.DateTimeFormat('es-MX', {
   timeZone: 'America/Cancun', hour: '2-digit', minute: '2-digit', hour12: false,
 }).format(new Date())
 
-export function InventoryView({ role, items, requests, onChange, onRequestsChange, onOpenCash, onNotify }: Props) {
+export function InventoryView({ role, items, requests, onChange, onRequestsChange, onOpenCash, canWrite, onSaveCount, onNotify }: Props) {
   const [tab, setTab] = useState<InventoryTab>('Existencias')
+  const [savingCount, setSavingCount] = useState(false)
+  const retryCount = useRef<{ key: string; id: string } | null>(null)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'Todas' | InventoryCategory>('Todas')
   const [stateFilter, setStateFilter] = useState<'Todos' | StockState>('Todos')
@@ -44,10 +49,10 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
   }, [items])
 
   const counts = useMemo(() => ({
-    depleted: items.filter(item => stockState(item) === 'Agotado').length,
-    low: items.filter(item => stockState(item) === 'Bajo').length,
-    order: items.filter(item => item.suggestedPurchase > 0).length,
-    value: items.reduce((sum, item) => sum + item.stock * item.lastPrice, 0),
+    depleted: items.filter(item => item.stockKnown !== false && stockState(item) === 'Agotado').length,
+    low: items.filter(item => item.stockKnown !== false && item.parKnown !== false && stockState(item) === 'Bajo').length,
+    order: items.filter(item => item.stockKnown !== false && item.parKnown !== false && item.suggestedPurchase > 0).length,
+    value: items.filter(item => item.priceKnown !== false && item.stockKnown !== false).reduce((sum, item) => sum + item.stock * item.lastPrice, 0),
   }), [items])
 
   const visibleItems = useMemo(() => items.filter(item => {
@@ -57,32 +62,44 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
     return matchesSearch && matchesCategory && matchesState
   }), [category, items, search, stateFilter])
 
-  const recommended = items.filter(item => item.suggestedPurchase > 0)
+  const recommended = items.filter(item => item.stockKnown !== false && item.parKnown !== false && item.suggestedPurchase > 0)
   const countItems = items.filter(item => item.category === countCategory)
   const selectedItems = recommended.filter(item => selected.has(item.id))
-  const estimatedTotal = selectedItems.reduce((sum, item) => sum + (Number(orderDraft[item.id]) || 0) * item.lastPrice, 0)
-  const changedCount = items.filter(item => Number(countDraft[item.id]) !== item.stock && countDraft[item.id] !== '').length
-  const lastCountLabel = items.some(item => item.lastUpdated === 'Ahora') ? 'Ahora' : 'Hoy · 07:20'
+  const estimatedTotal = selectedItems.reduce((sum, item) => sum + (Number(orderDraft[item.id]) || 0) * (item.priceKnown === false ? 0 : item.lastPrice), 0)
+  const allPricesKnown = selectedItems.every(item => item.priceKnown !== false)
+  const changedCount = items.filter(item => item.stockKnown !== false && Number(countDraft[item.id]) !== item.stock && countDraft[item.id] !== '').length
+  const lastCountLabel = items.some(item => item.lastUpdated && item.lastUpdated !== 'Sin registro') ? 'Según historial de compras' : 'Sin registro'
 
   const updateCount = (id: string, amount: number) => {
     const current = Number(countDraft[id]) || 0
     setCountDraft({ ...countDraft, [id]: String(Math.max(0, Math.round((current + amount) * 100) / 100)) })
   }
 
-  const saveCount = () => {
-    if (!changedCount) { onNotify('No hay cantidades modificadas'); return }
-    onChange(rows => rows.map(item => {
-      const nextStock = Number(countDraft[item.id])
-      if (!Number.isFinite(nextStock) || nextStock < 0 || nextStock === item.stock) return item
-      return {
-        ...item,
-        stock: nextStock,
-        suggestedPurchase: Math.max(0, Math.ceil(item.parLevel - nextStock)),
-        lastUpdated: 'Ahora',
-      }
-    }))
-    onNotify(changedCount === 1 ? 'Conteo guardado · 1 producto actualizado' : `Conteo guardado · ${changedCount} productos actualizados`)
-    setTab('Existencias')
+  const saveCount = async () => {
+    if (!canWrite || savingCount) { onNotify('La conexión de Inventario no está disponible'); return }
+    const changes = items.filter(item => countDraft[item.id] !== '' &&
+      Number(countDraft[item.id]) !== item.stock)
+      .filter(item => item.stockKnown !== false)
+      .map(item => ({product:item.name,previous:item.stock,counted:Number(countDraft[item.id])}))
+    if (!changes.length) {onNotify('No hay cantidades modificadas');return}
+    if (changes.some(item => !Number.isFinite(item.counted) || item.counted < 0 ||
+      Math.abs(item.counted*100-Math.round(item.counted*100))>0.001)) {
+      onNotify('Las cantidades deben ser válidas, positivas y con máximo dos decimales')
+      return
+    }
+    const key=JSON.stringify(changes)
+    const countId=retryCount.current?.key===key ? retryCount.current.id : 'HMS-COUNT-'+crypto.randomUUID()
+    retryCount.current={key,id:countId}
+    setSavingCount(true)
+    try {
+      await onSaveCount(changes,countId)
+      retryCount.current=null
+      setTab('Existencias')
+      onNotify(`Conteo registrado: ${changes.length} ajustes en Transacciones`)
+    } catch(error) {
+      console.warn('No fue posible guardar el conteo',error)
+      onNotify('Conteo sin confirmar. Revisa las existencias antes de reintentar.')
+    } finally {setSavingCount(false)}
   }
 
   const toggleSelected = (id: string) => {
@@ -92,40 +109,11 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
     setSelected(next)
   }
 
-  const createRequest = () => {
-    if (!selectedItems.length) { onNotify('Selecciona al menos un producto'); return }
-    if (selectedItems.some(item => !Number.isFinite(Number(orderDraft[item.id])) || Number(orderDraft[item.id]) <= 0)) {
-      onNotify('Todas las cantidades solicitadas deben ser mayores a cero')
-      return
-    }
-    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-    const request: PurchaseRequest = {
-      id: `SOL-${date.replaceAll('-', '')}-${String(requests.length + 1).padStart(3, '0')}`,
-      createdAt: `Hoy · ${requestTime()}`,
-      createdBy: role,
-      status: 'Pendiente',
-      items: selectedItems.map(item => ({
-        product: item.name,
-        quantity: Number(orderDraft[item.id]) || 0,
-        unit: item.unit,
-        estimatedTotal: (Number(orderDraft[item.id]) || 0) * item.lastPrice,
-      })),
-      estimatedTotal,
-    }
-    onRequestsChange(rows => [request, ...rows])
-    setTab('Solicitudes')
-    onNotify(`Solicitud creada · ${selectedItems.length} productos`)
-  }
+  // No existe una tabla de solicitudes de compra en Inventory.
+  // Los botones permanecen deshabilitados para no simular persistencia.
 
-  const acknowledgeRequest = (requestId: string) => {
-    onRequestsChange(rows => rows.map(request => request.id === requestId ? {
-      ...request, status: 'Tomada en cuenta', acknowledgedBy: role, acknowledgedAt: `Hoy · ${requestTime()}`,
-    } : request))
-    onNotify('Solicitud tomada en cuenta')
-  }
-
-  const canAcknowledge = ['Dueño', 'Gerencia', 'Administración'].includes(role)
-  const canRegisterPurchase = ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
+  const canAcknowledge = false
+  const canRegisterPurchase = false
   const hasInventoryData = items.length > 0
 
   return <section className="page inventory-page">
@@ -142,7 +130,7 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
       <article className={counts.depleted ? 'critical' : ''}><span><AlertTriangle size={14}/>Agotados</span><strong>{hasInventoryData ? counts.depleted : '—'}</strong><small>{hasInventoryData ? 'Requieren atención inmediata' : 'Sin datos'}</small></article>
       <article className={counts.low ? 'warning' : ''}><span><PackageOpen size={14}/>Inventario bajo</span><strong>{hasInventoryData ? counts.low : '—'}</strong><small>{hasInventoryData ? 'Por debajo del nivel objetivo' : 'Sin datos'}</small></article>
       <article><span><ShoppingCart size={14}/>Productos por pedir</span><strong>{hasInventoryData ? counts.order : '—'}</strong><small>{hasInventoryData ? 'Incluidos en la recomendación' : 'Sin datos'}</small></article>
-      <article><span><PackageCheck size={14}/>Valor aproximado</span><strong>{hasInventoryData ? money(counts.value) : '—'}</strong><small>{hasInventoryData ? 'Existencia × último precio' : 'Sin datos'}</small></article>
+      <article><span><PackageCheck size={14}/>Valor aproximado</span><strong>{hasInventoryData && items.every(item => item.priceKnown !== false) ? money(counts.value) : '—'}</strong><small>{hasInventoryData ? 'Existencia × último precio' : 'Sin datos'}</small></article>
     </section>
 
     <div className="inventory-tabs" role="tablist" aria-label="Vistas de inventario">
@@ -160,8 +148,8 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
       <section className="panel inventory-table-panel">
         <header><div><span>EXISTENCIA ACTUAL</span><h2>Productos registrados</h2></div><small>{hasInventoryData ? 'Datos registrados' : 'Sin datos conectados'}</small></header>
         <div className="table-scroll inventory-desktop-table"><table className="inventory-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Nivel objetivo</th><th>Estado</th><th>Último conteo</th><th></th></tr></thead><tbody>{visibleItems.map(item => {
-          const state = stockState(item)
-          return <tr key={item.id}><td><b>{item.name}</b><small>{item.id}</small></td><td>{item.category}</td><td><strong>{formatQuantity(item.stock)}</strong> <small className="inline-unit">{item.unit}</small></td><td>{formatQuantity(item.parLevel)} {item.unit}</td><td><span className={`inventory-state ${state.toLowerCase()}`}>{state}</span></td><td>{item.lastUpdated}</td><td><button className="table-action" onClick={() => { setCountCategory(item.category); setTab('Conteo') }}>Actualizar</button></td></tr>
+          const state = item.stockKnown === false || item.parKnown === false ? 'Sin datos' : stockState(item)
+          return <tr key={item.id}><td><b>{item.name}</b><small>{item.id}</small></td><td>{item.category}</td><td><strong>{item.stockKnown === false ? '—' : formatQuantity(item.stock)}</strong> <small className="inline-unit">{item.unit}</small></td><td>{item.parKnown === false ? '—' : formatQuantity(item.parLevel)} {item.unit}</td><td><span className={`inventory-state ${state.toLowerCase().replace(' ','-')}`}>{state}</span></td><td>{item.lastUpdated}</td><td><button className="table-action" onClick={() => { setCountCategory(item.category); setTab('Conteo') }}>Actualizar</button></td></tr>
         })}</tbody></table></div>
         <div className="inventory-mobile-list">{visibleItems.map(item => {
           const state = stockState(item)
@@ -176,13 +164,13 @@ export function InventoryView({ role, items, requests, onChange, onRequestsChang
         const draft = countDraft[item.id] ?? ''
         const changed = Number(draft) !== item.stock && draft !== ''
         return <div key={item.id} className={changed ? 'changed' : ''}><span><b>{item.name}</b><small>{item.category} · Anterior: {formatQuantity(item.stock)} {item.unit}</small></span><div className="count-control"><button onClick={() => updateCount(item.id, -1)} aria-label={`Restar ${item.name}`}><Minus size={14}/></button><input type="number" min="0" step="0.01" value={draft} onChange={event => setCountDraft({ ...countDraft, [item.id]: event.target.value })}/><i>{item.unit}</i><button onClick={() => updateCount(item.id, 1)} aria-label={`Sumar ${item.name}`}><Plus size={14}/></button></div>{changed ? <CheckCircle2 size={17} className="count-changed-icon"/> : <span className="count-unchanged">Sin cambio</span>}</div>
-      })}</div><div className="mobile-count-savebar"><span><b>{changedCount}</b><small>modificados</small></span><button className="primary-action" onClick={saveCount}>Guardar conteo</button></div></article>
+      })}</div><div className="mobile-count-savebar"><span><b>{changedCount}</b><small>modificados</small></span><button className="primary-action" disabled={!canWrite || savingCount || !changedCount} onClick={() => void saveCount()}>{savingCount ? 'Guardando…' : 'Guardar conteo'}</button></div></article>
       <aside className="panel count-review"><header><div><span>REVISIÓN</span><h2>Antes de guardar</h2></div></header><div><ClipboardCheck size={28}/><b>{changedCount} productos modificados</b><p>El sistema conservará las cantidades que no cambiaste y recalculará la compra sugerida.</p><button className="primary-action" onClick={saveCount}>Guardar conteo</button><button onClick={() => { setCountDraft(Object.fromEntries(items.map(item => [item.id, String(item.stock)]))); setTab('Existencias') }}>Cancelar</button></div></aside>
     </section>}
 
     {tab === 'Compra recomendada' && <section className="inventory-order-layout">
       <article className="panel recommended-order"><header><div><span>RECOMENDACIÓN SEMANAL</span><h2>{recommended.length} productos por reponer</h2></div><small>Las cantidades pueden editarse antes de solicitar</small></header><div className="recommended-list">{recommended.map(item => <label key={item.id} className={selected.has(item.id) ? 'selected' : ''}><input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)}/><span><b>{item.name}</b><small>{item.category} · Hay {formatQuantity(item.stock)} de {formatQuantity(item.parLevel)} {item.unit}</small></span><div><small>COMPRAR</small><input type="number" min="0" step="0.01" value={orderDraft[item.id] ?? ''} onChange={event => setOrderDraft({ ...orderDraft, [item.id]: event.target.value })}/><i>{item.unit}</i></div><strong>{money((Number(orderDraft[item.id]) || 0) * item.lastPrice)}</strong></label>)}</div></article>
-      <aside className="panel order-review"><header><div><span>SOLICITUD</span><h2>Resumen de compra</h2></div></header><div className="order-review-body"><span className="order-role">Preparada por <b>{role}</b></span><ul>{selectedItems.map(item => <li key={item.id}><span>{item.name}<small>{orderDraft[item.id]} {item.unit}</small></span><b>{money((Number(orderDraft[item.id]) || 0) * item.lastPrice)}</b></li>)}</ul>{!selectedItems.length && <div className="order-empty"><ShoppingCart size={23}/><span>Selecciona productos para preparar la solicitud.</span></div>}<footer><span><small>ESTIMADO</small><b>{money(estimatedTotal)}</b></span><button className="primary-action" onClick={createRequest}><Check size={15}/>Crear solicitud</button><p>La solicitud no modifica existencias hasta confirmar la compra real en Caja.</p></footer></div></aside>
+      <aside className="panel order-review"><header><div><span>SOLICITUD</span><h2>Resumen de compra</h2></div></header><div className="order-review-body"><span className="order-role">Preparada por <b>{role}</b></span><ul>{selectedItems.map(item => <li key={item.id}><span>{item.name}<small>{orderDraft[item.id]} {item.unit}</small></span><b>{money((Number(orderDraft[item.id]) || 0) * item.lastPrice)}</b></li>)}</ul>{!selectedItems.length && <div className="order-empty"><ShoppingCart size={23}/><span>Selecciona productos para preparar la solicitud.</span></div>}<footer><span><small>ESTIMADO</small><b>{allPricesKnown ? money(estimatedTotal) : '—'}</b></span><button className="primary-action" disabled title="No existe una tabla persistente de solicitudes de compra"><Check size={15}/>Crear solicitud · pendiente</button><p>Las solicitudes todavía no tienen una tabla de almacenamiento. Las cantidades recomendadas son informativas; los precios desconocidos no se incluyen en estimaciones.</p></footer></div></aside>
     </section>}
 
     {tab === 'Solicitudes' && <section className="purchase-requests-view">
