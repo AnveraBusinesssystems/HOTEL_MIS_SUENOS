@@ -364,6 +364,7 @@ export interface CashMovement {
 export interface CashDay {
   date: string
   openingCash: number
+  openingKnown?: boolean
   countedCash?: number
   closed?: boolean
   closeId?: string
