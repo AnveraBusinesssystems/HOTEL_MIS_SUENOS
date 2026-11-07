@@ -14,9 +14,6 @@ type Props = {
   role: Role
   items: InventoryItem[]
   requests: PurchaseRequest[]
-  onChange: (updater: (rows: InventoryItem[]) => InventoryItem[]) => void
-  onRequestsChange: (updater: (rows: PurchaseRequest[]) => PurchaseRequest[]) => void
-  onOpenCash: (requestId: string) => void
   canWrite: boolean
   onSaveCount: (changes: InventoryCountChange[], countId: string) => Promise<boolean>
   onNotify: (message: string) => void
@@ -42,6 +39,7 @@ export function InventoryView({ role, items, requests, canWrite, onSaveCount, on
   useEffect(() => {
     setCountDraft(Object.fromEntries(items.map(item => [item.id, String(item.stock)])))
     setOrderDraft(Object.fromEntries(items.map(item => [item.id, String(item.suggestedPurchase)])))
+    setSelected(new Set(items.filter(item => item.suggestedPurchase > 0 && item.stockKnown !== false && item.parKnown !== false).map(item => item.id)))
   }, [items])
 
   const counts = useMemo(() => ({
@@ -116,7 +114,7 @@ export function InventoryView({ role, items, requests, canWrite, onSaveCount, on
     <section className="page-heading inventory-heading">
       <div><p className="eyebrow">CONTROL DE EXISTENCIAS</p><h1>Inventario</h1><p>Consulta existencias, registra el conteo físico y prepara la siguiente compra.</p></div>
       <div className="inventory-heading-actions">
-        <span><PackageCheck size={14}/><small>Último conteo</small><b>{lastCountLabel}</b></span>
+        <span><PackageCheck size={14}/><small>Última compra registrada</small><b>{lastCountLabel}</b></span>
         <button onClick={() => { if (role === 'Cocina') setCountCategory('Alimentos'); setTab('Conteo') }}><ClipboardCheck size={15}/>Hacer conteo</button>
         <button className="primary-action" onClick={() => setTab('Compra recomendada')}><ShoppingCart size={15}/>Revisar compra</button>
       </div>
