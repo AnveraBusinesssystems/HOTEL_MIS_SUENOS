@@ -5,6 +5,7 @@ export const emptyDashboard = (): DashboardData => ({
   roomPerformance: [],
   rateDays: [],
   recommendations: [],
+  rmsCalendar: [],
   monthly: [],
   expenses: [],
   roomMonthly: [],
