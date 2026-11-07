@@ -97,7 +97,7 @@ function saveInventoryCount_(request) {
       tx=ss.getSheetByName('Transacciones');
     inventoryHeaders_(stock,2,['PRODUCTO','CATEGORIA','UNIDAD','STOCK','PAR_LEVEL','ULT_ACT','ULT_PRECIO']);
     inventoryHeaders_(tx,2,['FECHA','TIPO','PRODUCTO','CANTIDAD','UNIDAD','PRECIO_UNITARIO','COSTO_TOTAL','PROVEEDOR','DONDE','NOTAS']);
-    var existingRows=Math.max(0,tx.getLastRow()-2);
+    var existingRows=Math.max(0,inventoryLastTransactionRow_(tx)-2);
     if(existingRows) {
       var notes=tx.getRange(3,10,existingRows,1).getValues();
       if(notes.some(function(row){return String(row[0]||'').indexOf('ID:'+id)!==-1}))
@@ -124,7 +124,7 @@ function saveInventoryCount_(request) {
         'AJUSTE CONTEO | ID:'+id+' | antes:'+old+' | contado:'+wanted]);
     });
     if(!updates.length)return {countId:id,changed:0};
-    var last=tx.getLastRow(),target=Math.max(3,last+1);
+    var target=inventoryLastTransactionRow_(tx)+1;
     // Stock/Par Calc usan Transacciones filas 3:1000. Nunca escribir fuera.
     if(target+updates.length-1>1000)throw new Error('Transacciones llega al límite de las fórmulas (fila 1000).');
     try {
@@ -133,6 +133,7 @@ function saveInventoryCount_(request) {
         var n=target+index;
         tx.getRange(n,1,1,4).setValues([row.slice(0,4)]);
         tx.getRange(n,7,1,4).setValues([row.slice(6,10)]);
+        inventoryTransactionFormula_(tx,n);
       });
       SpreadsheetApp.flush();
     }catch(error) {
