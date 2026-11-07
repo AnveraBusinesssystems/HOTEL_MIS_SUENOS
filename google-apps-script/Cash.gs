@@ -96,9 +96,10 @@ function registerCashMovement_(request) {
       'Servicios':'Administración','Gastos externos':'Administración',
       'Retiro de efectivo':'Administración','Otro gasto':'Otros'}[category];
     var now=new Date(), row=new Array(21).fill('');
-    row[0]=id;row[1]=now;row[2]=date;row[3]=type;row[4]=category;row[5]=dept;
+    row[0]=id;row[1]=now;row[2]=cashDate_(date);row[3]=type;row[4]=category;row[5]=dept;
     row[6]=desc;row[7]=method;row[8]=amount;row[12]='Sistema HMS';
     row[13]='Activo';row[16]=now;row[20]='Caja Web';
+    if(cashDayClosed_(ss,date)) throw new Error('El día está cerrado.');
     var target=cashNextRow_(ledger,1);
     ledger.getRange(target,1,1,21).setValues([row]);
     cashInvalidate_();
@@ -125,6 +126,7 @@ function annulCashMovement_(request) {
     var vals=sh.getRange(row,1,1,21).getValues()[0];
     if(vals[13]==='Anulado') return {movementId:id,duplicate:true};
     if(vals[13]!=='Activo') throw new Error('Movimiento sin estado Activo.');
+    if(cashDayClosed_(ss, vals[2] instanceof Date ? dateKey_(vals[2]) : String(vals[2]))) throw new Error('El día está cerrado.');
     if(vals[9] || vals[10] || vals[11] ||
       ['Pago de reserva','Anticipo de reserva','Compra de inventario',
         'Cobro de tour','Pago a proveedor de tour','Comisión de tour a recepción'].indexOf(String(vals[4]))>=0)
@@ -152,16 +154,12 @@ function saveCashDay_(request) {
       'Efectivo contado','Diferencia','Entradas tarjeta','Salidas tarjeta','Entradas transferencia',
       'Salidas transferencia','Total entradas','Total salidas','Neto del día','Cerrado por',
       'Fecha y hora de cierre','Estado','Revisado por','Nota']);
-    var last=sh.getLastRow(), existing=0;
-    if(last>=6) {
-      var dates=sh.getRange(6,2,last-5,1).getValues();
-      dates.forEach(function(v,i){if(v[0] instanceof Date && dateKey_(v[0])===date)existing=i+6;});
-    }
+    var existing=cashClosureRow_(sh,date);
     var row=existing||cashNextRow_(sh,2);
     if(existing && String(sh.getRange(row,18).getValue())==='Cerrado')
       throw new Error('El cierre está cerrado; requiere reapertura administrativa.');
     if(!existing) {
-      if(opening===undefined) opening=0; // Saldo inicial explícito en primera creación; posteriormente editable.
+      if(opening===undefined) throw new Error('Registra primero el fondo inicial.');
       var key='CIERRE-'+date.replace(/-/g,'');
       sh.getRange(row,1,1,3).setValues([[key,cashDate_(date),Number(opening)]]);
       sh.getRange(row,18).setValue('Abierto');
@@ -169,5 +167,51 @@ function saveCashDay_(request) {
     if(counted!==undefined)sh.getRange(row,7).setValue(Number(counted));
     cashInvalidate_();
     return {date:date,saved:true};
+  }finally{lock.releaseLock();}
+}
+
+/** Busca un cierre por fecha sin depender del último renglón con fórmulas. */
+function cashClosureRow_(sheet,day) {
+  var n=Math.max(0,sheet.getLastRow()-5);
+  if(!n) return 0;
+  var vals=sheet.getRange(6,2,n,1).getValues();
+  for(var i=0;i<vals.length;i++) {
+    var d=vals[i][0] instanceof Date ? dateKey_(vals[i][0]) : String(vals[i][0]||'');
+    if(d===day) return i+6;
+  }
+  return 0;
+}
+function cashDayClosed_(ss,day) {
+  var sheet=ss.getSheetByName('CIERRES_CAJA');
+  if(!sheet) throw new Error('Falta CIERRES_CAJA.');
+  var row=cashClosureRow_(sheet,day);
+  return row>0 && String(sheet.getRange(row,18).getValue()).trim()==='Cerrado';
+}
+/** Cierra un día después del conteo, conservando las fórmulas de D:O. */
+function closeCashDay_(request) {
+  var day=String(request.date||''), note=String(request.note||'').trim();
+  cashDate_(day);
+  if(note.length>500) throw new Error('Nota demasiado larga.');
+  var lock=LockService.getScriptLock();lock.waitLock(15000);
+  try{
+    var ss=SpreadsheetApp.openById(HMS_CONFIG.SPREADSHEET_ID);
+    var sh=ss.getSheetByName('CIERRES_CAJA');
+    if(!sh) throw new Error('Falta CIERRES_CAJA.');
+    var row=cashClosureRow_(sh,day);
+    if(!row) throw new Error('Primero registra el fondo inicial y el conteo del día.');
+    if(String(sh.getRange(row,18).getValue()).trim()==='Cerrado') return {date:day,closed:true,duplicate:true};
+    if(sh.getRange(row,7).getValue()==='') throw new Error('Primero registra el efectivo contado.');
+    SpreadsheetApp.flush();
+    var difference=Number(sh.getRange(row,8).getValue());
+    if(!isFinite(difference)) throw new Error('La diferencia de caja no está calculada.');
+    if(Math.abs(difference)>0.009 && !request.acceptDifference)
+      throw new Error('Existe una diferencia de caja; se requiere aceptación expresa.');
+    if(Math.abs(difference)>0.009 && !note)
+      throw new Error('Explica el motivo de la diferencia de caja.');
+    var now=new Date();
+    sh.getRange(row,16,1,3).setValues([['Sistema HMS',now,'Cerrado']]);
+    sh.getRange(row,20).setValue(note);
+    cashInvalidate_();
+    return {date:day,closed:true,duplicate:false,difference:difference};
   }finally{lock.releaseLock();}
 }
