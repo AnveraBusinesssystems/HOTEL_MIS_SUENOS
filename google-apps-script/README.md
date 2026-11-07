@@ -5,7 +5,7 @@ Este directorio contiene el código que se copiará manualmente al proyecto de A
 ## Instalación manual
 
 1. Crea un proyecto de Apps Script ligado a la cuenta propietaria del hotel.
-2. Crea y copia todos los archivos ejecutables `.gs` desde esta carpeta: `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs`, `RMS.gs`, `Reservations.gs`, `Operation.gs` y `FinanceReaders.gs`. No copies los archivos `.md` como scripts.
+2. Crea y copia todos los archivos ejecutables `.gs` desde esta carpeta: `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs`, `RMS.gs`, `Reservations.gs`, `Operation.gs`, `FinanceReaders.gs`, `Cash.gs` y `TourPayments.gs`. No copies los archivos `.md` como scripts.
 3. En **Configuración del proyecto**, activa la visualización del archivo de manifiesto y reemplaza `appsscript.json`.
 4. Implementa como **Aplicación web**, ejecutando como el propietario. Copia la URL que termina en `/exec`.
 5. Antes de activar datos reales en GitHub Pages, completa el módulo de autenticación. No uses la URL pública como si fuera una contraseña.
@@ -34,7 +34,7 @@ La entrada normal trae solamente `roomPerformance` y `roomMonthly`; reutiliza en
 
 `Reservas` utiliza `reservations.get` y `reservations.update` para cambiar estado o habitación. `reservations.payment` registra un pago en RESERVAS y MOVIMIENTOS_CAJA con identificador de idempotencia, sin asumir que un monto pagado vacío equivale a cero. La lectura cubre desde 30 días antes hasta 180 días después con límite de 500 reservas. Los pagos requieren conciliación de V si no hay importe histórico conocido.
 
-`RMS / Tarifas` utiliza `rms.get` para ocupación y disponibilidad por categoría durante 180 días. Las tarifas actuales y recomendadas, pickup y demanda predictiva permanecen sin fuente. `operation.get` carga habitaciones, limpieza, datos diarios, Tours y movimientos de caja reutilizando `FinanceReaders.gs`. `operation.event` registra cambios de limpieza e incidencias. Las operaciones de cobro de Tours permanecen bloqueadas hasta completar Caja.
+`RMS / Tarifas` utiliza `rms.get` para ocupación y disponibilidad por categoría durante 180 días. Las tarifas actuales y recomendadas, pickup y demanda predictiva permanecen sin fuente. `operation.get` carga habitaciones, limpieza, datos diarios, Tours y movimientos de caja reutilizando `FinanceReaders.gs`. `operation.event` registra cambios de limpieza e incidencias. Los cobros y liquidaciones de tours existentes usan `tour.payment` (PAGOS_TOURS + MOVIMIENTOS_CAJA), y su estado usa `tour.update` sobre TOURS. Crear nuevos tours sigue bloqueado por falta de campos de proveedor, horario y participantes.
 
 ## Seguridad
 
@@ -48,5 +48,16 @@ La web app todavía no incluye autenticación de servidor. El código puede copi
 - `INDICADORES` y `INDICADORES_HABITACIONES` contienen ADR histórico; no equivale a tarifa publicada. `OPERACION_DIARIA` estima ingresos por noche proporcionalmente.
 - Columnas `RESERVAS!AA:AI` contienen fórmulas y no deben sobrescribirse. `ESTADO_HABITACIONES!B:F` también se considera calculado y de solo lectura.
 - El registro de datos pendientes está en `REGISTRO_DATOS_FALTANTES.md`; detalles por módulo en `*_MAPEO.md`.
-- Los módulos **Caja, Inventario, Personal y Configuración** aún tienen conexiones de escritura pendientes. La presencia de interfaz no significa persistencia real.
+- **Caja** cuenta con lectura, escritura de movimientos independientes, cobros de reservas y tours existentes, apertura, conteo, cierre y anulación controlada. Las compras de inventario y los reembolsos especializados siguen pendientes por depender de otros módulos. **Inventario, Personal y Configuración** aún tienen conexiones de escritura pendientes. La presencia de interfaz no significa persistencia real.
 - No se han ejecutado pruebas de integración ni se ha desplegado el conjunto actual de archivos.
+
+## Caja (conexiones nuevas)
+
+- `cash.get`: lectura de `MOVIMIENTOS_CAJA` y `CIERRES_CAJA`.
+- `cash.movement.create`: solo movimientos independientes no vinculados a una reserva, tour o compra de inventario.
+- `cash.movement.annul`: anulación con motivo de movimientos independientes; no modifica el original, conserva registro.
+- `cash.day.save`: apertura y conteo; `cash.day.close`: cierre formal, diferencias justificadas y día cerrado sin nuevas escrituras financieras.
+- `reservations.payment`: pago y anticipo de huéspedes en Reservas + Caja.
+- `tour.payment`: cobro huésped / proveedor / recepción / hotel desde Tours existentes, registrado en `PAGOS_TOURS` y `MOVIMIENTOS_CAJA`.
+- `tour.update`: estado de tour, sin sobrescribir las fórmulas de TOURS.
+- Detalle y campos pendientes en [`CAJA_MAPEO.md`](CAJA_MAPEO.md). Se requiere control de acceso **en el servidor** antes del despliegue de operaciones reales.
