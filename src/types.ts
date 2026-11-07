@@ -232,9 +232,9 @@ export interface OperationDay {
 }
 
 export type TourStatus = 'Agendado' | 'Realizado' | 'Cancelado'
-export type TourPaymentStatus = 'Pendiente' | 'Pagado' | 'Sin registro'
-export type TourSettlementStatus = 'Pendiente' | 'Liquidado' | 'Sin registro'
-export type TourCommissionStatus = 'Pendiente' | 'Pagada' | 'Sin registro'
+export type TourPaymentStatus = 'Pendiente' | 'Parcial' | 'Pagado' | 'Cancelado' | 'Sin registro'
+export type TourSettlementStatus = 'Pendiente' | 'Liquidado' | 'Sin registro' | 'No aplica'
+export type TourCommissionStatus = 'Pendiente' | 'Pagada' | 'Sin registro' | 'No aplica'
 
 export interface TourBooking {
   id: string
@@ -247,6 +247,11 @@ export interface TourBooking {
   people: number
   salePrice: number
   providerAmount: number
+  collectedBy?: 'Hotel' | 'Recepción'
+  guestDue?: number
+  providerDue?: number
+  receptionDue?: number
+  hotelDue?: number
   status: TourStatus
   paymentStatus: TourPaymentStatus
   paymentMethod?: CashPaymentMethod
@@ -326,7 +331,7 @@ export type CashMovementCategory =
   | 'Pago de reserva' | 'Anticipo de reserva' | 'Venta de restaurante' | 'Otro ingreso'
   | 'Compra de inventario' | 'Mantenimiento' | 'Lavandería' | 'Servicios'
   | 'Reembolso' | 'Retiro de efectivo' | 'Gastos externos' | 'Otro gasto'
-  | 'Cobro de tour' | 'Pago a proveedor de tour' | 'Comisión de tour a recepción' | 'Sin clasificar'
+  | 'Cobro de tour' | 'Pago a proveedor de tour' | 'Comisión de tour a recepción' | 'Pago al hotel por tour' | 'Sin clasificar'
 
 export interface CashPurchaseItem {
   product: string
