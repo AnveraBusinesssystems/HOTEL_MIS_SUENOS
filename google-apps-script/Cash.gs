@@ -15,6 +15,7 @@ function getCash_(refresh) {
   var rows = count ? closures.getRange(6,1,count,20).getValues() : [];
   var days = rows.filter(function(r) {return r[0] && r[1] instanceof Date;}).map(function(r){
     return {date:dateKey_(r[1]), openingCash:numberOrZero_(r[2]),
+      openingKnown:r[2] !== '' && r[2] !== null,
       countedCash:r[6] === '' || r[6] === null ? undefined : numberOrZero_(r[6]),
       closed:r[17] === 'Cerrado', closeId:String(r[0])};
   });
@@ -88,7 +89,10 @@ function registerCashMovement_(request) {
       var old=ledger.getRange(existing,1,1,21).getValues()[0];
       if(old[3]===type && old[4]===category && old[7]===method &&
         numberOrZero_(old[8])===amount && String(old[6])===desc &&
-        (old[2] instanceof Date ? dateKey_(old[2]) : String(old[2]))===date) return {movementId:id,duplicate:true};
+        (old[2] instanceof Date ? dateKey_(old[2]) : String(old[2]))===date) {
+        if(String(old[13])!=='Activo') throw new Error('El ID corresponde a un movimiento que ya no está activo.');
+        return {movementId:id,duplicate:true};
+      }
       throw new Error('ID existente con distinto contenido; conciliar.');
     }
     var dept={'Venta de restaurante':'Restaurante','Otro ingreso':'Recepción',
@@ -200,6 +204,7 @@ function closeCashDay_(request) {
     var row=cashClosureRow_(sh,day);
     if(!row) throw new Error('Primero registra el fondo inicial y el conteo del día.');
     if(String(sh.getRange(row,18).getValue()).trim()==='Cerrado') return {date:day,closed:true,duplicate:true};
+    if(sh.getRange(row,3).getValue()==='') throw new Error('Falta registrar el fondo inicial.');
     if(sh.getRange(row,7).getValue()==='') throw new Error('Primero registra el efectivo contado.');
     SpreadsheetApp.flush();
     var difference=Number(sh.getRange(row,8).getValue());
