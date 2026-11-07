@@ -63,6 +63,10 @@ Ver `RESERVAS_MAPEO.md` para las 35 columnas y reglas de escritura.
 | Acceso/no molestar, bloqueos manuales | Falta persistencia fiable | No inferir desde las fórmulas de ocupación |
 | Apertura/cierre de jornada | Falta estado persistente | No confundir marca local con sincronización Cloudbeds |
 | Envío e historial de cierre operativo | Falta fuente | CIERRES_CAJA es diferente de reporte operativo diario |
+| Tours: lista e importes | No | Lectura de TOURS A:V implementada; MOVIMIENTOS_CAJA compartido con Caja |
+| Tours: horario del servicio, proveedor, cantidad de personas | Faltan campos estructurados | No derivables con fiabilidad del TOURS actual |
+| Tours: cobro, proveedor, comisión y estado persistente | Falta acción de escritura | Requiere coordinar TOURS, PAGOS_TOURS y MOVIMIENTOS_CAJA; bloqueado en UI hasta conectar |
+| Ingresos diarios y ADR / RevPAR de cierre | No | Reutiliza OPERACION_DIARIA A:R; los ingresos son estimaciones proporcionales |
 | Fichajes de personal | Falta fuente de asistencia real | TURNOS_PERSONAL son turnos programados |
 | Cancelaciones del día | Falta log de eventos | Estado actual de reserva no da fecha de cancelación |
 
@@ -84,7 +88,7 @@ Ver `OPERACION_DIARIA_MAPEO.md`. Se reutilizan las rutas de RESERVAS y se añade
 2. [x] **Indicadores** — Rendimiento y Habitaciones preparados; Costos pendiente.
 3. [x] **RMS / Tarifas** — ocupación y disponibilidad preparadas; precios, pickup, modelo y publicación pendientes.
 4. [x] **Reservas** — lectura, filtros locales, validación de asignación, actualización de estados y registro de pagos preparado. Faltan fuente de contacto, persistencia de limpieza, búsqueda histórica fuera de ventana y sincronización Cloudbeds.
-5. [x] **Operación diaria** — lectura de habitaciones y registro de eventos preparados. Pendiente: estados operativos avanzados, tareas estructuradas, inicio/cierre formal, tours, correo e historial de reportes.
+5. [x] **Operación diaria** — lecturas de habitaciones, limpieza, datos diarios, tours y caja preparadas; registro de eventos y salidas preparado. Pendiente: acciones de escritura de Tours, tareas avanzadas, apertura/cierre formal, asistencia y envío de reportes.
 6. [ ] **Caja** — **SIGUIENTE**. Mapear MOVIMIENTOS_CAJA, CIERRES_CAJA, TOURS y PAGOS_TOURS, reutilizando pagos de Reservas.
 7. [ ] **Inventario** — conectar la segunda hoja Inventory.
 8. [ ] **Personal**
