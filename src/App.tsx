@@ -70,6 +70,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
+  const [operationLoaded, setOperationLoaded] = useState(false)
+  const [operationLoading, setOperationLoading] = useState(false)
   const [rmsLoaded, setRmsLoaded] = useState(false)
   const [rmsLoading, setRmsLoading] = useState(false)
   const [reservationsLoaded, setReservationsLoaded] = useState(false)
@@ -89,9 +91,46 @@ function App() {
       roomPerformance: current.roomPerformance,
       roomMonthly: current.roomMonthly,
       rmsCalendar: current.rmsCalendar,
+      roomStates: current.roomStates,
+      operationTasks: current.operationTasks,
+      operationDays: current.operationDays,
+      cleaningHistory: current.cleaningHistory,
       reservations: current.reservations,
     } : next)
     setLoading(false)
+  }
+
+  const loadOperation = async (refresh = false) => {
+    if (!hotelService.isConfigured || operationLoading) return false
+    setOperationLoading(true)
+    try {
+      const operation = await hotelService.getOperation(refresh)
+      setData(current => current ? { ...current, ...operation } : current)
+      setOperationLoaded(true)
+      return true
+    } catch (error) {
+      console.warn('No fue posible cargar Operación diaria.', error)
+      return false
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const recordOperationEvent = async (event: Parameters<typeof hotelService.recordOperationEvent>[0]) => {
+    if (!hotelService.isConfigured) {
+      setToast('Google Apps Script todavía no está conectado')
+      return false
+    }
+    try {
+      await hotelService.recordOperationEvent(event)
+      const payload = await hotelService.getOperation(true)
+      setData(current => current ? { ...current, ...payload } : current)
+      return true
+    } catch (error) {
+      console.warn('No se pudo registrar evento de operación.', error)
+      setToast('No se guardó el evento de operación')
+      return false
+    }
   }
 
   const loadRms = async (refresh = false) => {
@@ -162,7 +201,12 @@ function App() {
     }
   }, [active, data, rmsLoaded, rmsLoading])
   useEffect(() => {
-    if (active === 'Reservas' && data && !reservationsLoaded && !reservationsLoading) {
+    if (active === 'Operación diaria' && data && !operationLoaded && !operationLoading) {
+      void loadOperation()
+    }
+  }, [active, data, operationLoaded, operationLoading])
+  useEffect(() => {
+    if ((active === 'Reservas' || active === 'Operación diaria') && data && !reservationsLoaded && !reservationsLoading) {
       void loadReservations()
     }
   }, [active, data, reservationsLoaded, reservationsLoading])
@@ -194,6 +238,7 @@ function App() {
       setIndicatorsLoaded(false)
       setReservationsLoaded(false)
       setRmsLoaded(false)
+      setOperationLoaded(false)
       setSessionUser(null)
     }
     const scheduleExpiration = (lastActivity: number) => {
@@ -283,9 +328,14 @@ function App() {
   if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
 
   const refreshActivePage = async () => {
+    if (active === 'Operación diaria' && hotelService.isConfigured) {
+      const updated = await loadOperation(true)
+      setToast(updated ? 'Operación diaria actualizada' : 'No se pudo actualizar Operación diaria')
+      return
+    }
     if (active === 'RMS / Tarifas' && hotelService.isConfigured) {
       const updated = await loadRms(true)
       setToast(updated ? 'Calendario RMS actualizado' : 'No se pudo actualizar RMS')
@@ -320,7 +370,7 @@ function App() {
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
-          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
+          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
           <button className="logout-button" onClick={signOut}>Salir</button>
@@ -340,7 +390,7 @@ function App() {
         days={data.operationDays} tours={data.tours} cashMovements={data.cashMovements}
         staff={data.staff} staffTimeEntries={data.staffTimeEntries}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
-        onDaysChange={updateOperationDays} onToursChange={updateTours}
+        onDaysChange={updateOperationDays} onOperationEvent={recordOperationEvent} onToursChange={updateTours}
         onCashMovementsChange={updateCashMovements} onNotify={setToast}
       />}
       {active === 'Caja' && <CashView
