@@ -183,6 +183,7 @@ export function CashView({
   if (!canAccess) return <section className="page"><div className="page-heading"><div><p className="eyebrow">CONTROL FINANCIERO</p><h1>Caja</h1><p>Registro operativo de entradas y salidas.</p></div></div><div className="access-note">Tu rol no tiene acceso al movimiento de dinero. Dueño, Gerencia, Administración y Recepción pueden usar este módulo.</div></section>
 
   const openForm = (type: CashMovementType, reservationId = '') => {
+    if (!allowCashWrite) { onNotify('Caja está cerrada o falta conectar Apps Script'); return }
     const next = freshDraft(type)
     if (reservationId) {
       next.reservationId = reservationId
@@ -320,8 +321,8 @@ export function CashView({
       <div><p className="eyebrow">CONTROL FINANCIERO OPERATIVO</p><h1>Caja</h1><p>Todo movimiento real de dinero, con responsable y trazabilidad.</p></div>
       <div className="cash-heading-actions">
         <label><span>FECHA DE OPERACIÓN</span><input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)}/></label>
-        <button className="cash-add expense" onClick={() => openForm('Salida')}><Receipt size={15}/> Registrar gasto</button>
-        <button className="cash-add income" onClick={() => openForm('Entrada')}><Plus size={15}/> Registrar entrada</button>
+        <button className="cash-add expense" disabled={!allowCashWrite} onClick={() => openForm('Salida')}><Receipt size={15}/> Registrar gasto</button>
+        <button className="cash-add income" disabled={!allowCashWrite} onClick={() => openForm('Entrada')}><Plus size={15}/> Registrar entrada</button>
       </div>
     </section>
 
@@ -329,8 +330,8 @@ export function CashView({
       <article><span><CircleDollarSign size={14}/> Entradas</span><strong className="positive">{hasCashData ? money(entries) : '—'}</strong><small>{hasCashData ? `${activeMovements.filter(item => item.type === 'Entrada').length} movimientos` : 'Sin datos'}</small></article>
       <article><span><Receipt size={14}/> Salidas</span><strong className="negative">{hasCashData ? money(exits) : '—'}</strong><small>{hasCashData ? `${activeMovements.filter(item => item.type === 'Salida').length} movimientos` : 'Sin datos'}</small></article>
       <article><span><Landmark size={14}/> Flujo neto</span><strong className={hasCashData ? entries - exits >= 0 ? 'positive' : 'negative' : ''}>{hasCashData ? money(entries - exits) : '—'}</strong><small>{hasCashData ? 'Entradas menos salidas' : 'Sin datos'}</small></article>
-      <article><span><Banknote size={14}/> Efectivo esperado</span><strong>{hasCashData ? money(expectedCash) : '—'}</strong><small>{hasCashData ? `Incluye fondo inicial de ${money(day.openingCash)}` : 'Sin datos'}</small></article>
-      <article><span><FileText size={14}/> Pendiente en reservas</span><strong>{hasCashData ? money(outstanding) : '—'}</strong><small>{hasCashData ? `${pendingReservations.length} reservas con saldo` : 'Sin datos'}</small></article>
+      <article><span><Banknote size={14}/> Efectivo esperado</span><strong>{expectedCash !== null ? money(expectedCash) : '—'}</strong><small>{recordedDay ? `Incluye fondo inicial de ${money(day.openingCash)}` : 'Fondo inicial sin registrar'}</small></article>
+      <article><span><FileText size={14}/> Pendiente en reservas</span><strong>{knownReservations.length ? money(outstanding) : '—'}</strong><small>{`${pendingReservations.length} con saldo conocido · ${unknownBalances} sin conciliar`}</small></article>
     </section>
 
     <section className="cash-method-strip">
@@ -338,7 +339,7 @@ export function CashView({
         <span>{method === 'Efectivo' ? <Banknote size={14}/> : method === 'Tarjeta' ? <CreditCard size={14}/> : <Landmark size={14}/>} {method}</span>
         <div><b>{hasCashData ? money(methodEntries) : '—'}</b><small>entradas</small></div><div><b>{hasCashData ? money(methodExits) : '—'}</b><small>salidas</small></div>
       </article>)}
-      <p><AlertTriangle size={14}/><span>Los tours se controlan en su módulo independiente y no se mezclan con Caja hasta registrar su pago real.</span></p>
+      <p><AlertTriangle size={14}/><span>Los pagos de tours aparecen aquí cuando están registrados en MOVIMIENTOS_CAJA; las operaciones de Tours pendientes siguen sin escritura.</span></p>
     </section>
 
     <section className="cash-layout">
@@ -359,36 +360,42 @@ export function CashView({
 
       <aside className="cash-side">
         <section className="panel cash-control"><header><div><span>CONTROL DE EFECTIVO</span><h2>Conteo del día</h2></div></header><div className="cash-control-body">
-          <div><span>Fondo inicial</span><b>{hasCashData ? money(day.openingCash) : '—'}</b></div><div><span>Movimiento neto</span><b>{hasCashData ? money(cashEntries - cashExits) : '—'}</b></div><div className="expected"><span>Efectivo esperado</span><b>{hasCashData ? money(expectedCash) : '—'}</b></div>
+          <div><span>Fondo inicial</span><b>{recordedDay ? money(day.openingCash) : 'Sin registro'}</b></div><div><span>Movimiento neto</span><b>{hasCashData ? money(cashEntries - cashExits) : '—'}</b></div><div className="expected"><span>Efectivo esperado</span><b>{expectedCash !== null ? money(expectedCash) : '—'}</b></div>
           {day.countedCash !== undefined && <div className="count-result"><span>Efectivo contado</span><b>{money(day.countedCash)}</b><em className={difference === 0 ? 'positive' : 'negative'}>{difference === 0 ? 'Caja cuadrada' : `Diferencia ${money(difference ?? 0)}`}</em></div>}
-          <label><span>REGISTRAR CONTEO</span><div><input type="number" min="0" value={counted} onChange={event => setCounted(event.target.value)} placeholder="0.00"/><button onClick={saveCount}>Guardar</button></div></label>
+          <label><span>FONDO INICIAL</span><div><input type="number" min="0" step="0.01" disabled={isClosed || saving || !canWrite} value={openingDraft} onChange={event => setOpeningDraft(event.target.value)} placeholder={recordedDay ? money(day.openingCash) : 'Registrar apertura'}/><button disabled={isClosed || saving || !canWrite} onClick={() => void saveOpening()}>Guardar fondo</button></div></label>
+          <label><span>REGISTRAR CONTEO</span><div><input type="number" min="0" step="0.01" disabled={!recordedDay || isClosed || saving || !canWrite} value={counted} onChange={event => setCounted(event.target.value)} placeholder="0.00"/><button disabled={!recordedDay || isClosed || saving || !canWrite} onClick={() => void saveCount()}>Guardar conteo</button></div></label>
+          <label><span>CIERRE DEL DÍA</span><div><input value={closeNote} disabled={!recordedDay || isClosed || saving || !canWrite} onChange={event => setCloseNote(event.target.value)} placeholder="Nota de cierre / justificación"/></div></label>
+          {difference !== undefined && Math.abs(difference) > .009 && <label><input type="checkbox" disabled={isClosed || saving} checked={acceptDifference} onChange={event => setAcceptDifference(event.target.checked)}/> Acepto la diferencia de efectivo indicada</label>}
+          <button className="primary-action" disabled={!recordedDay || recordedDay.countedCash === undefined || isClosed || saving || !canWrite} onClick={() => void closeDay()}>{isClosed ? 'Día cerrado' : 'Cerrar caja del día'}</button>
         </div></section>
 
         <section className="panel cash-breakdown"><header><div><span>SALIDAS</span><h2>Gasto por categoría</h2></div></header><div>{expensesByCategory.length ? expensesByCategory.map(([category, amount]) => <p key={category}><span>{category}</span><b>{money(amount)}</b></p>) : <small>Sin gastos registrados este día.</small>}</div></section>
 
-        <section className="panel cash-purchase-requests"><header><div><span>COMPRAS AUTORIZADAS</span><h2>Solicitudes listas</h2></div><b>{readyPurchaseRequests.length}</b></header><div>{readyPurchaseRequests.length ? readyPurchaseRequests.map(request => <button key={request.id} onClick={() => openPurchaseRequest(request)}><span><b>{request.id}</b><small>{request.items.length} productos · solicitó {request.createdBy}</small></span><strong>{money(request.estimatedTotal)}</strong><ChevronRight size={14}/></button>) : <small>No hay solicitudes tomadas en cuenta.</small>}</div></section>
+        <section className="panel cash-purchase-requests"><header><div><span>COMPRAS AUTORIZADAS</span><h2>Solicitudes listas</h2></div><b>{readyPurchaseRequests.length}</b></header><div>{readyPurchaseRequests.length ? readyPurchaseRequests.map(request => <button key={request.id} disabled title="Compras se conectan en Inventario" onClick={() => openPurchaseRequest(request)}><span><b>{request.id}</b><small>{request.items.length} productos · solicitó {request.createdBy}</small></span><strong>{money(request.estimatedTotal)}</strong><ChevronRight size={14}/></button>) : <small>No hay solicitudes tomadas en cuenta.</small>}</div></section>
 
-        <section className="panel pending-payments"><header><div><span>COBRANZA</span><h2>Mayores saldos pendientes</h2></div></header><div>{pendingReservations.slice(0, 4).map(reservation => <button key={reservation.id} onClick={() => openForm('Entrada', reservation.id)}><span><b>{reservation.guestName}</b><small>{reservation.roomNumber ?? reservation.roomType} · {reservation.id}</small></span><strong>{money(balance(reservation))}</strong><Plus size={14}/></button>)}</div></section>
+        <section className="panel pending-payments"><header><div><span>COBRANZA</span><h2>Mayores saldos pendientes</h2></div></header><div>{pendingReservations.slice(0, 4).map(reservation => <button key={reservation.id} onClick={() => openForm('Entrada', reservation.subReservationId)}><span><b>{reservation.guestName}</b><small>{reservation.roomNumber ?? reservation.roomType} · {reservation.id}</small></span><strong>{money(balance(reservation))}</strong><Plus size={14}/></button>)}</div></section>
       </aside>
     </section>
 
-    {draft && <MovementDialog draft={draft} reservations={pendingReservations} inventory={inventory} error={formError} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => setDraft(null)} onSave={saveMovement}/>}
-    {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul} onClose={() => setSelectedMovement(null)} onAnnul={() => annul(selectedMovement)}/>}
+    {draft && <MovementDialog draft={draft} reservations={pendingReservations} inventory={inventory} error={formError} saving={saving} canWrite={allowCashWrite} onChange={setDraft} onSwitchType={switchDraftType} onClose={() => {setDraft(null);retry.current=null}} onSave={() => void saveMovement()}/>}
+    {selectedMovement && <MovementDetail movement={selectedMovement} canAnnul={canAnnul && allowCashWrite && !saving} onClose={() => setSelectedMovement(null)} onAnnul={() => void annul(selectedMovement)}/>}
   </section>
 }
 
-function MovementDialog({ draft, reservations, inventory, error, onChange, onSwitchType, onClose, onSave }: {
+function MovementDialog({ draft, reservations, inventory, error, saving, canWrite, onChange, onSwitchType, onClose, onSave }: {
   draft: Draft
   reservations: Reservation[]
   inventory: InventoryItem[]
   error: string
+  saving: boolean
+  canWrite: boolean
   onChange: (draft: Draft) => void
   onSwitchType: (type: CashMovementType) => void
   onClose: () => void
   onSave: () => void
 }) {
   const categories = draft.type === 'Entrada' ? incomeCategories : expenseCategories
-  const linkedReservation = reservations.find(item => item.id === draft.reservationId)
+  const linkedReservation = reservations.find(item => item.subReservationId === draft.reservationId)
   const needsReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
   const isInventory = draft.type === 'Salida' && draft.category === 'Compra de inventario'
   const invoiceTotal = draft.purchaseItems.reduce((sum, item) => sum + Number(item.total || 0), 0)
@@ -417,7 +424,7 @@ function MovementDialog({ draft, reservations, inventory, error, onChange, onSwi
     <div className="cash-form">
       {draft.purchaseRequestId && <div className="linked-purchase-request full"><FileText size={16}/><p><b>Compra ligada a {draft.purchaseRequestId}</b><span>Esta factura es editable: ajusta, elimina o añade productos según lo comprado realmente. La solicitud original no cambiará.</span></p></div>}
       <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
-      {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.id} value={item.id}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
+      {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.subReservationId} value={item.subReservationId}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
       {isInventory ? <section className="invoice-items full">
         <header><div><span>PRODUCTO</span><span>CANTIDAD</span><span>UNIDAD</span><span>TOTAL</span><span></span></div></header>
@@ -434,7 +441,7 @@ function MovementDialog({ draft, reservations, inventory, error, onChange, onSwi
       <label className="full"><span>Concepto / motivo</span><textarea value={draft.description} onChange={event => onChange({ ...draft, description: event.target.value })} placeholder={draft.type === 'Entrada' ? 'Ej. Pago restante de hospedaje' : 'Ej. Compra de insumos para desayunos'}/></label>
       {error && <div className="cash-form-error full"><AlertTriangle size={14}/>{error}</div>}
     </div>
-    <footer><button onClick={onClose}>Cancelar</button><button className="primary-action" onClick={onSave}>Registrar {draft.type.toLowerCase()}</button></footer>
+    <footer><button onClick={onClose}>Cancelar</button><button className="primary-action" disabled={saving || !canWrite} onClick={onSave}>{saving ? 'Guardando…' : `Registrar ${draft.type.toLowerCase()}`}</button></footer>
   </section></div>
 }
 
