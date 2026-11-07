@@ -360,6 +360,8 @@ export interface CashDay {
   date: string
   openingCash: number
   countedCash?: number
+  closed?: boolean
+  closeId?: string
 }
 
 export type InventoryCategory = 'Alimentos' | 'Bebidas' | 'Limpieza' | 'Lavandería' | 'Amenidades' | 'Suministros'
