@@ -86,7 +86,12 @@ function getRms_(refresh) {
   });
   var payload = { calendar: calendar, reservationsWithoutCategory: unresolved,
     generatedAt: new Date().toISOString() };
-  cache.put(key, JSON.stringify(payload), HMS_CONFIG.RMS_CACHE_SECONDS);
+  // Límite de CacheService: entradas de hasta 100 KB. Evitar fallar toda
+  // la consulta por intentar cachear un calendario de 180 × 5 celdas.
+  var serialized = JSON.stringify(payload);
+  if (serialized.length < 90000) {
+    cache.put(key, serialized, HMS_CONFIG.RMS_CACHE_SECONDS);
+  }
   return payload;
 }
 
