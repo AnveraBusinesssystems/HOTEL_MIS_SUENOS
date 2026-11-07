@@ -95,3 +95,9 @@ Ver `OPERACION_DIARIA_MAPEO.md`. Se reutilizan las rutas de RESERVAS y se añade
 9. [ ] **Configuración**
 
 Actualizar este archivo al concluir cada pestaña.
+
+## 5. Consolidación transversal del código (6 nov 2026)
+
+Se corrigieron el tratamiento de datos desconocidos en finanzas, la selección de mes de Resumen en horario de Cancún, la denominación de ADR histórico, los límites del caché de RMS/Reservas, la invalidación de caché de Operación, los reintentos de pagos y la recuperación básica de operaciones fallidas. **Esto no añade nuevas columnas ni implica despliegue o pruebas.**
+
+**Riesgos pendientes de alta prioridad:** autenticación y permisos del servidor, transacciones interhojas para pagos, eliminación total de cambios optimistas locales, normalización de reservas multihabitación y disponibilidad de fuentes reales de costos/tarifas. Ver `CONSOLIDACION_AUDITORIA.md`.
