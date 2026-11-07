@@ -82,7 +82,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
   if (room.occupancy === 'Bloqueada') return room
   const current = reservations.find(reservation => reservation.roomNumber === room.roomNumber && reservation.status === 'Hospedado')
   const next = reservations.filter(reservation => reservation.roomNumber === room.roomNumber && reservation.status === 'Confirmada' && reservation.checkOut > TODAY).sort((left, right) => left.checkIn.localeCompare(right.checkIn))[0]
-  return { ...room, occupancy: current ? current.checkOut <= TODAY ? 'Salida prevista' as const : 'Ocupada' as const : 'Libre' as const, currentReservationId: current?.id, nextReservationId: next?.id }
+  return { ...room, occupancy: current ? (current.checkOut <= TODAY ? 'Salida prevista' as const : 'Ocupada' as const) : (room.occupancy === 'Ocupada' ? 'Ocupada' as const : 'Libre' as const), currentReservationId: current?.id, nextReservationId: next?.id }
 })
 
 export function OperationsView(props: Props) {
