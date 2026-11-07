@@ -65,7 +65,10 @@ function getOperation_(refresh) {
     var target = rooms.find(function(r) { return r.roomNumber === room; });
     if (!target) return;
     target.activityLog.push({ id: logId, action: action, by: worker, at: timestamp });
-    // Conservar estado desde acciones reales. El registro es fuente de eventos.
+    // Un check de ayer no debe marcar limpia una habitación que hoy requiere
+    // nueva limpieza por salida o cambio de huésped.
+    if (timestamp.slice(0,10) !== today) return;
+    // Conservar estado desde acciones reales del día operativo actual.
     if (/limpieza solicitada|marcar sucia|solicitar limpieza/i.test(action)) target.cleaning = 'Sucia';
     if (/inici[oó] limpieza|inici[oó] trabajo/i.test(action)) target.cleaning = 'En limpieza';
     if (/termin[oó] limpieza|limpieza terminada/i.test(action)) target.cleaning = 'Por revisar';
