@@ -22,6 +22,8 @@ export const cashService = {
     apiClient.post<{ movementId: string; duplicate: boolean }>('cash.movement.create', { movement, movementId }),
   annul: (movementId: string, reason: string) =>
     apiClient.post<{ movementId: string; duplicate: boolean }>('cash.movement.annul', { movementId, reason }),
+  closeDay: (date: string, note: string, acceptDifference = false) =>
+    apiClient.post<{ date: string; closed: boolean; difference?: number }>('cash.day.close', { date, note, acceptDifference }),
   saveDay: (date: string, fields: { openingCash?: number; countedCash?: number }) =>
     apiClient.post<{ date: string; saved: boolean }>('cash.day.save', { date, ...fields }),
 }
