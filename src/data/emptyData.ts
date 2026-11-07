@@ -13,6 +13,7 @@ export const emptyDashboard = (): DashboardData => ({
   roomStates: [],
   operationTasks: [],
   operationDays: [],
+  cleaningHistory: [],
   tours: [],
   staff: [],
   staffSchedules: [],
