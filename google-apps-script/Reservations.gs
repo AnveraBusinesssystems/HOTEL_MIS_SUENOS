@@ -211,3 +211,79 @@ function invalidateReservationDependents_() {
   cache.remove(HMS_CONFIG.SUMMARY_CACHE_KEY);
   cache.remove(HMS_CONFIG.INDICATORS_CACHE_KEY);
 }
+
+/**
+ * Registro conciliable: solo permite pagos cuando V ya tiene saldo pagado
+ * explícito. Se registra movimiento en caja antes de ajustar V/W.
+ * Nunca se deduce que un V vacío signifique cero histórico.
+ */
+function recordReservationPayment_(request) {
+  var key = String(request.reservationKey || '').trim();
+  var amount = Number(request.amount);
+  var method = String(request.method || '').trim();
+  var paymentId = String(request.paymentId || '').trim();
+  if (!key || !paymentId || !isFinite(amount) || amount <= 0 ||
+      ['Efectivo', 'Tarjeta', 'Transferencia'].indexOf(method) < 0)
+    throw new Error('Datos de pago incompletos o inválidos.');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var ss = SpreadsheetApp.openById(HMS_CONFIG.SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(HMS_CONFIG.SHEETS.RESERVATIONS);
+    assertReservationHeaders_(sheet);
+    var rowNo = reservationRowForKey_(sheet, key);
+    var row = sheet.getRange(rowNo, 1, 1, 35).getValues()[0];
+    if (row[21] === '' || row[21] === null) {
+      throw new Error('Monto pagado histórico desconocido: conciliar antes de registrar nuevos pagos.');
+    }
+    if (/cancel|no.show/i.test(String(row[16]))) throw new Error('No se registran pagos en reservas canceladas.');
+    var previous = numberOrZero_(row[21]);
+    var total = numberOrZero_(row[20]);
+    var due = Math.round((total - previous) * 100) / 100;
+    if (amount > due + 0.001) throw new Error('El pago supera el saldo pendiente.');
+    var ledger = ss.getSheetByName('MOVIMIENTOS_CAJA');
+    if (!ledger) throw new Error('Falta MOVIMIENTOS_CAJA.');
+    var header = ledger.getRange(6, 1, 1, 21).getDisplayValues()[0];
+    if (header[0] !== 'ID movimiento' || header[8] !== 'Monto' || header[9] !== 'Clave de reserva') {
+      throw new Error('Estructura de MOVIMIENTOS_CAJA incompatible.');
+    }
+    // Idempotencia: reenvíos del mismo paymentId no duplican movimientos.
+    var last = ledger.getLastRow();
+    if (last >= 7) {
+      var already = ledger.getRange(7, 1, last-6, 1)
+        .createTextFinder(paymentId).matchEntireCell(true).findNext();
+      if (already) return mapReservationRow_(row, todayKey_());
+    }
+    var now = new Date();
+    var rowCash = new Array(21).fill('');
+    rowCash[0] = paymentId;               // A ID movimiento
+    rowCash[1] = now;                     // B fecha y hora
+    rowCash[2] = dateKey_(now);           // C fecha operativa
+    rowCash[3] = 'Entrada';               // D movimiento
+    rowCash[4] = 'Pago de reserva';       // E categoría
+    rowCash[5] = 'Recepción y Reservas';  // F departamento
+    rowCash[6] = 'Pago de reserva ' + key;// G concepto
+    rowCash[7] = method;                  // H método
+    rowCash[8] = amount;                  // I monto
+    rowCash[9] = key;                     // J clave de reserva
+    rowCash[12] = 'Sistema HMS';          // M usuario
+    rowCash[13] = 'Registrado';           // N estado
+    rowCash[16] = now;                    // Q actualizado
+    rowCash[20] = 'Reservas Web';         // U origen
+    var cashRow = Math.max(7, last + 1);
+    ledger.getRange(cashRow, 1, 1, 21).setValues([rowCash]);
+    try {
+      var newPaid = Math.round((previous + amount) * 100) / 100;
+      sheet.getRange(rowNo, 22).setValue(newPaid); // V: pagado acumulado
+      sheet.getRange(rowNo, 23).setValue(Math.max(0, Math.round((total-newPaid)*100)/100)); // W: saldo
+      sheet.getRange(rowNo, 26).setValue(now);
+    } catch (error) {
+      ledger.getRange(cashRow, 1, 1, 21).clearContent();
+      throw error;
+    }
+    SpreadsheetApp.flush();
+    invalidateReservationDependents_();
+    return mapReservationRow_(sheet.getRange(rowNo, 1, 1, 35).getValues()[0], todayKey_());
+  } finally { lock.releaseLock(); }
+}
