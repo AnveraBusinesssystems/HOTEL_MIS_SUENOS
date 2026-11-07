@@ -13,10 +13,11 @@ type Props = {
   reservations: Reservation[]
   onChange: (updater: (rows: Reservation[]) => Reservation[]) => void
   onPersist?: (reservationKey: string, changes: Partial<Reservation>) => Promise<Reservation>
+  onPayment?: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => Promise<Reservation>
   onNotify: (message: string) => void
 }
 
-const paymentState = (reservation: Reservation) => reservation.paid <= 0
+const paymentState = (reservation: Reservation) => reservation.paymentKnown === false ? 'Sin registro' : reservation.paid <= 0
   ? 'Pendiente' : reservation.paid >= reservation.total ? 'Pagada' : 'Parcial'
 
 const nights = (reservation: Reservation) => Math.max(1, Math.round((new Date(`${reservation.checkOut}T12:00:00`).getTime() - new Date(`${reservation.checkIn}T12:00:00`).getTime()) / 86400000))
@@ -28,7 +29,7 @@ const shiftDate = (date: string, amount: number) => {
 }
 const calendarLabel = (date: string) => new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`)).replace('.', '').toUpperCase()
 
-export function ReservationsView({ reservations, onChange, onPersist, onNotify }: Props) {
+export function ReservationsView({ reservations, onChange, onPersist, onPayment, onNotify }: Props) {
   const [selectedKey, setSelectedKey] = useState<string>()
   const [view, setView] = useState<'Calendario' | 'Lista'>('Calendario')
   const [calendarStart, setCalendarStart] = useState(TODAY)
@@ -39,7 +40,6 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
   const [payment, setPayment] = useState<'Todos' | 'Pagada' | 'Parcial' | 'Pendiente'>('Todos')
   const [from, setFrom] = useState(TODAY)
   const [to, setTo] = useState(() => shiftDate(TODAY, 14))
-  const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState('Sin sincronizar')
   const hasReservations = reservations.length > 0
 
@@ -51,7 +51,7 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
 
   const baseFiltered = useMemo(() => reservations.filter(reservation => {
     const normalizedQuery = query.trim().toLowerCase()
-    const matchesQuery = !normalizedQuery || [reservation.id, reservation.guestName, reservation.roomNumber ?? '', reservation.phone].some(value => value.toLowerCase().includes(normalizedQuery))
+    const matchesQuery = !normalizedQuery || [reservation.id, reservation.subReservationId, reservation.guestName, reservation.roomNumber ?? '', reservation.phone].some(value => value.toLowerCase().includes(normalizedQuery))
     return matchesQuery && (status === 'Todas' || reservation.status === status) && (roomType === 'Todas' || reservation.roomType === roomType) && (payment === 'Todos' || paymentState(reservation) === payment)
   }), [payment, query, reservations, roomType, status])
   const filtered = useMemo(() => baseFiltered.filter(reservation => reservation.checkOut >= from && reservation.checkIn <= to), [baseFiltered, from, to])
@@ -63,16 +63,26 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
   const departures = reservations.filter(row => row.checkOut === TODAY && row.status === 'Hospedado').length
   const inHouse = reservations.filter(row => row.status === 'Hospedado').length
   const future = reservations.filter(row => row.checkIn > TODAY && row.status === 'Confirmada').length
-  const balance = reservations.filter(row => ACTIVE_STATUSES.includes(row.status)).reduce((sum, row) => sum + Math.max(0, row.total - row.paid), 0)
-  const attention = reservations.filter(row => ACTIVE_STATUSES.includes(row.status) && (!row.roomNumber || row.total > row.paid)).length
+  const balanceKnown = reservations.filter(row => ACTIVE_STATUSES.includes(row.status) && row.paymentKnown !== false)
+  const balance = balanceKnown.reduce((sum, row) => sum + Math.max(0, row.total - row.paid), 0)
+  const attention = reservations.filter(row => ACTIVE_STATUSES.includes(row.status) && (!row.roomNumber || row.paymentKnown === false || row.total > row.paid)).length
 
-  const sync = () => {
-    setSyncing(true)
-    window.setTimeout(() => {
-      setSyncing(false)
-      setLastSync(new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date()).replace('.', ''))
-      onNotify('Conexión con Cloudbeds pendiente')
-    }, 800)
+  const registerPayment = async (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia') => {
+    if (!onPayment) {
+      onNotify('El registro de pagos requiere desplegar Apps Script')
+      return false
+    }
+    try {
+      const paymentId = 'HMS-PAGO-' + crypto.randomUUID()
+      const saved = await onPayment(reservationKey, amount, method, paymentId)
+      onChange(rows => rows.map(row => row.subReservationId === reservationKey ? saved : row))
+      onNotify('Pago registrado en RESERVAS y MOVIMIENTOS_CAJA')
+      return true
+    } catch (error) {
+      console.warn('No fue posible registrar el pago.', error)
+      onNotify('No se registró el pago; revisa el saldo histórico y la conexión')
+      return false
+    }
   }
 
   const updateReservation = async (reservationKey: string, changes: Partial<Reservation>, message: string) => {
@@ -90,7 +100,7 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
   return <div className="page reservations-page">
     <section className="page-heading reservation-heading">
       <div><p className="eyebrow">OPERACIÓN DE HOSPEDAJE</p><h1>Reservas</h1><p>Llegadas, salidas, asignación y saldos desde una sola vista.</p></div>
-      <div className="sync-cluster"><div><span>Última sincronización</span><b>{lastSync}</b><small>Cloudbeds · Conexión pendiente</small></div><button className="cloudbeds-action" onClick={sync} disabled={syncing}><Cloud size={15}/>{syncing ? 'Verificando…' : 'Sincronizar Cloudbeds'}</button></div>
+      <div className="sync-cluster"><div><span>Última sincronización</span><b>{lastSync}</b><small>Google Sheets · Lectura de reservas</small></div><button className="cloudbeds-action" disabled title="Cloudbeds todavía no tiene conexión"><Cloud size={15}/> Cloudbeds pendiente</button></div>
     </section>
 
     <section className="reservation-summary">
@@ -98,7 +108,7 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
       <article><span><LogOut size={14}/> Salidas hoy</span><strong>{hasReservations ? departures : '—'}</strong><small>{hasReservations ? 'Check-out antes de 11:00' : 'Sin datos'}</small></article>
       <article><span><UserRound size={14}/> Hospedados</span><strong>{hasReservations ? inHouse : '—'}</strong><small>{hasReservations ? 'Actualmente en el hotel' : 'Sin datos'}</small></article>
       <article><span><BedDouble size={14}/> Próximas</span><strong>{hasReservations ? future : '—'}</strong><small>{hasReservations ? 'Después de hoy' : 'Sin datos'}</small></article>
-      <article className={balance > 0 ? 'summary-warning' : ''}><span><CircleDollarSign size={14}/> Saldo pendiente</span><strong>{hasReservations ? money(balance) : '—'}</strong><small>{hasReservations ? `${attention} reservas requieren atención` : 'Sin datos'}</small></article>
+      <article className={balance > 0 ? 'summary-warning' : ''}><span><CircleDollarSign size={14}/> Saldo pendiente</span><strong>{balanceKnown.length ? money(balance) : '—'}</strong><small>{hasReservations ? `${attention} reservas requieren atención; saldos sin registro excluidos` : 'Sin datos'}</small></article>
     </section>
 
     <section className="reservation-viewbar">
@@ -130,7 +140,7 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
             <td><b>{reservation.roomNumber ?? 'Sin asignar'}</b><small>{reservation.roomType}</small></td>
             <td>{reservation.adults + reservation.children}<small>{reservation.adults} ad. · {reservation.children} men.</small></td>
             <td><span className={`reservation-status ${reservation.status.toLowerCase().replace(' ', '-')}`}>{reservation.status}</span></td>
-            <td>{reservation.channel}</td><td>{money(reservation.total)}</td><td className={due > 0 ? 'negative' : ''}>{money(due)}</td>
+            <td>{reservation.channel}</td><td>{money(reservation.total)}</td><td className={due > 0 && reservation.paymentKnown !== false ? 'negative' : ''}>{reservation.paymentKnown === false ? 'Sin registro' : money(due)}</td>
             <td><span className={`payment-status ${paymentLabel.toLowerCase()}`}>{paymentLabel}</span></td><td><button className="row-open" aria-label={`Abrir ${reservation.id}`}><ChevronRight size={16}/></button></td>
           </tr>
         })}</tbody>
@@ -139,7 +149,7 @@ export function ReservationsView({ reservations, onChange, onPersist, onNotify }
 
     {selected && <ReservationDrawer
       reservation={selected} onClose={() => setSelectedKey(undefined)}
-      onUpdate={updateReservation} onNotify={onNotify}
+      onUpdate={updateReservation} onPayment={registerPayment} canRegisterPayment={Boolean(onPayment)} onNotify={onNotify}
     />}
   </div>
 }
@@ -178,19 +188,28 @@ function CalendarRoomRow({ label, dates, reservations, columns, onOpen }: { labe
   </div>
 }
 
-function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reservation: Reservation; onClose: () => void; onUpdate: (reservationKey: string, changes: Partial<Reservation>, message: string) => Promise<void>; onNotify: (message: string) => void }) {
+function ReservationDrawer({ reservation, onClose, onUpdate, onPayment, canRegisterPayment, onNotify }: {
+  reservation: Reservation
+  onClose: () => void
+  onUpdate: (reservationKey: string, changes: Partial<Reservation>, message: string) => Promise<void>
+  onPayment: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia') => Promise<boolean>
+  canRegisterPayment: boolean
+  onNotify: (message: string) => void
+}) {
   const [room, setRoom] = useState(reservation.roomNumber ?? '')
   const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo')
+  const [savingPayment, setSavingPayment] = useState(false)
   const due = Math.max(0, reservation.total - reservation.paid)
   const requestedPayment = Number(paymentAmount)
-  const canPay = requestedPayment > 0 && requestedPayment <= due
+  const canPay = canRegisterPayment && !savingPayment && reservation.paymentKnown !== false && requestedPayment > 0 && requestedPayment <= due
 
   return <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
     <aside className="drawer reservation-drawer">
       <header><div><span>RESERVA · {reservation.id}</span><h2>{reservation.guestName}</h2><p>{reservation.channel} · creada {shortDate(reservation.createdAt)}</p></div><button onClick={onClose} aria-label="Cerrar"><X size={18}/></button></header>
       <div className="reservation-alerts">
         {!reservation.roomNumber && <div className="reservation-alert warning"><AlertTriangle size={15}/><span>La llegada todavía no tiene habitación asignada.</span></div>}
-        {due > 0 && <div className="reservation-alert"><CircleDollarSign size={15}/><span>Saldo pendiente de {money(due)}.</span></div>}
+        {reservation.paymentKnown === false ? <div className="reservation-alert warning"><CircleDollarSign size={15}/><span>Importe pagado sin registro: debe conciliarse antes de registrar otro pago.</span></div> : due > 0 && <div className="reservation-alert"><CircleDollarSign size={15}/><span>Saldo pendiente de {money(due)}.</span></div>}
         {reservation.cleaningRequested && <div className="reservation-alert cleaning"><Sparkles size={15}/><span>El huésped solicitó limpieza.</span></div>}
       </div>
 
@@ -200,7 +219,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onNotify }: { reser
 
       <section className="drawer-section"><span className="drawer-label">HUÉSPED</span><div className="guest-contact"><b>{reservation.email}</b><span>{reservation.phone}</span></div>{reservation.notes && <p className="reservation-notes">{reservation.notes}</p>}</section>
 
-      <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 ? 'negative' : 'positive'}>{money(due)}</b></div></div>{due > 0 && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { void onUpdate(reservation.subReservationId, { paid: reservation.paid + requestedPayment }, `pago de ${money(requestedPayment)} registrado`); setPaymentAmount('') }}>Registrar</button></div>}</section>
+      <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{reservation.paymentKnown === false ? 'Sin registro' : money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 && reservation.paymentKnown !== false ? 'negative' : 'positive'}>{reservation.paymentKnown === false ? 'Sin determinar' : money(due)}</b></div></div>{due > 0 && reservation.paymentKnown !== false && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as typeof paymentMethod)}><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { setSavingPayment(true); void onPayment(reservation.subReservationId, requestedPayment, paymentMethod).then(ok => { if (ok) setPaymentAmount('') }).finally(() => setSavingPayment(false)) }}>{savingPayment ? 'Guardando…' : 'Registrar'}</button></div>}</section>
 
       <footer className="reservation-actions"><button onClick={() => void onUpdate(reservation.subReservationId, { cleaningRequested: !reservation.cleaningRequested }, reservation.cleaningRequested ? 'solicitud de limpieza retirada' : 'limpieza solicitada') }><Sparkles size={14}/>{reservation.cleaningRequested ? 'Retirar limpieza' : 'Solicitar limpieza'}</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
     </aside>
