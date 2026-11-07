@@ -17,6 +17,10 @@ function doPost(event) {
     var request = parseRequest_(event);
 
     switch (request.action) {
+      case 'inventory.get':
+        return jsonResponse_({ok:true,data:getInventory_(request.refresh===true)});
+      case 'inventory.count':
+        return jsonResponse_({ok:true,data:saveInventoryCount_(request)});
       case 'summary.get':
         return jsonResponse_({ ok: true, data: getSummary_() });
       case 'indicators.get':
