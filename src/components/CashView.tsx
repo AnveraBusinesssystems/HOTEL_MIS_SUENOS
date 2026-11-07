@@ -53,23 +53,9 @@ const today = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date())
 
-const currentTime = () => new Intl.DateTimeFormat('es-MX', {
-  timeZone: 'America/Cancun', hour: '2-digit', minute: '2-digit', hour12: false,
-}).format(new Date())
-
 const incomeCategories: CashMovementCategory[] = ['Pago de reserva', 'Anticipo de reserva', 'Venta de restaurante', 'Otro ingreso']
 const expenseCategories: CashMovementCategory[] = ['Compra de inventario', 'Mantenimiento', 'Lavandería', 'Servicios', 'Reembolso', 'Gastos externos', 'Retiro de efectivo', 'Otro gasto']
 const methods: CashPaymentMethod[] = ['Efectivo', 'Tarjeta', 'Transferencia']
-const fallbackInventoryUnits: Record<string, string> = {
-  Huevo: 'Piezas',
-  Fruta: 'Kilogramos',
-  Café: 'Kilogramos',
-  'Agua embotellada': 'Piezas',
-  'Papel higiénico': 'Paquetes',
-  Toallas: 'Piezas',
-  'Productos de limpieza': 'Litros',
-  'Otro producto': 'Unidades',
-}
 const newPurchaseItem = () => ({ id: crypto.randomUUID(), product: '', quantity: '', unit: '', total: '' })
 const areaForCategory: Record<CashMovementCategory, CashArea> = {
   'Pago de reserva': 'Reservas',
@@ -471,7 +457,7 @@ function MovementDialog({ draft, reservations, inventory, error, saving, canWrit
       <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item} disabled={(item === 'Compra de inventario' && !inventoryReady) || item === 'Reembolso'}>{item}{(item === 'Compra de inventario' && !inventoryReady) || item === 'Reembolso' ? ' · pendiente' : ''}</option>)}</select></label>
       {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.subReservationId} value={item.subReservationId}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
-      {isInventory && <label className="full"><span>Proveedor (opcional)</span><input value={draft.supplier} maxLength={100} onChange={event => onChange({...draft,supplier:event.target.value})} placeholder="Proveedor"/><span>Establecimiento (opcional)</span><input value={draft.place} maxLength={100} onChange={event => onChange({...draft,place:event.target.value})} placeholder="Lugar de compra"/></label>}
+      {isInventory && <><label className="full"><span>Proveedor (opcional)</span><input value={draft.supplier} maxLength={100} onChange={event => onChange({...draft,supplier:event.target.value})} placeholder="Proveedor"/></label><label className="full"><span>Establecimiento (opcional)</span><input value={draft.place} maxLength={100} onChange={event => onChange({...draft,place:event.target.value})} placeholder="Lugar de compra"/></label></>}
       {isInventory ? <section className="invoice-items full">
         <header><div><span>PRODUCTO</span><span>CANTIDAD</span><span>UNIDAD</span><span>TOTAL</span><span></span></div></header>
         {draft.purchaseItems.map((item, index) => <div className="invoice-item" key={item.id}>
