@@ -28,13 +28,16 @@ function readHotelCashMovements_(ss) {
     var validAreas = ['Reservas','Recepción','Restaurante','Lavandería','Limpieza','Mantenimiento','Administración','Otros'];
     var area = validAreas.indexOf(sourceArea)>=0 ? sourceArea :
       /recepci[oó]n/i.test(sourceArea) ? 'Recepción' : 'Otros';
+    if (!/^(activo|registrado|anulado|cancelado)$/i.test(String(r[13] || '').trim())) return null;
     return {
       id:String(r[0]), date:r[2] instanceof Date ? dateKey_(r[2]) : String(r[2] || '').slice(0,10),
       time:r[1] instanceof Date ? Utilities.formatDate(r[1],HMS_CONFIG.TIME_ZONE,'HH:mm'):'',
       type:type, amount:numberOrZero_(r[8]), paymentMethod:method,
       area:area, category:category,
-      description:String(r[6] || ''), status:/anulad/i.test(String(r[13]))?'Anulado':'Registrado',
+      description:String(r[6] || ''), status:/^(anulado|cancelado)$/i.test(String(r[13]).trim())?'Anulado':'Registrado',
       createdBy:String(r[12] || ''),
+      annulledBy:String(r[17] || '') || undefined,
+      annulledAt:r[18] instanceof Date ? Utilities.formatDate(r[18],HMS_CONFIG.TIME_ZONE,"yyyy-MM-dd HH:mm") : undefined,
       reservationId:String(r[9] || '') || undefined,
       tourId:String(r[10] || '') || undefined,
       purchaseId:String(r[11] || '') || undefined
