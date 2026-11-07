@@ -65,3 +65,5 @@
 - Los pagos reintentados conservan un identificador mientras monto y método permanezcan iguales; `Reservations.gs` revisa si ya está registrado y exige conciliación ante resultados inconsistentes.
 - La hoja RESERVAS (Q, M, V, W y Z) y MOVIMIENTOS_CAJA siguen siendo fuentes de verdad. AA:AI no se sobrescriben.
 - Falta autenticación del servidor, confirmación definitiva de formatos de asignación y manejo transaccional robusto entre hojas antes de producción.
+
+**Actualización de Caja:** `reservations.payment` admite categoría de pago normal o anticipo, siempre con referencia de reserva y monto histórico conciliado. Los movimientos se escriben con fecha operativa de Sheets y estado `Activo` para que las fórmulas de `CIERRES_CAJA` los incluyan. Los reembolsos especializados y cualquier anulación que afecte saldo de reserva permanecen pendientes.
