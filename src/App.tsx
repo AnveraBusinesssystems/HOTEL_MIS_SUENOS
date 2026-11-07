@@ -70,6 +70,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
+  const [rmsLoaded, setRmsLoaded] = useState(false)
+  const [rmsLoading, setRmsLoading] = useState(false)
   const [reservationsLoaded, setReservationsLoaded] = useState(false)
   const [reservationsLoading, setReservationsLoading] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -86,9 +88,26 @@ function App() {
       ...next,
       roomPerformance: current.roomPerformance,
       roomMonthly: current.roomMonthly,
+      rmsCalendar: current.rmsCalendar,
       reservations: current.reservations,
     } : next)
     setLoading(false)
+  }
+
+  const loadRms = async (refresh = false) => {
+    if (!hotelService.isConfigured || rmsLoading) return false
+    setRmsLoading(true)
+    try {
+      const payload = await hotelService.getRms(refresh)
+      setData(current => current ? { ...current, rmsCalendar: payload.calendar } : current)
+      setRmsLoaded(true)
+      return true
+    } catch (error) {
+      console.warn('No fue posible cargar RMS; se conservan los datos actuales.', error)
+      return false
+    } finally {
+      setRmsLoading(false)
+    }
   }
 
   const loadReservations = async (refresh = false) => {
@@ -138,6 +157,11 @@ function App() {
     }
   }, [active, data, indicatorsLoaded, indicatorsLoading])
   useEffect(() => {
+    if (active === 'RMS / Tarifas' && data && !rmsLoaded && !rmsLoading) {
+      void loadRms()
+    }
+  }, [active, data, rmsLoaded, rmsLoading])
+  useEffect(() => {
     if (active === 'Reservas' && data && !reservationsLoaded && !reservationsLoading) {
       void loadReservations()
     }
@@ -169,6 +193,7 @@ function App() {
       setData(null)
       setIndicatorsLoaded(false)
       setReservationsLoaded(false)
+      setRmsLoaded(false)
       setSessionUser(null)
     }
     const scheduleExpiration = (lastActivity: number) => {
@@ -257,9 +282,14 @@ function App() {
   if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
 
   const refreshActivePage = async () => {
+    if (active === 'RMS / Tarifas' && hotelService.isConfigured) {
+      const updated = await loadRms(true)
+      setToast(updated ? 'Calendario RMS actualizado' : 'No se pudo actualizar RMS')
+      return
+    }
     if (active === 'Indicadores' && hotelService.isConfigured) {
       const updated = await loadIndicators(true)
       setToast(updated ? 'Indicadores actualizados' : 'No se pudieron actualizar los indicadores')
@@ -289,7 +319,7 @@ function App() {
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
-          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
+          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
           <button className="logout-button" onClick={signOut}>Salir</button>
