@@ -100,6 +100,7 @@ function getOperation_(refresh) {
   });
   var payload = {roomStates: rooms, operationTasks: operationTasks,
     operationDays: operationDays, cleaningHistory: history,
+    tours: readHotelTours_(ss), cashMovements: readHotelCashMovements_(ss),
     generatedAt:new Date().toISOString()};
   cache.put(HMS_CONFIG.OPERATION_CACHE_KEY, JSON.stringify(payload), HMS_CONFIG.OPERATION_CACHE_SECONDS);
   return payload;
