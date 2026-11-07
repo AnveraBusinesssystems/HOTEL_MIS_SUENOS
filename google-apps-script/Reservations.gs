@@ -153,6 +153,7 @@ function updateReservation_(request) {
     sheet.getRange(rowNo, 26).setValue(new Date());
     SpreadsheetApp.flush();
     invalidateReservationDependents_();
+    CacheService.getScriptCache().remove(HMS_CONFIG.CASH_CACHE_KEY);
     return mapReservationRow_(sheet.getRange(rowNo, 1, 1, 35).getValues()[0], todayKey_());
   } finally { lock.releaseLock(); }
 }
@@ -272,7 +273,7 @@ function recordReservationPayment_(request) {
     var rowCash = new Array(21).fill('');
     rowCash[0] = paymentId;               // A ID movimiento
     rowCash[1] = now;                     // B fecha y hora
-    rowCash[2] = dateKey_(now);           // C fecha operativa
+    rowCash[2] = cashDate_(dateKey_(now)); // C fecha operativa: tipo Date para SUMIFS
     rowCash[3] = 'Entrada';               // D movimiento
     rowCash[4] = 'Pago de reserva';       // E categoría
     rowCash[5] = 'Recepción y Reservas';  // F departamento
@@ -281,11 +282,12 @@ function recordReservationPayment_(request) {
     rowCash[8] = amount;                  // I monto
     rowCash[9] = key;                     // J clave de reserva
     rowCash[12] = 'Sistema HMS';          // M usuario
-    rowCash[13] = 'Registrado';           // N estado
+    rowCash[13] = 'Activo';               // N estado esperado por CIERRES_CAJA
     rowCash[15] = 'HMS_PAID_BEFORE:' + previous + ';HMS_PAID_AFTER:' + Math.round((previous + amount)*100)/100;
     rowCash[16] = now;                    // Q actualizado
     rowCash[20] = 'Reservas Web';         // U origen
-    var cashRow = Math.max(6, last + 1);
+    if(cashDayClosed_(ss,dateKey_(now))) throw new Error('No se puede registrar un pago en un día cerrado.');
+    var cashRow = cashNextRow_(ledger,1);
     ledger.getRange(cashRow, 1, 1, 21).setValues([rowCash]);
     try {
       var newPaid = Math.round((previous + amount) * 100) / 100;
