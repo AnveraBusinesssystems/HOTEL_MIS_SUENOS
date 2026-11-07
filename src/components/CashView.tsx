@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, Banknote, CalendarDays, ChevronRight, CircleDollarSign,
   CreditCard, FileText, Landmark, Plus, Receipt, Search, Trash2, WalletCards, X,
@@ -8,6 +8,7 @@ import type {
   CashPaymentMethod, InventoryItem, PurchaseRequest, Reservation, Role,
 } from '../types'
 import { longDate, money } from '../utils'
+import type { CashNewMovement } from '../services/cashService'
 
 interface CashViewProps {
   role: Role
@@ -23,6 +24,12 @@ interface CashViewProps {
   onInventoryChange: (updater: (rows: InventoryItem[]) => InventoryItem[]) => void
   onPurchaseRequestsChange: (updater: (rows: PurchaseRequest[]) => PurchaseRequest[]) => void
   onPurchaseRequestOpened: () => void
+  canWrite: boolean
+  onCreateCash: (movement: CashNewMovement, movementId: string) => Promise<boolean>
+  onPayReservation: (reservationKey: string, amount: number, method: CashPaymentMethod, paymentId: string, category: 'Pago de reserva' | 'Anticipo de reserva') => Promise<boolean>
+  onAnnulCash: (movementId: string, reason: string) => Promise<boolean>
+  onSaveCashDay: (date: string, fields: { openingCash?: number; countedCash?: number }) => Promise<boolean>
+  onCloseCashDay: (date: string, note: string, acceptDifference: boolean) => Promise<boolean>
   onNotify: (message: string) => void
 }
 
@@ -75,6 +82,7 @@ const areaForCategory: Record<CashMovementCategory, CashArea> = {
   'Cobro de tour': 'Recepción',
   'Pago a proveedor de tour': 'Administración',
   'Comisión de tour a recepción': 'Administración',
+  'Sin clasificar': 'Otros',
 }
 
 const freshDraft = (type: CashMovementType): Draft => ({
@@ -94,7 +102,7 @@ const balance = (reservation: Reservation) => Math.max(0, reservation.total - re
 export function CashView({
   role, reservations, movements, days, inventory, purchaseRequests, initialPurchaseRequestId,
   onReservationsChange, onMovementsChange, onDaysChange, onInventoryChange,
-  onPurchaseRequestsChange, onPurchaseRequestOpened, onNotify,
+  onPurchaseRequestsChange, onPurchaseRequestOpened, canWrite, onCreateCash, onPayReservation, onAnnulCash, onSaveCashDay, onCloseCashDay, onNotify,
 }: CashViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -103,22 +111,32 @@ export function CashView({
   const [typeFilter, setTypeFilter] = useState<'Todos' | CashMovementType>('Todos')
   const [methodFilter, setMethodFilter] = useState<'Todos' | CashPaymentMethod>('Todos')
   const [counted, setCounted] = useState('')
+  const [openingDraft, setOpeningDraft] = useState('')
+  const [closeNote, setCloseNote] = useState('')
+  const [acceptDifference, setAcceptDifference] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const retry = useRef<{ key: string; id: string } | null>(null)
   const [formError, setFormError] = useState('')
 
   const canAccess = ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
   const canAnnul = ['Dueño', 'Gerencia', 'Administración'].includes(role)
-  const day = days.find(item => item.date === selectedDate) ?? { date: selectedDate, openingCash: 0 }
+  const recordedDay = days.find(item => item.date === selectedDate)
+  const day = recordedDay ?? { date: selectedDate, openingCash: 0 }
+  const isClosed = recordedDay?.closed === true
   const dayMovements = movements.filter(item => item.date === selectedDate)
   const activeMovements = dayMovements.filter(item => item.status === 'Registrado')
   const entries = activeMovements.filter(item => item.type === 'Entrada').reduce((sum, item) => sum + item.amount, 0)
   const exits = activeMovements.filter(item => item.type === 'Salida').reduce((sum, item) => sum + item.amount, 0)
   const cashEntries = activeMovements.filter(item => item.type === 'Entrada' && item.paymentMethod === 'Efectivo').reduce((sum, item) => sum + item.amount, 0)
   const cashExits = activeMovements.filter(item => item.type === 'Salida' && item.paymentMethod === 'Efectivo').reduce((sum, item) => sum + item.amount, 0)
-  const expectedCash = day.openingCash + cashEntries - cashExits
-  const outstanding = reservations.filter(activeReservation).reduce((sum, item) => sum + balance(item), 0)
-  const pendingReservations = reservations.filter(item => activeReservation(item) && balance(item) > 0).sort((a, b) => balance(b) - balance(a))
+  const expectedCash = recordedDay ? day.openingCash + cashEntries - cashExits : null
+  const knownReservations = reservations.filter(item => activeReservation(item) && item.paymentKnown !== false)
+  const outstanding = knownReservations.reduce((sum, item) => sum + balance(item), 0)
+  const unknownBalances = reservations.filter(item => activeReservation(item) && item.paymentKnown === false).length
+  const pendingReservations = knownReservations.filter(item => balance(item) > 0).sort((a, b) => balance(b) - balance(a))
   const readyPurchaseRequests = purchaseRequests.filter(item => item.status === 'Tomada en cuenta')
-  const hasCashData = movements.length > 0 || days.length > 0 || reservations.length > 0
+  const hasCashData = movements.length > 0 || days.length > 0
+  const allowCashWrite = canWrite && !isClosed
 
   const openPurchaseRequest = (request: PurchaseRequest) => {
     const next = freshDraft('Salida')
@@ -132,8 +150,8 @@ export function CashView({
       unit: item.unit,
       total: '',
     }))
-    setFormError('')
-    setDraft(next)
+    onNotify('La compra de inventario requiere conectar su flujo de escritura en Inventory. No se registró un gasto.')
+    setDraft(null)
   }
 
   useEffect(() => {
@@ -176,101 +194,126 @@ export function CashView({
 
   const switchDraftType = (type: CashMovementType) => setDraft(current => current ? freshDraft(type) : null)
 
-  const saveMovement = () => {
-    if (!draft) return
-    const isInventoryPurchase = draft.type === 'Salida' && draft.category === 'Compra de inventario'
-    const amount = isInventoryPurchase
-      ? draft.purchaseItems.reduce((sum, item) => sum + Number(item.total || 0), 0)
-      : Number(draft.amount)
-    if (!Number.isFinite(amount) || amount <= 0) { setFormError('Ingresa un monto válido mayor a cero.'); return }
+  const saveMovement = async () => {
+    if (!draft || saving || !allowCashWrite) return
+    const amount = Number(draft.amount)
+    if (!Number.isFinite(amount) || amount <= 0 || Math.abs(Math.round(amount * 100) - amount * 100) > .00001) {
+      setFormError('Ingresa un monto válido de hasta dos decimales.')
+      return
+    }
     const linksReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
-    const reservation = reservations.find(item => item.id === draft.reservationId)
-    if (linksReservation && !reservation) { setFormError('Selecciona la reserva que está pagando.'); return }
-    if (reservation && amount > balance(reservation)) { setFormError(`El pago no puede exceder el saldo de ${money(balance(reservation))}.`); return }
-    if (isInventoryPurchase && draft.purchaseItems.some(item => !item.product || !item.unit || Number(item.quantity) <= 0 || Number(item.total) <= 0)) {
-      setFormError('Completa producto, cantidad y total en cada renglón de la compra.'); return
+    const reservation = reservations.find(item => item.subReservationId === draft.reservationId)
+    if (linksReservation && (!reservation || reservation.paymentKnown === false)) {
+      setFormError('Selecciona una reserva conciliada con monto pagado conocido.')
+      return
     }
-    if (!draft.description.trim()) { setFormError('Agrega un concepto breve para identificar el movimiento.'); return }
-
-    const sameDayCount = movements.filter(item => item.date === selectedDate).length + 1
-    const stamp = selectedDate.replaceAll('-', '')
-    const movement: CashMovement = {
-      id: `MOV-${stamp}-${String(sameDayCount).padStart(3, '0')}`,
-      date: selectedDate,
-      time: currentTime(),
-      type: draft.type,
-      amount,
-      paymentMethod: draft.paymentMethod,
-      area: areaForCategory[draft.category],
-      category: draft.category,
-      description: draft.description.trim(),
-      status: 'Registrado',
-      createdBy: role,
-      reservationId: linksReservation ? draft.reservationId : undefined,
-      purchaseRequestId: isInventoryPurchase && draft.purchaseRequestId ? draft.purchaseRequestId : undefined,
-      purchaseId: draft.type === 'Salida' ? `COMP-${stamp}-${String(movements.filter(item => item.date === selectedDate && item.type === 'Salida').length + 1).padStart(3, '0')}` : undefined,
-      purchaseItems: isInventoryPurchase ? draft.purchaseItems.map(item => ({ product: item.product, quantity: Number(item.quantity), unit: item.unit, total: Number(item.total) })) : undefined,
+    if (reservation && amount > balance(reservation)) {
+      setFormError(`El pago supera el saldo de ${money(balance(reservation))}.`)
+      return
     }
-    onMovementsChange(rows => [movement, ...rows])
-    if (reservation) onReservationsChange(rows => rows.map(item => item.id === reservation.id ? { ...item, paid: Math.min(item.total, item.paid + amount) } : item))
-    if (isInventoryPurchase) {
-      onInventoryChange(rows => rows.map(item => {
-        const purchased = movement.purchaseItems?.filter(line => line.product === item.name).reduce((sum, line) => sum + line.quantity, 0) ?? 0
-        if (!purchased) return item
-        const stock = item.stock + purchased
-        return { ...item, stock, suggestedPurchase: Math.max(0, Math.ceil(item.parLevel - stock)), lastUpdated: 'Ahora' }
-      }))
-      if (draft.purchaseRequestId) {
-        onPurchaseRequestsChange(rows => rows.map(item => item.id === draft.purchaseRequestId ? {
-          ...item,
-          status: 'Comprada',
-          purchasedBy: role,
-          purchasedAt: `Hoy · ${currentTime()}`,
-          cashMovementId: movement.id,
-        } : item))
-      }
+    if (!draft.description.trim()) {
+      setFormError('Indica un concepto para el movimiento.')
+      return
     }
-    setDraft(null)
-    onNotify(isInventoryPurchase ? `Compra real registrada · inventario actualizado · ${money(amount)}` : `${draft.type} registrada · ${money(amount)}`)
+    const allowedIndependent = draft.type === 'Entrada'
+      ? ['Venta de restaurante', 'Otro ingreso']
+      : ['Mantenimiento','Lavandería','Servicios','Gastos externos','Retiro de efectivo','Otro gasto']
+    if (!linksReservation && !allowedIndependent.includes(draft.category)) {
+      setFormError('Este movimiento requiere conectar Inventario, Tours o el flujo especializado correspondiente.')
+      return
+    }
+    const key = JSON.stringify({draft,selectedDate,amount})
+    const id = retry.current?.key === key ? retry.current.id : 'HMS-CASH-' + crypto.randomUUID()
+    retry.current = {key,id}
+    setSaving(true)
+    try {
+      const ok = linksReservation && reservation
+        ? await onPayReservation(reservation.subReservationId,amount,draft.paymentMethod,id,
+            draft.category as 'Pago de reserva' | 'Anticipo de reserva')
+        : await onCreateCash({
+            type:draft.type,date:selectedDate,amount,paymentMethod:draft.paymentMethod,
+            category:draft.category,description:draft.description.trim(),
+          },id)
+      if (ok) {
+        retry.current = null
+        setDraft(null)
+        onNotify(`${draft.type} registrada en Google Sheets · ${money(amount)}`)
+      } else setFormError('No se confirmó el registro del movimiento.')
+    } catch (error) {
+      console.warn('Movimiento de caja no confirmado',error)
+      setFormError('No se confirmó el movimiento. Verifica si se registró antes de intentar otra operación.')
+    } finally { setSaving(false) }
   }
 
-  const saveCount = () => {
-    const value = Number(counted)
-    if (!Number.isFinite(value) || value < 0) { onNotify('Ingresa un conteo de efectivo válido'); return }
-    onDaysChange(rows => rows.some(item => item.date === selectedDate)
-      ? rows.map(item => item.date === selectedDate ? { ...item, countedCash: value } : item)
-      : [...rows, { date: selectedDate, openingCash: 0, countedCash: value }])
-    setCounted('')
-    onNotify('Conteo de efectivo registrado')
+  const saveOpening = async () => {
+    if (saving || !allowCashWrite) return
+    if (openingDraft.trim() === '' || !Number.isFinite(Number(openingDraft)) || Number(openingDraft) < 0) {
+      onNotify('Ingresa un fondo inicial válido, incluido cero si corresponde.')
+      return
+    }
+    setSaving(true)
+    try {
+      await onSaveCashDay(selectedDate,{openingCash:Number(openingDraft)})
+      setOpeningDraft('')
+      onNotify('Fondo inicial guardado')
+    } catch (error) {
+      console.warn(error);onNotify('No se guardó el fondo inicial')
+    } finally { setSaving(false) }
   }
 
-  const annul = (movement: CashMovement) => {
-    onMovementsChange(rows => rows.map(item => item.id === movement.id ? { ...item, status: 'Anulado', annulledBy: role, annulledAt: `${selectedDate} ${currentTime()}` } : item))
-    if (movement.reservationId && movement.type === 'Entrada') {
-      onReservationsChange(rows => rows.map(item => item.id === movement.reservationId ? { ...item, paid: Math.max(0, item.paid - movement.amount) } : item))
+  const saveCount = async () => {
+    if (saving || !allowCashWrite || !recordedDay) return
+    if (counted.trim()==='' || !Number.isFinite(Number(counted)) || Number(counted)<0) {
+      onNotify('Ingresa un conteo de efectivo válido.')
+      return
     }
-    if (movement.category === 'Compra de inventario' && movement.purchaseItems?.length) {
-      onInventoryChange(rows => rows.map(item => {
-        const purchased = movement.purchaseItems?.filter(line => line.product === item.name).reduce((sum, line) => sum + line.quantity, 0) ?? 0
-        if (!purchased) return item
-        const stock = Math.max(0, item.stock - purchased)
-        return { ...item, stock, suggestedPurchase: Math.max(0, Math.ceil(item.parLevel - stock)), lastUpdated: 'Ahora' }
-      }))
-      if (movement.purchaseRequestId) {
-        onPurchaseRequestsChange(rows => rows.map(item => item.id === movement.purchaseRequestId ? {
-          ...item,
-          status: 'Tomada en cuenta',
-          purchasedBy: undefined,
-          purchasedAt: undefined,
-          cashMovementId: undefined,
-        } : item))
-      }
-    }
-    setSelectedMovement(null)
-    onNotify('Movimiento anulado; el historial se conservó')
+    setSaving(true)
+    try {
+      await onSaveCashDay(selectedDate,{countedCash:Number(counted)})
+      setCounted('')
+      onNotify('Conteo de efectivo guardado')
+    } catch (error) {
+      console.warn(error);onNotify('No se guardó el conteo')
+    } finally { setSaving(false) }
   }
 
-  const difference = day.countedCash === undefined ? undefined : day.countedCash - expectedCash
+  const closeDay = async () => {
+    if (!recordedDay || recordedDay.countedCash===undefined || saving || isClosed) return
+    if (difference != null && Math.abs(difference) > .009 && (!acceptDifference || !closeNote.trim())) {
+      onNotify('Explica y acepta expresamente la diferencia antes de cerrar.')
+      return
+    }
+    setSaving(true)
+    try {
+      await onCloseCashDay(selectedDate,closeNote,acceptDifference)
+      setCloseNote('')
+      setAcceptDifference(false)
+      onNotify('Cierre de Caja registrado en Google Sheets')
+    } catch (error) {
+      console.warn(error);onNotify('No se pudo cerrar el día de Caja')
+    } finally {setSaving(false)}
+  }
+
+  const annul = async (movement: CashMovement) => {
+    if (saving || !canAnnul || !allowCashWrite) return
+    const independent = !movement.reservationId && !movement.tourId && !movement.purchaseId &&
+      !['Pago de reserva','Anticipo de reserva','Compra de inventario','Cobro de tour',
+        'Pago a proveedor de tour','Comisión de tour a recepción'].includes(movement.category)
+    if (!independent) {
+      onNotify('La anulación requiere conciliarse desde el módulo de origen.')
+      return
+    }
+    setSaving(true)
+    try {
+      await onAnnulCash(movement.id,'Anulación administrativa desde Caja')
+      setSelectedMovement(null)
+      onNotify('Movimiento anulado; el historial permanece')
+    } catch (error) {
+      console.warn(error);onNotify('No se confirmó la anulación')
+    } finally {setSaving(false)}
+  }
+
+  const difference = day.countedCash === undefined || expectedCash === null ? undefined : day.countedCash - expectedCash
 
   return <section className="page cash-page">
     <section className="page-heading cash-heading">
