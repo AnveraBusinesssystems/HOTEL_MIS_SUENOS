@@ -95,6 +95,7 @@ function App() {
       operationTasks: current.operationTasks,
       operationDays: current.operationDays,
       cleaningHistory: current.cleaningHistory,
+      dailyOperation: current.dailyOperation,
       tours: current.tours,
       cashMovements: current.cashMovements,
       reservations: current.reservations,
@@ -390,7 +391,7 @@ function App() {
       {active === 'Operación diaria' && <OperationsView
         role={role} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
         days={data.operationDays} tours={data.tours} cashMovements={data.cashMovements}
-        staff={data.staff} staffTimeEntries={data.staffTimeEntries}
+        staff={data.staff} staffTimeEntries={data.staffTimeEntries} dailyOperation={data.dailyOperation}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
         onDaysChange={updateOperationDays} onPersistReservation={persistReservation} onOperationEvent={recordOperationEvent} onToursChange={updateTours}
         onCashMovementsChange={updateCashMovements} onNotify={setToast}
