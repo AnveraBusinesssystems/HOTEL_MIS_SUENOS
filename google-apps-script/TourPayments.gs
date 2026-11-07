@@ -48,9 +48,14 @@ function recordTourPayment_(request) {
     if(oldCash || oldPayment) {
       if(!oldCash || !oldPayment) throw new Error('Pago incompleto entre Caja y PAGOS_TOURS: conciliar antes de reintentar.');
       var prev=journal.getRange(oldPayment.getRow(),1,1,13).getValues()[0];
+      var previousCash=ledger.getRange(oldCash,1,1,21).getValues()[0];
+      var sourceAgain=categories[kind];
       if(String(prev[3])===tourId && String(prev[4])===kind &&
          String(prev[5])===method && numberOrZero_(prev[6])===amount &&
-         String(prev[7])===eventId && String(prev[9])==='Activo') {
+         String(prev[7])===eventId && String(prev[9])==='Activo' &&
+         String(previousCash[10])===tourId && String(previousCash[4])===sourceAgain.category &&
+         String(previousCash[7])===method && numberOrZero_(previousCash[8])===amount &&
+         String(previousCash[13])==='Activo') {
         return {tourId:tourId,eventId:eventId,duplicate:true};
       }
       throw new Error('Identificador del pago ya utilizado con valores diferentes.');
