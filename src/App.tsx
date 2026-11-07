@@ -70,6 +70,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
+  const [cashLoaded, setCashLoaded] = useState(false)
+  const [cashLoading, setCashLoading] = useState(false)
   const [operationLoaded, setOperationLoaded] = useState(false)
   const [operationLoading, setOperationLoading] = useState(false)
   const [rmsLoaded, setRmsLoaded] = useState(false)
@@ -98,9 +100,69 @@ function App() {
       dailyOperation: current.dailyOperation,
       tours: current.tours,
       cashMovements: current.cashMovements,
+      cashDays: current.cashDays,
       reservations: current.reservations,
     } : next)
     setLoading(false)
+  }
+
+  const loadCash = async (refresh = false) => {
+    if (!hotelService.isConfigured || cashLoading) return false
+    setCashLoading(true)
+    try {
+      const payload = await hotelService.getCash(refresh)
+      setData(current => current ? { ...current, ...payload } : current)
+      setCashLoaded(true)
+      return true
+    } catch (error) {
+      console.warn('No fue posible cargar Caja.', error)
+      return false
+    } finally {
+      setCashLoading(false)
+    }
+  }
+
+  const createCashMovement = async (movement: Parameters<typeof hotelService.createCashMovement>[0], movementId: string) => {
+    await hotelService.createCashMovement(movement, movementId)
+    const payload = await hotelService.getCash(true)
+    setData(current => current ? { ...current, ...payload } : current)
+    setOperationLoaded(false)
+    return true
+  }
+
+  const annulCashMovement = async (movementId: string, reason: string) => {
+    await hotelService.annulCashMovement(movementId, reason)
+    const payload = await hotelService.getCash(true)
+    setData(current => current ? { ...current, ...payload } : current)
+    setOperationLoaded(false)
+    return true
+  }
+
+  const saveCashDay = async (date: string, fields: { openingCash?: number; countedCash?: number }) => {
+    await hotelService.saveCashDay(date, fields)
+    const payload = await hotelService.getCash(true)
+    setData(current => current ? { ...current, ...payload } : current)
+    return true
+  }
+
+  const closeCashDay = async (date: string, note: string, acceptDifference: boolean) => {
+    await hotelService.closeCashDay(date, note, acceptDifference)
+    const payload = await hotelService.getCash(true)
+    setData(current => current ? { ...current, ...payload } : current)
+    return true
+  }
+
+  const payFromCash = async (
+    reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia',
+    paymentId: string, category: 'Pago de reserva' | 'Anticipo de reserva',
+  ) => {
+    await hotelService.recordReservationPayment(reservationKey, amount, method, paymentId, category)
+    const [cash, bookings] = await Promise.all([
+      hotelService.getCash(true), hotelService.getReservations(true),
+    ])
+    setData(current => current ? { ...current, ...cash, ...bookings } : current)
+    setOperationLoaded(false)
+    return true
   }
 
   const loadOperation = async (refresh = false) => {
@@ -200,6 +262,11 @@ function App() {
     if (sessionUser) void load()
   }, [sessionUser])
   useEffect(() => {
+    if (active === 'Caja' && data && !cashLoaded && !cashLoading) {
+      void loadCash()
+    }
+  }, [active, data, cashLoaded, cashLoading])
+  useEffect(() => {
     if (active === 'Indicadores' && data && !indicatorsLoaded && !indicatorsLoading) {
       void loadIndicators(data.monthly.length === 0)
     }
@@ -248,6 +315,7 @@ function App() {
       setReservationsLoaded(false)
       setRmsLoaded(false)
       setOperationLoaded(false)
+      setCashLoaded(false)
       setSessionUser(null)
     }
     const scheduleExpiration = (lastActivity: number) => {
@@ -289,7 +357,12 @@ function App() {
     setData(current => current ? { ...current, reservations: updater(current.reservations) } : current)
   }
   const persistReservation = (reservationKey: string, changes: Partial<DashboardData['reservations'][number]>) => hotelService.updateReservation(reservationKey, changes)
-  const persistPayment = (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => hotelService.recordReservationPayment(reservationKey, amount, method, paymentId)
+  const persistPayment = async (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => {
+    const saved = await hotelService.recordReservationPayment(reservationKey, amount, method, paymentId)
+    setCashLoaded(false)
+    setOperationLoaded(false)
+    return saved
+  }
   const updateRooms = (updater: (rows: DashboardData['roomStates']) => DashboardData['roomStates']) => {
     setData(current => current ? { ...current, roomStates: updater(current.roomStates) } : current)
   }
@@ -337,9 +410,14 @@ function App() {
   if (!sessionUser) return <LoginScreen onLogin={() => { localStorage.setItem(AUTH_STORAGE_KEY, 'true'); localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); setSessionUser(DEMO_SESSION_USER) }}/>
   if (loading || !data) return <div className="system-loading"><span>HOTEL MIS SUEÑOS</span><small>Preparando análisis RMS…</small></div>
 
-  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
+  const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setCashLoaded(false); setSessionUser(null); setMobileNavOpen(false) }
 
   const refreshActivePage = async () => {
+    if (active === 'Caja' && hotelService.isConfigured) {
+      const updated = await loadCash(true)
+      setToast(updated ? 'Caja actualizada' : 'No se pudo actualizar Caja')
+      return
+    }
     if (active === 'Operación diaria' && hotelService.isConfigured) {
       const updated = await loadOperation(true)
       setToast(updated ? 'Operación diaria actualizada' : 'No se pudo actualizar Operación diaria')
@@ -379,7 +457,7 @@ function App() {
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
           <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
-          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
+          <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading || cashLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
           <button className="logout-button" onClick={signOut}>Salir</button>
@@ -409,7 +487,10 @@ function App() {
         inventory={data.inventory} purchaseRequests={data.purchaseRequests} initialPurchaseRequestId={cashPurchaseRequestId}
         onReservationsChange={updateReservations} onMovementsChange={updateCashMovements}
         onDaysChange={updateCashDays} onInventoryChange={updateInventory}
-        onPurchaseRequestsChange={updatePurchaseRequests} onPurchaseRequestOpened={() => setCashPurchaseRequestId(undefined)} onNotify={setToast}
+        onPurchaseRequestsChange={updatePurchaseRequests} onPurchaseRequestOpened={() => setCashPurchaseRequestId(undefined)}
+        canWrite={hotelService.isConfigured}
+        onCreateCash={createCashMovement} onAnnulCash={annulCashMovement} onSaveCashDay={saveCashDay}
+        onCloseCashDay={closeCashDay} onPayReservation={payFromCash} onNotify={setToast}
       />}
       {active === 'Inventario' && <InventoryView
         role={role} items={data.inventory} requests={data.purchaseRequests}
