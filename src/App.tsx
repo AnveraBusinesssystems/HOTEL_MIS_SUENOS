@@ -390,7 +390,7 @@ function App() {
         days={data.operationDays} tours={data.tours} cashMovements={data.cashMovements}
         staff={data.staff} staffTimeEntries={data.staffTimeEntries}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
-        onDaysChange={updateOperationDays} onOperationEvent={recordOperationEvent} onToursChange={updateTours}
+        onDaysChange={updateOperationDays} onPersistReservation={persistReservation} onOperationEvent={recordOperationEvent} onToursChange={updateTours}
         onCashMovementsChange={updateCashMovements} onNotify={setToast}
       />}
       {active === 'Caja' && <CashView
