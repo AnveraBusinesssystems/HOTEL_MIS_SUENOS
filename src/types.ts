@@ -382,6 +382,9 @@ export interface InventoryItem {
   suggestedPurchase: number
   lastUpdated: string
   lastPrice: number
+  stockKnown?: boolean
+  priceKnown?: boolean
+  parKnown?: boolean
 }
 
 export type PurchaseRequestStatus = 'Pendiente' | 'Tomada en cuenta' | 'Comprada' | 'Cancelada'
