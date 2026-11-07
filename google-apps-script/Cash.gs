@@ -6,6 +6,12 @@ function getCash_(refresh) {
   if (cached) return JSON.parse(cached);
   var ss = SpreadsheetApp.openById(HMS_CONFIG.SPREADSHEET_ID);
   var movements = readHotelCashMovements_(ss);
+  try {
+    var invoiceDetails=readInventoryPurchaseDetails_();
+    movements.forEach(function(m){if(m.purchaseId && invoiceDetails[m.purchaseId]) m.purchaseItems=invoiceDetails[m.purchaseId];});
+  } catch(error) {
+    console.warn('No se pudo cargar detalle de compras Inventory: '+error);
+  }
   var closures = cashSheet_(ss, 'CIERRES_CAJA',
     ['ID cierre','Fecha operativa','Saldo inicial','Entradas efectivo','Salidas efectivo','Efectivo esperado',
     'Efectivo contado','Diferencia','Entradas tarjeta','Salidas tarjeta','Entradas transferencia',
