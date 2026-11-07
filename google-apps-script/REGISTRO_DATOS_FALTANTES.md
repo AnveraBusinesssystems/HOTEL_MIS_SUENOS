@@ -50,6 +50,24 @@
 
 Ver `RESERVAS_MAPEO.md` para las 35 columnas y reglas de escritura.
 
+## 2B. Operación diaria — sin duplicar datos
+
+| Dato | ¿Nueva columna? | Acción |
+| --- | --- | --- |
+| Llegadas/salidas, huéspedes alojados, noches y desayuno esperado | No | RESERVAS + OPERACION_DIARIA A:R |
+| Habitación activa y categoría | No | CONFIGURACION A:E |
+| Estado básico de habitaciones | No | ESTADO_HABITACIONES A:F, fórmulas protegidas |
+| Responsable, inicio, fin, incidencia activa | No | ESTADO_HABITACIONES G:M |
+| Historial de acciones de limpieza | No | REGISTRO_LIMPIEZA A:F |
+| Tareas complejas, prioridades, estados y vencimientos exactos | Falta estructura persistente | El log simple no conserva todo el modelo; estudiar fuente adecuada antes de agregar campos |
+| Acceso/no molestar, bloqueos manuales | Falta persistencia fiable | No inferir desde las fórmulas de ocupación |
+| Apertura/cierre de jornada | Falta estado persistente | No confundir marca local con sincronización Cloudbeds |
+| Envío e historial de cierre operativo | Falta fuente | CIERRES_CAJA es diferente de reporte operativo diario |
+| Fichajes de personal | Falta fuente de asistencia real | TURNOS_PERSONAL son turnos programados |
+| Cancelaciones del día | Falta log de eventos | Estado actual de reserva no da fecha de cancelación |
+
+Ver `OPERACION_DIARIA_MAPEO.md`. Se reutilizan las rutas de RESERVAS y se añade `operation.get`/`operation.event`.
+
 ## 3. Política para nuevas columnas/tablas
 
 - Primero reutilizar una columna existente, fórmula o dato ya normalizado.
@@ -66,8 +84,8 @@ Ver `RESERVAS_MAPEO.md` para las 35 columnas y reglas de escritura.
 2. [x] **Indicadores** — Rendimiento y Habitaciones preparados; Costos pendiente.
 3. [x] **RMS / Tarifas** — ocupación y disponibilidad preparadas; precios, pickup, modelo y publicación pendientes.
 4. [x] **Reservas** — lectura, filtros locales, validación de asignación, actualización de estados y registro de pagos preparado. Faltan fuente de contacto, persistencia de limpieza, búsqueda histórica fuera de ventana y sincronización Cloudbeds.
-5. [ ] **Operación diaria** — **SIGUIENTE**
-6. [ ] **Caja**
+5. [x] **Operación diaria** — lectura de habitaciones y registro de eventos preparados. Pendiente: estados operativos avanzados, tareas estructuradas, inicio/cierre formal, tours, correo e historial de reportes.
+6. [ ] **Caja** — **SIGUIENTE**. Mapear MOVIMIENTOS_CAJA, CIERRES_CAJA, TOURS y PAGOS_TOURS, reutilizando pagos de Reservas.
 7. [ ] **Inventario** — conectar la segunda hoja Inventory.
 8. [ ] **Personal**
 9. [ ] **Configuración**
