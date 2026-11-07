@@ -95,6 +95,8 @@ function App() {
       operationTasks: current.operationTasks,
       operationDays: current.operationDays,
       cleaningHistory: current.cleaningHistory,
+      tours: current.tours,
+      cashMovements: current.cashMovements,
       reservations: current.reservations,
     } : next)
     setLoading(false)
