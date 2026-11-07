@@ -61,3 +61,13 @@ La lectura inicial de habitaciones, datos diarios, tours y caja está preparada;
 - `src/types.ts`, `src/data/emptyData.ts`
 
 **Próxima sección:** Caja. También debe coordinarse la conexión de Tours y Cierre diario para no duplicar escrituras en MOVIMIENTOS_CAJA.
+
+## Consolidación de escrituras de operación (6 nov 2026)
+
+- Operación diaria y Reservas comparten `operation.event` como única escritura para solicitudes de limpieza.
+- Los botones de **Habitaciones** y **Limpieza** ya esperan el resultado de Apps Script antes de tomar el nuevo estado del servidor. No se añaden tareas únicamente al estado local como señal de guardado.
+- **Confirmar salida** actualiza primero RESERVAS Q y después intenta registrar la solicitud de limpieza; si falla el segundo paso lo informa como una operación parcialmente completada.
+- Apps Script impide aprobar una habitación que tenga incidencia activa en ESTADO_HABITACIONES J. Se intenta restaurar G:M y retirar el evento de REGISTRO_LIMPIEZA si una escritura parcial falla.
+- **Iniciar operación** permanece deshabilitado hasta conectar una fuente real de apertura de jornada. Cambio manual de «No molestar/acceso» también permanece deshabilitado.
+- **Limitación vigente:** el historial de limpieza A:F no modela IDs individuales de tareas, prioridades, fechas límite ni resolución individual de múltiples incidencias. El frontend reconstruye tareas básicas; no afirmar persistencia de un sistema completo de tareas.
+- No hay transacción atómica entre hojas, ni se ha hecho despliegue o validación de extremo a extremo.
