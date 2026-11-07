@@ -2,6 +2,7 @@ import { emptyDashboard } from '../data/emptyData'
 import type { DashboardData } from '../types'
 import { indicatorsService } from './indicatorsService'
 import { rmsService } from './rmsService'
+import { operationService } from './operationService'
 import { reservationsService } from './reservationsService'
 import { summaryService } from './summaryService'
 
@@ -23,6 +24,14 @@ export const hotelService = {
 
   getIndicators(includeMonthly = false) {
     return indicatorsService.get(includeMonthly)
+  },
+
+  getOperation(refresh = false) {
+    return operationService.get(refresh)
+  },
+
+  recordOperationEvent(event: Parameters<typeof operationService.recordEvent>[0]) {
+    return operationService.recordEvent(event)
   },
 
   getRms(refresh = false) {
