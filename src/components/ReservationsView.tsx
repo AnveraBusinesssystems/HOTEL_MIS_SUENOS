@@ -14,6 +14,7 @@ type Props = {
   onChange: (updater: (rows: Reservation[]) => Reservation[]) => void
   onPersist?: (reservationKey: string, changes: Partial<Reservation>) => Promise<Reservation>
   onPayment?: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => Promise<Reservation>
+  onRequestCleaning?: (roomNumber: string) => Promise<boolean>
   onNotify: (message: string) => void
 }
 
@@ -29,7 +30,7 @@ const shiftDate = (date: string, amount: number) => {
 }
 const calendarLabel = (date: string) => new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`)).replace('.', '').toUpperCase()
 
-export function ReservationsView({ reservations, onChange, onPersist, onPayment, onNotify }: Props) {
+export function ReservationsView({ reservations, onChange, onPersist, onPayment, onRequestCleaning, onNotify }: Props) {
   const [selectedKey, setSelectedKey] = useState<string>()
   const [view, setView] = useState<'Calendario' | 'Lista'>('Calendario')
   const [calendarStart, setCalendarStart] = useState(TODAY)
@@ -86,15 +87,24 @@ export function ReservationsView({ reservations, onChange, onPersist, onPayment,
   }
 
   const updateReservation = async (reservationKey: string, changes: Partial<Reservation>, message: string) => {
-    const localOnly = Object.keys(changes).every(key => key === 'cleaningRequested')
+    if (!onPersist) { onNotify('Conexión de Reservas no disponible; nada se guardó'); return }
     try {
-      const saved = !localOnly && onPersist ? await onPersist(reservationKey, changes) : undefined
-      onChange(rows => rows.map(row => row.subReservationId === reservationKey ? (saved ?? { ...row, ...changes }) : row))
-      onNotify(saved ? `${message}. Google Sheets actualizado` : `${message}. Cambio local`)
+      const saved = await onPersist(reservationKey, changes)
+      onChange(rows => rows.map(row => row.subReservationId === reservationKey ? saved : row))
+      onNotify(`${message}. Google Sheets actualizado`)
     } catch (error) {
       console.warn('No fue posible actualizar la reserva.', error)
       onNotify('No fue posible guardar el cambio en Google Sheets')
     }
+  }
+
+  const requestCleaning = async (reservation: Reservation) => {
+    if (!reservation.roomNumber || !onRequestCleaning) {
+      onNotify('Asigna una habitación y conecta Apps Script antes de solicitar limpieza')
+      return
+    }
+    const ok = await onRequestCleaning(reservation.roomNumber)
+    onNotify(ok ? `Limpieza registrada para ${reservation.roomNumber}` : 'No se confirmó la solicitud de limpieza')
   }
 
   return <div className="page reservations-page">
@@ -149,7 +159,7 @@ export function ReservationsView({ reservations, onChange, onPersist, onPayment,
 
     {selected && <ReservationDrawer
       reservation={selected} onClose={() => setSelectedKey(undefined)}
-      onUpdate={updateReservation} onPayment={registerPayment} canRegisterPayment={Boolean(onPayment)} onNotify={onNotify}
+      onUpdate={updateReservation} onRequestCleaning={requestCleaning} onPayment={registerPayment} canRegisterPayment={Boolean(onPayment)} onNotify={onNotify}
     />}
   </div>
 }
@@ -188,10 +198,11 @@ function CalendarRoomRow({ label, dates, reservations, columns, onOpen }: { labe
   </div>
 }
 
-function ReservationDrawer({ reservation, onClose, onUpdate, onPayment, canRegisterPayment, onNotify }: {
+function ReservationDrawer({ reservation, onClose, onUpdate, onRequestCleaning, onPayment, canRegisterPayment, onNotify }: {
   reservation: Reservation
   onClose: () => void
   onUpdate: (reservationKey: string, changes: Partial<Reservation>, message: string) => Promise<void>
+  onRequestCleaning: (reservation: Reservation) => Promise<void>
   onPayment: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia') => Promise<boolean>
   canRegisterPayment: boolean
   onNotify: (message: string) => void
@@ -221,7 +232,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onPayment, canRegis
 
       <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{reservation.paymentKnown === false ? 'Sin registro' : money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 && reservation.paymentKnown !== false ? 'negative' : 'positive'}>{reservation.paymentKnown === false ? 'Sin determinar' : money(due)}</b></div></div>{due > 0 && reservation.paymentKnown !== false && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as typeof paymentMethod)}><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { setSavingPayment(true); void onPayment(reservation.subReservationId, requestedPayment, paymentMethod).then(ok => { if (ok) setPaymentAmount('') }).finally(() => setSavingPayment(false)) }}>{savingPayment ? 'Guardando…' : 'Registrar'}</button></div>}</section>
 
-      <footer className="reservation-actions"><button onClick={() => void onUpdate(reservation.subReservationId, { cleaningRequested: !reservation.cleaningRequested }, reservation.cleaningRequested ? 'solicitud de limpieza retirada' : 'limpieza solicitada') }><Sparkles size={14}/>{reservation.cleaningRequested ? 'Retirar limpieza' : 'Solicitar limpieza'}</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
+      <footer className="reservation-actions"><button disabled={!reservation.roomNumber || reservation.status === 'Cancelada' || reservation.status === 'No show'} onClick={() => void onRequestCleaning(reservation)}><Sparkles size={14}/>Solicitar limpieza</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
     </aside>
   </div>
 }
