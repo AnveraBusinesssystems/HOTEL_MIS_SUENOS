@@ -392,10 +392,8 @@ function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRooms
   const [reportItem, setReportItem] = useState<CleaningWorkItem>()
   const [selectedIssues, setSelectedIssues] = useState<RoomIssueType[]>([])
   const [reportType, setReportType] = useState<RoomIssueType>('Falta control de TV')
-  const activity = (action: string) => ({ id: `ACT-${Date.now()}-${Math.random().toString(16).slice(2)}`, action, by: role, at: hotelTime() })
-  const persist = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work: string, note = '') => {
-    void onOperationEvent({ roomNumber, actionType, worker: role, work, note, eventId: 'HMS-OP-' + crypto.randomUUID() })
-  }
+  const persist = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work: string, note = '') =>
+    onOperationEvent({ roomNumber, actionType, worker: role, work, note, eventId: 'HMS-OP-' + crypto.randomUUID() })
   const grouped = new Map<string, OperationTask[]>()
   tasks.filter(task => CLEANING_TYPES.includes(task.type)).forEach(task => grouped.set(task.roomNumber, [...(grouped.get(task.roomNumber) ?? []), task]))
   const workItems: CleaningWorkItem[] = rooms.map(room => {
@@ -417,60 +415,39 @@ function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRooms
   const queueCount = (target: CleaningQueue) => workItems.filter(item => item.section === target).length
   const itemHasCleaning = (item: CleaningWorkItem) => item.tasks.some(task => task.status !== 'Terminada' && task.type !== 'Reposición') || rooms.find(room => room.roomNumber === item.roomNumber)?.cleaning !== 'Limpia'
 
-  const startWork = (item: CleaningWorkItem) => {
-    const ids = new Set(item.tasks.filter(task => task.status !== 'Terminada').map(task => task.id))
-    const room = rooms.find(room => room.roomNumber === item.roomNumber)
-    onTasksChange(rows => {
-      if (ids.size) return rows.map(task => ids.has(task.id) ? { ...task, status: 'En proceso', startedAt: hotelTime(), assignedTo: role === 'Limpieza' ? 'Personal de limpieza' : task.assignedTo } : task)
-      const type: OperationTask['type'] = item.section === 'Salidas' ? 'Limpieza de salida' : room?.occupancy === 'Ocupada' ? 'Limpieza de estancia' : 'Limpieza general'
-      return [...rows, { id: `OP-${Date.now()}`, date: TODAY, roomNumber: item.roomNumber, roomType: item.roomType, type, status: 'En proceso', priority: item.priority, assignedTo: role === 'Limpieza' ? 'Personal de limpieza' : 'Limpieza', requestedAt: hotelTime(), startedAt: hotelTime(), deadline: 'Hoy', note: 'Trabajo iniciado desde el panel de Limpieza.' }]
-    })
-    onRoomsChange(rows => rows.map(room => room.roomNumber === item.roomNumber ? { ...room, cleaning: itemHasCleaning(item) ? 'En limpieza' : room.cleaning, activityLog: [...(room.activityLog ?? []), activity('Inició el trabajo de habitación')] } : room))
-    persist(item.roomNumber, 'Inició limpieza', item.tasks[0]?.type ?? 'Limpieza general')
-    onNotify(`${item.roomNumber}: inicio enviado al registro`)
+  const startWork = async (item: CleaningWorkItem) => {
+    const ok = await persist(item.roomNumber, 'Inició limpieza', item.tasks[0]?.type ?? 'Limpieza general')
+    onNotify(ok ? `${item.roomNumber}: trabajo iniciado y guardado` : `${item.roomNumber}: no fue posible iniciar el trabajo`)
   }
-  const completeWork = (item: CleaningWorkItem, issues: RoomIssueType[] = []) => {
-    const completedIds = new Set(item.tasks.map(task => task.id))
-    const issueRecords = issues.map((issue, index) => ({ issue, taskId: `OP-${Date.now()}-${index}`, meta: issueTaskMeta(issue) }))
-    onTasksChange(rows => {
-      const completed = rows.map(task => completedIds.has(task.id) ? { ...task, status: 'Terminada' as const, completedAt: completedNow() } : task)
-      const additions: OperationTask[] = issueRecords.map(({ issue, taskId, meta }) => ({ id: taskId, date: TODAY, roomNumber: item.roomNumber, roomType: item.roomType, type: meta.type, status: 'Pendiente', priority: meta.priority, assignedTo: meta.assignedTo, requestedAt: hotelTime(), deadline: 'Hoy', note: `${issue}.` }))
-      return [...completed, ...additions]
-    })
-    onRoomsChange(rows => rows.map(room => {
-      if (room.roomNumber !== item.roomNumber) return room
-      const resolved = room.issues?.map(issue => issue.taskId && completedIds.has(issue.taskId) ? { ...issue, status: 'Resuelto' as const } : issue) ?? []
-      const existingTypes = new Set(resolved.filter(issue => issue.status === 'Pendiente').map(issue => issue.type))
-      const newIssues = issueRecords.filter(record => !existingTypes.has(record.issue)).map(({ issue, taskId }, index) => ({ id: `INC-${Date.now()}-${index}`, type: issue, status: 'Pendiente' as const, reportedAt: hotelTime(), reportedBy: role, taskId }))
-      return { ...room, cleaning: itemHasCleaning(item) ? 'Limpia' : room.cleaning, issues: [...resolved, ...newIssues], activityLog: [...(room.activityLog ?? []), activity(`Terminó el trabajo${issues.length ? ` y reportó ${issues.length} incidencia(s)` : ''}`)] }
-    }))
+  const completeWork = async (item: CleaningWorkItem, issues: RoomIssueType[] = []) => {
+    const ok = await persist(item.roomNumber, 'Terminó limpieza', item.tasks[0]?.type ?? 'Limpieza general')
+    if (!ok) { onNotify('No se pudo guardar la finalización'); return }
+    let failedIssues = 0
+    for (const issue of issues) {
+      if (!await persist(item.roomNumber, 'Incidencia reportada', 'Revisión', issue)) failedIssues++
+    }
     setFinishItem(undefined)
     setSelectedIssues([])
-    setQueue(issueRecords.some(record => record.meta.type === 'Reposición') ? 'Limpieza' : 'Check')
-    persist(item.roomNumber, 'Terminó limpieza', item.tasks[0]?.type ?? 'Limpieza general', issues.join(', '))
-    issues.forEach(issue => persist(item.roomNumber, 'Incidencia reportada', 'Revisión', issue))
-    onNotify(`${item.roomNumber}: finalización enviada al registro`)
+    setQueue(issues.length ? 'Limpieza' : 'Check')
+    onNotify(failedIssues ? `Limpieza guardada; ${failedIssues} incidencias sin registrar` : `${item.roomNumber}: trabajo guardado`)
   }
-  const confirmCheck = (item: CleaningWorkItem) => {
-    const room = rooms.find(room => room.roomNumber === item.roomNumber)
-    if (!room) return
-    if (hasPendingIssue(room)) { onNotify(`${item.roomNumber} todavía tiene incidencias pendientes`); return }
-    onRoomsChange(rows => rows.map(row => row.roomNumber === item.roomNumber ? { ...row, cleaning: 'Limpia', activityLog: [...(row.activityLog ?? []), activity('Confirmó el check de habitación')] } : row))
-    onTasksChange(rows => rows.map(task => task.roomNumber === item.roomNumber && task.type === 'Revisión' && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: completedNow() } : task))
-    persist(item.roomNumber, 'Check confirmado', 'Revisión')
-    onNotify(`${item.roomNumber}: check enviado al registro`)
+  const confirmCheck = async (item: CleaningWorkItem) => {
+    const room = rooms.find(row => row.roomNumber === item.roomNumber)
+    if (!room || hasPendingIssue(room)) { onNotify('Existen incidencias pendientes'); return }
+    const ok = await persist(item.roomNumber, 'Check confirmado', 'Revisión')
+    onNotify(ok ? `${item.roomNumber}: check guardado` : `${item.roomNumber}: check no guardado`)
   }
-  const reportProblem = () => {
+  const reportProblem = async () => {
     if (!reportItem) return
     const room = rooms.find(item => item.roomNumber === reportItem.roomNumber)
-    if (room?.issues?.some(issue => issue.status === 'Pendiente' && issue.type === reportType)) { onNotify(`${reportType} ya está reportado en ${reportItem.roomNumber}`); setReportItem(undefined); return }
-    const taskId = `OP-${Date.now()}`
+    if (room?.issues?.some(issue => issue.status === 'Pendiente' && issue.type === reportType)) {
+      onNotify('Esta incidencia ya se encuentra registrada')
+      return
+    }
     const meta = issueTaskMeta(reportType)
-    onTasksChange(rows => [...rows, { id: taskId, date: TODAY, roomNumber: reportItem.roomNumber, roomType: reportItem.roomType, type: meta.type, status: 'Pendiente', priority: meta.priority, assignedTo: meta.assignedTo, requestedAt: hotelTime(), deadline: 'Hoy', note: `${reportType}.` }])
-    onRoomsChange(rows => rows.map(item => item.roomNumber === reportItem.roomNumber ? { ...item, issues: [...(item.issues ?? []), { id: `INC-${Date.now()}`, type: reportType, status: 'Pendiente', reportedAt: hotelTime(), reportedBy: role, taskId }], activityLog: [...(item.activityLog ?? []), activity(`Reportó: ${reportType}`)] } : item))
-    persist(reportItem.roomNumber, 'Incidencia reportada', meta.type, reportType)
-    onNotify(`${reportType}: incidencia enviada al registro`)
-    setReportItem(undefined)
+    const ok = await persist(reportItem.roomNumber, 'Incidencia reportada', meta.type, reportType)
+    if (ok) setReportItem(undefined)
+    onNotify(ok ? `Incidencia registrada: ${reportType}` : 'No se pudo guardar la incidencia')
   }
 
   return <section className="cleaning-workspace">
