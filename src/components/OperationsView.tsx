@@ -233,6 +233,7 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
   cashMovements: CashMovement[]
   staff: StaffMember[]
   staffTimeEntries: StaffTimeEntry[]
+  dailyOperation: DailyOperationMetric[]
   onNotify: (message: string) => void
 }) {
   const [notes, setNotes] = useState('')
@@ -241,7 +242,6 @@ function DailyCloseView({ role, reservations, rooms, cashMovements, staff, staff
   const cashOut = activeCash.filter(item => item.type === 'Salida').reduce((sum, item) => sum + item.amount, 0)
   const occupied = reservations.filter(item => occupiedOn(item, TODAY))
   const todayOperation = dailyOperation.find(row => row.date === TODAY)
-  const roomRevenue = todayOperation?.revenue ?? null
   const createdToday = reservations.filter(item => item.createdAt.startsWith(TODAY)).length
   const attendance = staffTimeEntries.filter(item => item.date === TODAY)
   const staffNames = attendance.map(entry => staff.find(employee => employee.id === entry.employeeId)?.name).filter(Boolean)
