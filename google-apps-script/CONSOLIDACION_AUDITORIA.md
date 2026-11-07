@@ -44,3 +44,9 @@
 5. Posteriormente Inventario, Personal y Configuración.
 
 **Se mantiene la regla:** reutilizar datos existentes y registrar lo verdaderamente faltante; no inventar columnas ni alterar las hojas.
+
+## Segunda fase: Reservas + Operación diaria (6 nov 2026)
+
+**Cambios:** acciones de Habitaciones y Limpieza esperan `operation.event` y su lectura posterior, sin confirmar cambios optimistas; solicitudes de limpieza desde Reservas llaman a la misma ruta; confirmar salida primero guarda Q de RESERVAS y luego solicita limpieza, con estado parcial explícito; los reintentos de pago conservan `paymentId`; en Operation.gs se impiden aprobaciones con incidencia activa y se intenta restaurar escrituras parciales; «Iniciar operación» y cambios de acceso sin persistencia quedan deshabilitados.
+
+**Pendiente:** registro estructurado de tareas y múltiples incidencias, asociación de solicitud de limpieza con reserva, escritura formal de apertura de jornada y permisos por rol de servidor. Es necesario validar manualmente todas las rutas cuando se copie Apps Script, no se han ejecutado pruebas.
