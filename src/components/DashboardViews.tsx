@@ -44,20 +44,19 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
   if (!data.monthly.length) return <EmptySummaryView role={role} onOpenRms={onOpenRms}/>
 
   const financialAccess = ['Dueño', 'Gerencia', 'Administración'].includes(role)
-  const now = new Date()
-  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const current = data.monthly.find(row => row.key === currentKey) ?? data.monthly.at(-1)!
-  const currentIndex = data.monthly.indexOf(current)
-  const previous = data.monthly[currentIndex - 1] ?? current
+  const currentKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit' }).format(new Date())
+  const eligiblePeriods = [...data.monthly].filter(row => row.key <= currentKey).sort((a, b) => a.key.localeCompare(b.key))
+  const current = eligiblePeriods.at(-1) ?? [...data.monthly].sort((a, b) => a.key.localeCompare(b.key))[0]
+  const previous = eligiblePeriods.filter(row => row.key < current.key).at(-1)
   const currentMetrics = monthlyMetrics(current)
-  const previousMetrics = monthlyMetrics(previous)
+  const previousMetrics = previous ? monthlyMetrics(previous) : null
   const executiveKpis: KPI[] = [
-    { id: 'revenue', label: 'Ingresos', value: current.revenue, previous: previous.revenue, format: 'mxn', helper: 'Ingresos por hospedaje.' },
-    { id: 'occupancy', label: 'Ocupación', value: currentMetrics.occupancy, previous: previousMetrics.occupancy, format: 'percent', comparisonMode: 'points', helper: 'Noches vendidas / disponibles.' },
-    { id: 'adr', label: 'ADR', value: currentMetrics.adr, previous: previousMetrics.adr, format: 'mxn', helper: 'Precio promedio por noche vendida.' },
-    { id: 'revpar', label: 'RevPAR', value: currentMetrics.revpar, previous: previousMetrics.revpar, format: 'mxn', helper: 'Ingreso por habitación disponible.' },
-    { id: 'costs', label: 'Costos', value: current.costs, previous: previous.costs, format: 'mxn', helper: 'Gastos registrados en el periodo.', available: current.costsAvailable === true },
-    { id: 'result', label: 'Resultado operativo', value: currentMetrics.operatingResult, previous: previousMetrics.operatingResult, format: 'mxn', helper: 'Ingresos menos costos.', available: current.costsAvailable === true },
+    { id: 'revenue', label: 'Ingresos', value: current.revenue, previous: previous?.revenue ?? current.revenue, format: 'mxn', available: Boolean(previous), helper: 'Ingresos por hospedaje.' },
+    { id: 'occupancy', label: 'Ocupación', value: currentMetrics.occupancy, previous: previousMetrics?.occupancy ?? currentMetrics.occupancy, format: 'percent', comparisonMode: 'points', helper: 'Noches vendidas / disponibles.' },
+    { id: 'adr', label: 'ADR', value: currentMetrics.adr, previous: previousMetrics?.adr ?? currentMetrics.adr, format: 'mxn', helper: 'Precio promedio por noche vendida.' },
+    { id: 'revpar', label: 'RevPAR', value: currentMetrics.revpar, previous: previousMetrics?.revpar ?? currentMetrics.revpar, format: 'mxn', helper: 'Ingreso por habitación disponible.' },
+    { id: 'costs', label: 'Costos', value: current.costs, previous: previous?.costs ?? current.costs, format: 'mxn', helper: 'Gastos registrados en el periodo.', available: current.costsAvailable === true },
+    { id: 'result', label: 'Resultado operativo', value: currentMetrics.operatingResult, previous: previousMetrics?.operatingResult ?? currentMetrics.operatingResult, format: 'mxn', helper: 'Ingresos menos costos.', available: current.costsAvailable === true },
   ]
   const nextSeven = data.rateDays.slice(0, 7)
   const occupied = nextSeven.reduce((sum, day) => sum + day.occupied, 0)
@@ -83,7 +82,7 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
 
     <section className="grid two">
       <article className="panel">
-        <header><div><span>DESEMPEÑO RECIENTE</span><h2>Ingresos y ocupación</h2></div><span className="data-state">REAL</span></header>
+        <header><div><span>DESEMPEÑO RECIENTE</span><h2>Ingresos y ocupación</h2></div><span className="data-state">ESTIMADO</span></header>
         <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.performance} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="#e4ddd2" vertical={false}/><XAxis dataKey="date" tick={{ fontSize: 10 }} axisLine={false} tickLine={false}/>
           <YAxis yAxisId="money" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={value => `${Math.round(value / 1000)}k`}/><YAxis yAxisId="percent" orientation="right" domain={[0, 100]} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={value => `${value}%`}/>
@@ -92,7 +91,7 @@ export function SummaryView({ data, role, onOpenRms }: SummaryProps) {
       </article>
       <article className="panel next-days-panel">
         <header><div><span>PRÓXIMOS 7 DÍAS</span><h2>Ocupación y disponibilidad</h2></div><button onClick={() => onOpenRms()}>Ver 180 días</button></header>
-        <div className="next-days-list">{nextSeven.map(day => <button key={day.date} onClick={() => onOpenRms(`${day.date}-CHA`)}><span>{shortDate(day.date)}</span><b>{day.occupied}/17</b><div className="occupancy-track"><i style={{ width: `${day.occupancy}%` }}/></div><strong>{number(day.occupancy, 0)}%</strong><small>{day.available} libres</small></button>)}</div>
+        <div className="next-days-list">{nextSeven.map(day => <button key={day.date} onClick={() => onOpenRms(`${day.date}-CHA`)}><span>{shortDate(day.date)}</span><b>{day.occupied}/{day.occupied + day.available}</b><div className="occupancy-track"><i style={{ width: `${day.occupancy}%` }}/></div><strong>{number(day.occupancy, 0)}%</strong><small>{day.available} libres</small></button>)}</div>
       </article>
     </section>
   </div>
