@@ -56,3 +56,12 @@
 - Dependencias compartidas: `Config.gs` y `Utils.gs`.
 
 **Estado:** código preparado y guardado; no se ha desplegado, ejecutado ni probado Apps Script; no se ha modificado ninguna Google Sheet.
+
+## Consolidación de Reservas y Operación (6 nov 2026)
+
+- Las actualizaciones de estado y habitación de Reservas esperan la respuesta de `reservations.update` antes de reemplazar el registro en React. Se eliminó el fallback que simulaba una escritura local cuando faltaba Apps Script.
+- El botón **Solicitar limpieza** de Reservas ahora utiliza el mismo `operation.event` que Operación diaria, con `eventId` independiente. Requiere habitación asignada, y se desactiva para reservas multihabitación, canceladas o no-show.
+- La solicitud no se identifica aún por reserva en REGISTRO_LIMPIEZA: se registra por habitación y fecha. Para trazabilidad individual habrá que ampliar el contrato, sin agregar columnas arbitrarias hasta definirlo.
+- Los pagos reintentados conservan un identificador mientras monto y método permanezcan iguales; `Reservations.gs` revisa si ya está registrado y exige conciliación ante resultados inconsistentes.
+- La hoja RESERVAS (Q, M, V, W y Z) y MOVIMIENTOS_CAJA siguen siendo fuentes de verdad. AA:AI no se sobrescriben.
+- Falta autenticación del servidor, confirmación definitiva de formatos de asignación y manejo transaccional robusto entre hojas antes de producción.
