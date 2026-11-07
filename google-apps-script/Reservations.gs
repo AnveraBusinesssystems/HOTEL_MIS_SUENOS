@@ -31,7 +31,10 @@ function getReservations_(refresh) {
     })
     .slice(0, 500);
 
-  cache.put(HMS_CONFIG.RESERVATIONS_CACHE_KEY, JSON.stringify(payload), HMS_CONFIG.RESERVATIONS_CACHE_SECONDS);
+  var serialized = JSON.stringify(payload);
+  if (serialized.length < 90000) {
+    cache.put(HMS_CONFIG.RESERVATIONS_CACHE_KEY, serialized, HMS_CONFIG.RESERVATIONS_CACHE_SECONDS);
+  }
   return payload;
 }
 
@@ -210,6 +213,7 @@ function invalidateReservationDependents_() {
   cache.remove(HMS_CONFIG.RMS_CACHE_KEY);
   cache.remove(HMS_CONFIG.SUMMARY_CACHE_KEY);
   cache.remove(HMS_CONFIG.INDICATORS_CACHE_KEY);
+  cache.remove(HMS_CONFIG.OPERATION_CACHE_KEY);
 }
 
 /**
