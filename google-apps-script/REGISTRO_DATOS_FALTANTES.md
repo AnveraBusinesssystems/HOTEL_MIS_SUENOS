@@ -89,8 +89,8 @@ Ver `OPERACION_DIARIA_MAPEO.md`. Se reutilizan las rutas de RESERVAS y se añade
 3. [x] **RMS / Tarifas** — ocupación y disponibilidad preparadas; precios, pickup, modelo y publicación pendientes.
 4. [x] **Reservas** — lectura, filtros locales, validación de asignación, actualización de estados y registro de pagos preparado. Faltan fuente de contacto, persistencia de limpieza, búsqueda histórica fuera de ventana y sincronización Cloudbeds.
 5. [x] **Operación diaria** — lecturas de habitaciones, limpieza, datos diarios, tours y caja preparadas; registro de eventos y salidas preparado. Pendiente: acciones de escritura de Tours, tareas avanzadas, apertura/cierre formal, asistencia y envío de reportes.
-6. [ ] **Caja** — **SIGUIENTE**. Mapear MOVIMIENTOS_CAJA, CIERRES_CAJA, TOURS y PAGOS_TOURS, reutilizando pagos de Reservas.
-7. [ ] **Inventario** — conectar la segunda hoja Inventory.
+6. [x] **Caja** — lectura del libro de movimientos, cobros de reservas, cobros/liquidaciones de tours existentes, movimientos independientes, anulación, apertura, conteo y cierre preparados. Pendientes dependientes: compras de Inventario, reembolsos y autenticación del servidor.
+7. [ ] **Inventario** — **SIGUIENTE**. Conectar la hoja Inventory y las compras procedentes de Caja.
 8. [ ] **Personal**
 9. [ ] **Configuración**
 
@@ -109,3 +109,13 @@ Se corrigieron el tratamiento de datos desconocidos en finanzas, la selección d
 - **Estructura todavía faltante:** apertura de jornada persistente; acceso/no molestar; tareas individuales con IDs/prioridades; resoluciones individuales de incidencias; vínculo entre cada solicitud de limpieza y reserva.
 - **Precaución financiera:** reintentos de pago con el mismo ID, con conciliación obligatoria si el libro de caja y el monto acumulado no coinciden.
 - **Previo a producción:** autenticación y autorización servidor, y verificación manual de las rutas y de la recuperación ante fallos interhojas.
+
+## 7. Caja — información y columnas pendientes (6 nov 2026)
+
+- **Sin nuevas columnas:** `MOVIMIENTOS_CAJA!A:U` permite registrar, clasificar y anular movimientos; `CIERRES_CAJA!A:T` registra apertura, conteo y cierre. D:O de CIERRES_CAJA son fórmulas y permanecen de solo lectura.
+- **Reservas:** pagos y anticipos usan `RESERVAS!U,V,W` y `MOVIMIENTOS_CAJA`; no asumir cero cuando V esté vacío.
+- **Tours existentes:** los pagos se registran en `PAGOS_TOURS!A:M` y `MOVIMIENTOS_CAJA`, mientras `TOURS!J:R` calcula cobros y saldos; no duplicar esas fórmulas.
+- **Fuentes faltantes para terminar procesos relacionados:** compras de inventario con el segundo spreadsheet; reembolsos de reservas/tours; comprobantes y archivos; usuario autenticado y aprobación de cierre; crear tours con proveedor, hora y personas.
+- **Permisos y verificación:** la autenticación del servidor es obligatoria antes de publicar las escrituras. Todas las conexiones están preparadas en GitHub, no desplegadas ni probadas.
+
+Ver `CAJA_MAPEO.md`.
