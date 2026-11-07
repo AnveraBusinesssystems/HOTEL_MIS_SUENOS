@@ -136,9 +136,23 @@ function annulCashMovement_(request) {
         'Cobro de tour','Pago a proveedor de tour','Comisión de tour a recepción'].indexOf(String(vals[4]))>=0)
       throw new Error('Anular desde el módulo de origen para conservar conciliación.');
     var now=new Date();
-    sh.getRange(row,14).setValue('Anulado');
-    sh.getRange(row,18,1,3).setValues([['Sistema HMS',now,reason]]);
-    sh.getRange(row,17).setValue(now);
+    try {
+      sh.getRange(row,18,1,3).setValues([['Sistema HMS',now,reason]]);
+      sh.getRange(row,17).setValue(now);
+      // Cambiar N al final: las fórmulas del cierre solo restan movimientos
+      // con N='Activo', y un error previo no debe anular dinero parcialmente.
+      sh.getRange(row,14).setValue('Anulado');
+      SpreadsheetApp.flush();
+    } catch(error) {
+      try {
+        sh.getRange(row,14).setValue(vals[13]);
+        sh.getRange(row,17).setValue(vals[16]);
+        sh.getRange(row,18,1,3).setValues([[vals[17],vals[18],vals[19]]]);
+      } catch(rollback) {
+        console.error('CONCILIACION MANUAL ANULACION '+id+': '+rollback);
+      }
+      throw error;
+    }
     cashInvalidate_();
     return {movementId:id,duplicate:false};
   }finally{lock.releaseLock();}
@@ -165,8 +179,18 @@ function saveCashDay_(request) {
     if(!existing) {
       if(opening===undefined) throw new Error('Registra primero el fondo inicial.');
       var key='CIERRE-'+date.replace(/-/g,'');
-      sh.getRange(row,1,1,3).setValues([[key,cashDate_(date),Number(opening)]]);
-      sh.getRange(row,18).setValue('Abierto');
+      try {
+        sh.getRange(row,1,1,3).setValues([[key,cashDate_(date),Number(opening)]]);
+        sh.getRange(row,18).setValue('Abierto');
+      } catch(error) {
+        try {
+          sh.getRange(row,1,1,3).clearContent();
+          sh.getRange(row,18).clearContent();
+        } catch(rollback) {
+          console.error('CONCILIACION MANUAL APERTURA '+date+': '+rollback);
+        }
+        throw error;
+      }
     }else if(opening!==undefined)sh.getRange(row,3).setValue(Number(opening));
     if(counted!==undefined)sh.getRange(row,7).setValue(Number(counted));
     cashInvalidate_();
@@ -214,8 +238,16 @@ function closeCashDay_(request) {
     if(Math.abs(difference)>0.009 && !note)
       throw new Error('Explica el motivo de la diferencia de caja.');
     var now=new Date();
-    sh.getRange(row,16,1,3).setValues([['Sistema HMS',now,'Cerrado']]);
-    sh.getRange(row,20).setValue(note);
+    var oldClose=sh.getRange(row,16,1,5).getValues()[0];
+    try {
+      sh.getRange(row,20).setValue(note);
+      sh.getRange(row,16,1,3).setValues([['Sistema HMS',now,'Cerrado']]);
+      SpreadsheetApp.flush();
+    } catch(error) {
+      try { sh.getRange(row,16,1,5).setValues([oldClose]); }
+      catch(rollback) { console.error('CONCILIACION MANUAL CIERRE '+day+': '+rollback); }
+      throw error;
+    }
     cashInvalidate_();
     return {date:day,closed:true,duplicate:false,difference:difference};
   }finally{lock.releaseLock();}
