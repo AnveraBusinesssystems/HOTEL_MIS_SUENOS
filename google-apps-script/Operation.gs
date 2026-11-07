@@ -106,7 +106,11 @@ function getOperation_(refresh) {
     operationDays: operationDays, dailyOperation: dailyOperation, cleaningHistory: history,
     tours: readHotelTours_(ss), cashMovements: readHotelCashMovements_(ss),
     generatedAt:new Date().toISOString()};
-  cache.put(HMS_CONFIG.OPERATION_CACHE_KEY, JSON.stringify(payload), HMS_CONFIG.OPERATION_CACHE_SECONDS);
+  // CacheService tiene límite por entrada; devolver respuesta aunque sea muy grande.
+  var serialized = JSON.stringify(payload);
+  if (serialized.length < 90000) {
+    cache.put(HMS_CONFIG.OPERATION_CACHE_KEY, serialized, HMS_CONFIG.OPERATION_CACHE_SECONDS);
+  }
   return payload;
 }
 
