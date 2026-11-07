@@ -82,6 +82,7 @@ const areaForCategory: Record<CashMovementCategory, CashArea> = {
   'Cobro de tour': 'Recepción',
   'Pago a proveedor de tour': 'Administración',
   'Comisión de tour a recepción': 'Administración',
+  'Pago al hotel por tour': 'Administración',
   'Sin clasificar': 'Otros',
 }
 
