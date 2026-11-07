@@ -130,3 +130,24 @@ function recordInventoryPurchase_(request) {
     return {purchaseId:id,duplicate:false,amount:total};
   }finally{lock.releaseLock();}
 }
+
+/** Detalle de compras registradas por la web, visible en Caja. */
+function readInventoryPurchaseDetails_() {
+  var ss=inventoryBook_(),tx=ss.getSheetByName('Transacciones');
+  if(!tx)return {};
+  var last=inventoryLastTransactionRow_(tx);
+  if(last<3)return {};
+  var rows=tx.getRange(3,1,last-2,10).getValues();
+  var byId={};
+  rows.forEach(function(r){
+    var note=String(r[9]||''), match=note.match(/COMPRA HMS \| ID:(HMS-BUY-[\w-]+)/);
+    if(!match||String(r[1])!=='compras')return;
+    var id=match[1];
+    if(!byId[id])byId[id]=[];
+    byId[id].push({
+      product:String(r[2]||''),quantity:numberOrZero_(r[3]),
+      unit:String(r[4]||''),total:numberOrZero_(r[6])
+    });
+  });
+  return byId;
+}
