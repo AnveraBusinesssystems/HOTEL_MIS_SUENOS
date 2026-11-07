@@ -51,6 +51,7 @@ type Props = {
   staff: StaffMember[]
   staffTimeEntries: StaffTimeEntry[]
   onReservationsChange: (updater: (rows: Reservation[]) => Reservation[]) => void
+  onPersistReservation: (reservationKey: string, changes: Partial<Reservation>) => Promise<Reservation>
   onRoomsChange: (updater: (rows: RoomState[]) => RoomState[]) => void
   onTasksChange: (updater: (rows: OperationTask[]) => OperationTask[]) => void
   onDaysChange: (updater: (rows: OperationDay[]) => OperationDay[]) => void
@@ -84,7 +85,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onCashMovementsChange, onNotify } = props
+  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
@@ -155,14 +156,25 @@ export function OperationsView(props: Props) {
     onDaysChange(rows => rows.some(day => day.date === TODAY) ? rows.map(day => day.date === TODAY ? { ...day, status: 'Abierto', openedBy: role, openedAt: syncedAt } : day) : [...rows, { date: TODAY, status: 'Abierto', openedBy: role, openedAt: syncedAt }])
     onNotify('Marca local de inicio de operación; Cloudbeds todavía no está conectado')
   }
-  const confirmDeparture = (reservation: Reservation) => {
-    onReservationsChange(rows => rows.map(row => row.id === reservation.id ? { ...row, status: 'Salida' } : row))
-    if (reservation.roomNumber) {
-      const room = liveRooms.find(item => item.roomNumber === reservation.roomNumber)
-      onRoomsChange(rows => rows.map(item => item.roomNumber === reservation.roomNumber ? { ...item, occupancy: 'Libre', cleaning: 'Sucia', currentReservationId: undefined, accessStatus: 'Normal' } : item))
-      onTasksChange(rows => rows.some(task => task.date <= TODAY && task.roomNumber === reservation.roomNumber && CLEANING_TYPES.includes(task.type) && task.status !== 'Terminada') ? rows : [...rows, { id: `OP-${Date.now()}`, date: TODAY, roomNumber: reservation.roomNumber!, roomType: room?.roomType ?? reservation.roomType, type: 'Limpieza de salida', status: 'Pendiente', priority: 'Alta', assignedTo: 'Limpieza', requestedAt: hotelTime(), deadline: '15:00', note: 'Salida confirmada por recepción.', reservationId: reservation.id }])
+  const confirmDeparture = async (reservation: Reservation) => {
+    try {
+      const saved = await onPersistReservation(reservation.subReservationId, { status: 'Salida' })
+      onReservationsChange(rows => rows.map(row =>
+        row.subReservationId === reservation.subReservationId ? saved : row,
+      ))
+      if (reservation.roomNumber) {
+        // El egreso es fuente RESERVAS Q; la limpieza se registra como evento
+        // independiente sin alterar ESTADO_HABITACIONES B:F (fórmulas).
+        persistEvent(reservation.roomNumber, 'Limpieza solicitada', 'Limpieza de salida',
+          'Salida confirmada desde Operación diaria')
+        onRoomsChange(rows => rows.map(item => item.roomNumber === reservation.roomNumber
+          ? { ...item, cleaning: 'Sucia' } : item))
+      }
+      onNotify('Salida confirmada en RESERVAS; limpieza enviada al registro')
+    } catch (error) {
+      console.warn('No se pudo confirmar la salida.', error)
+      onNotify('No se pudo guardar la salida en Google Sheets')
     }
-    onNotify('Confirma la salida desde Reservas para guardarla. La tarea de limpieza se conservará local hasta esa actualización.')
   }
   const markRoomReady = (roomNumber: string) => {
     const room = liveRooms.find(item => item.roomNumber === roomNumber)
@@ -174,7 +186,7 @@ export function OperationsView(props: Props) {
   }
   const runPriorityAction = (item: PriorityItem) => {
     if (!isLiveDate) return
-    if (item.reservation && item.action === 'Confirmar salida') return confirmDeparture(item.reservation)
+    if (item.reservation && item.action === 'Confirmar salida') { void confirmDeparture(item.reservation); return }
     if (item.task?.type === 'Revisión') return markRoomReady(item.task.roomNumber)
     if (item.reservation && !item.reservation.roomNumber) return onNotify(`Abre ${item.reservation.id} desde el módulo Reservas para asignar habitación`)
     if (item.roomNumber) { setTab(item.task && CLEANING_TYPES.includes(item.task.type) && allowedTabs.includes('Limpieza') ? 'Limpieza' : 'Habitaciones'); setSelectedDate(TODAY) }
