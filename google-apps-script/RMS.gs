@@ -50,7 +50,7 @@ function getRms_(refresh) {
       if (!(arrival instanceof Date) || !(departure instanceof Date)) continue;
       var status = String(state[i][0] || '').toLowerCase();
       if (status.indexOf('cancel') >= 0 || status.indexOf('no_show') >= 0 ||
-          status.indexOf('no show') >= 0) continue;
+          status.indexOf('no show') >= 0 || status.indexOf('no-show') >= 0) continue;
       var checkin = dateKey_(arrival), checkout = dateKey_(departure);
       if (checkout <= today || checkin > dateKeys[days-1]) continue;
 
@@ -59,9 +59,9 @@ function getRms_(refresh) {
       var categories = rmsCategories_(normalized[i][0], normalized[i][1], bookedRooms, byCategory);
       if (!categories) { unresolved++; continue; }
 
-      for (var k = 0; k < dateKeys.length; k++) {
+      var firstDateIndex = Math.max(0, Math.floor((Date.parse(checkin + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 86400000));
+      for (var k = firstDateIndex; k < dateKeys.length && dateKeys[k] < checkout; k++) {
         var keyDate = dateKeys[k];
-        if (keyDate < checkin || keyDate >= checkout) continue;
         categories.forEach(function(category) {
           occupancy[keyDate][category.code] = (occupancy[keyDate][category.code] || 0) + category.count;
         });
@@ -91,7 +91,7 @@ function getRms_(refresh) {
 }
 
 function readRmsRoomCatalog_(ss) {
-  var sheet = ss.getSheetByName('CONFIGURACION');
+  var sheet = ss.getSheetByName(HMS_CONFIG.SHEETS.ROOM_CATALOG);
   if (!sheet) throw new Error('Falta CONFIGURACION.');
   var headers = sheet.getRange(18, 1, 1, 5).getDisplayValues()[0];
   if (headers[0] !== 'Habitación' || headers[1] !== 'Código de categoría' ||
