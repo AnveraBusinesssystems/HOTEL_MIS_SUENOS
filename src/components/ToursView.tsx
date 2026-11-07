@@ -74,7 +74,7 @@ export function ToursView({
 
   const pendingItems = useMemo(() => [
     ...unpaid.map(tour => ({ key: `pay-${tour.id}`, type: 'Cobro' as const, tour, amount: tour.salePrice, label: 'Cobrar huésped', overdue: tour.serviceDate < TODAY })),
-    ...providerPending.map(tour => ({ key: `provider-${tour.id}`, type: 'Proveedor' as const, tour, amount: tour.providerAmount, label: 'Liquidar proveedor', overdue: tour.settlementDueDate <= TODAY })),
+    ...providerPending.map(tour => ({ key: `provider-${tour.id}`, type: 'Proveedor' as const, tour, amount: tour.providerAmount, label: 'Liquidar proveedor', overdue: Boolean(tour.settlementDueDate) && tour.settlementDueDate <= TODAY })),
     ...commissionPending.map(tour => ({ key: `commission-${tour.id}`, type: 'Comisión' as const, tour, amount: receptionShare(tour), label: 'Entregar comisión', overdue: false })),
   ].sort((left, right) => Number(right.overdue) - Number(left.overdue) || left.tour.serviceDate.localeCompare(right.tour.serviceDate)), [unpaid, providerPending, commissionPending])
 
@@ -156,7 +156,7 @@ export function ToursView({
 
   return <section className="tour-workspace">
     <section className="tour-summary">
-      <article><span><MapPinned size={14}/> Tours del día</span><strong>{hasTourData ? scheduled.length : '—'}</strong><small>{hasTourData ? `${scheduled.reduce((sum, tour) => sum + tour.people, 0)} personas` : 'Sin datos'}</small></article>
+      <article><span><MapPinned size={14}/> Tours del día</span><strong>{hasTourData ? scheduled.length : '—'}</strong><small>{hasTourData ? scheduled.some(tour => tour.people > 0) ? `${scheduled.reduce((sum, tour) => sum + tour.people, 0)} personas registradas` : 'Participantes sin registro' : 'Sin datos'}</small></article>
       <article><span><ReceiptText size={14}/> Por cobrar</span><strong>{hasTourData ? money(unpaid.reduce((sum, tour) => sum + tour.salePrice, 0)) : '—'}</strong><small>{hasTourData ? `${unpaid.length} tour${unpaid.length === 1 ? '' : 's'}` : 'Sin datos'}</small></article>
       <article><span><Banknote size={14}/> A proveedores</span><strong>{hasTourData ? money(providerPending.reduce((sum, tour) => sum + tour.providerAmount, 0)) : '—'}</strong><small>{hasTourData ? `${providerPending.length} liquidación${providerPending.length === 1 ? '' : 'es'}` : 'Sin datos'}</small></article>
       <article><span><HandCoins size={14}/> Comisión recepción</span><strong>{hasTourData ? money(commissionPending.reduce((sum, tour) => sum + receptionShare(tour), 0)) : '—'}</strong><small>{hasTourData ? 'Pendiente de entregar' : 'Sin datos'}</small></article>
@@ -166,10 +166,10 @@ export function ToursView({
       <article className="panel tour-agenda">
         <header><div><span>AGENDA DE TOURS</span><h2>{longDate(date)}</h2></div><button className="primary-action" disabled={!toursWriteConnected} title="La escritura de tours se conectará con Caja" onClick={() => { setError(''); setDraft(freshDraft(date)) }}><Plus size={14}/>Agendar tour</button></header>
         <div className="tour-table-wrap"><table className="tour-table"><thead><tr><th>Hora</th><th>Huésped / reserva</th><th>Tour</th><th>Personas</th><th>Importes</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{scheduled.map(tour => <tr key={tour.id}>
-          <td><b>{tour.serviceTime}</b></td>
+          <td><b>{tour.serviceTime || '—'}</b></td>
           <td><b>{tour.guestName}</b><small>{tour.reservationId ?? 'Cliente externo'}</small></td>
-          <td><b>{tour.tourType}</b><small>{tour.provider}</small></td>
-          <td><span className="tour-people"><Users size={13}/>{tour.people}</span></td>
+          <td><b>{tour.tourType}</b><small>{tour.provider || 'Proveedor sin registrar'}</small></td>
+          <td><span className="tour-people"><Users size={13}/>{tour.people > 0 ? tour.people : '—'}</span></td>
           <td><b>{money(tour.salePrice)}</b><small>Proveedor {money(tour.providerAmount)}</small></td>
           <td><span className={`tour-badge ${tour.status.toLowerCase()}`}>{tour.status}</span><span className={`tour-badge ${tour.paymentStatus.toLowerCase()}`}>{tour.paymentStatus}</span></td>
           <td><div className="tour-row-actions">{tour.paymentStatus === 'Pendiente' && <button disabled={!toursWriteConnected} onClick={() => openAction('Cobrar', tour)}>Cobrar</button>}{tour.status === 'Agendado' && <button disabled={!toursWriteConnected} onClick={() => markCompleted(tour)}>Realizado</button>}{tour.status === 'Agendado' && tour.paymentStatus === 'Pendiente' && <button className="muted" disabled={!toursWriteConnected} onClick={() => cancelTour(tour)}>Cancelar</button>}</div></td>
