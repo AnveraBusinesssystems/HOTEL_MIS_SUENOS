@@ -33,6 +33,10 @@ export const hotelService = {
     return reservationsService.get(refresh)
   },
 
+  recordReservationPayment(reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) {
+    return reservationsService.payment(reservationKey, amount, method, paymentId)
+  },
+
   updateReservation(reservationKey: string, changes: Partial<DashboardData['reservations'][number]>) {
     return reservationsService.update(reservationKey, changes)
   },
