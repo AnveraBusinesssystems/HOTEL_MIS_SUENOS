@@ -25,6 +25,8 @@ function doPost(event) {
         return jsonResponse_({ ok: true, data: getRms_(request.refresh === true) });
       case 'reservations.get':
         return jsonResponse_({ ok: true, data: getReservations_(request.refresh === true) });
+      case 'reservations.payment':
+        return jsonResponse_({ ok: true, data: recordReservationPayment_(request) });
       case 'reservations.update':
         return jsonResponse_({ ok: true, data: updateReservation_(request) });
       default:
