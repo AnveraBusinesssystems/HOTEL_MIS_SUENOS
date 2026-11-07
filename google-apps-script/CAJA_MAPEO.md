@@ -86,7 +86,7 @@ Los identificadores únicos de movimientos y pagos se reutilizan ante reintentos
 
 ## Pendientes reales / conexiones dependientes
 
-1. **Compra de inventario**: no registrar una salida en Caja y sumar stock solo localmente. Debe conectarse de manera coordinada con la segunda Sheet `Inventory` (Transacciones/Inventario), detalles de productos y solicitudes. La opción está deshabilitada hasta trabajar Inventario.
+1. **Compra de inventario**: ahora preparada vía inventory.purchase. Guarda los artículos en Inventory/Transacciones y la salida correspondiente en MOVIMIENTOS_CAJA con ID compartido. La solicitud/compra ligada a una aprobación sigue pendiente de contar con un registro de solicitudes persistente.
 2. **Reembolsos de reservas/tours**: requiere flujo especializado que ajuste saldos y conserve historial de la fuente, no solo anular una entrada.
 3. **Crear nuevos tours**: la hoja actual no conserva proveedor, horario de servicio ni cantidad de personas. No inventar esos campos. Los cobros/liquidaciones de tours **ya existentes** están preparados.
 4. **Usuario real y permisos**: `Sistema HMS` es marcador; se debe autenticar y autorizar en **Apps Script**, no confiar en el rol de React.
@@ -103,3 +103,5 @@ Los identificadores únicos de movimientos y pagos se reutilizan ante reintentos
 React: `cashService.ts`, `tourPaymentsService.ts`, `reservationsService.ts`, `hotelService.ts`, `App.tsx`, `CashView.tsx`, `ToursView.tsx` y modelos en `types.ts`.
 
 **Estado:** código preparado en GitHub, sin edición de Google Sheets, sin compilación/pruebas ni despliegue. No afirmar que las conexiones están verificadas en producción.
+
+**Actualización de Inventario:** las compras directas por factura de productos activos se prepararon en InventoryPurchases.gs, con detalle de artículos reutilizado por Cash.gs. El código no modifica automáticamente una solicitud de compra porque la segunda hoja no tiene un registro de solicitudes. Ver INVENTARIO_MAPEO.md.
