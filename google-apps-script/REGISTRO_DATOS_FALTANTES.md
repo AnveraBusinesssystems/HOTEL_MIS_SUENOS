@@ -33,6 +33,23 @@
 | Media | Resumen | Alertas económicas RMS con impacto cuantificado | Requieren pronósticos, tarifas de referencia y lógica de recomendaciones | Motor RMS; no inferir impacto ficticio |
 | Posterior | RMS | Publicación de precios a Cloudbeds | Exige integración y confirmación externa, no una columna en Sheets | API/integradora Cloudbeds |
 
+## 2A. Reservas — lo calculable y lo verdaderamente ausente
+
+| Dato | Estado | Acción |
+|---|---|---|
+| Noches, huéspedes, saldos conocidos, estado de pago, llegadas/salidas | Derivable de RESERVAS G,H,N,O,U,V,Q | **No crear columnas** |
+| Asignación y disponibilidad física | RESERVAS M + CONFIGURACION A:E + fechas G,H | Validar antes de cambiar M |
+| Cambios de estado | RESERVAS Q; AA es fórmula | Cambiar solo Q |
+| Movimiento de pago con método | MOVIMIENTOS_CAJA A:U + RESERVAS V/W | Conexión preparada, sin crear columnas |
+| Pagos históricos con V vacío | **Desconocidos** | Conciliación real, no inferir cero |
+| Email / teléfono huésped | **No están en RESERVAS A:AI** | Buscar PMS o añadir fuente de contacto cuando corresponda |
+| Solicitud de limpieza persistente | **No hay campo persistente conectado** | Reutilizar tareas de Operación diaria cuando se implemente |
+| Búsqueda de reservas más allá de -30/+180 días y más de 500 registros | Limitación de la lectura actual | Extender filtros/paginación de API, **sin nuevas columnas** |
+| Crear reservas / borrar | Botones no existen en la UI actual | No construir acciones destructivas invisibles |
+| Link y sincronización Cloudbeds | Conector pendiente | Integración externa futura, **no columna** |
+
+Ver `RESERVAS_MAPEO.md` para las 35 columnas y reglas de escritura.
+
 ## 3. Política para nuevas columnas/tablas
 
 - Primero reutilizar una columna existente, fórmula o dato ya normalizado.
@@ -48,8 +65,8 @@
 1. [x] **Resumen** — columnas y conexión base preparadas; costos/alertas pendientes.
 2. [x] **Indicadores** — Rendimiento y Habitaciones preparados; Costos pendiente.
 3. [x] **RMS / Tarifas** — ocupación y disponibilidad preparadas; precios, pickup, modelo y publicación pendientes.
-4. [ ] **Reservas** — **SIGUIENTE**. Revisar tabla, filtros, estados, asignación, pagos y acciones crear/editar/eliminar. Comparar cada campo con RESERVAS (A:AI), reutilizar \`Reservations.gs\`, y completar las conexiones de escritura necesarias sin modificar la Sheet ahora.
-5. [ ] **Operación diaria**
+4. [x] **Reservas** — lectura, filtros locales, validación de asignación, actualización de estados y registro de pagos preparado. Faltan fuente de contacto, persistencia de limpieza, búsqueda histórica fuera de ventana y sincronización Cloudbeds.
+5. [ ] **Operación diaria** — **SIGUIENTE**
 6. [ ] **Caja**
 7. [ ] **Inventario** — conectar la segunda hoja Inventory.
 8. [ ] **Personal**
