@@ -54,6 +54,7 @@ type Props = {
   onRoomsChange: (updater: (rows: RoomState[]) => RoomState[]) => void
   onTasksChange: (updater: (rows: OperationTask[]) => OperationTask[]) => void
   onDaysChange: (updater: (rows: OperationDay[]) => OperationDay[]) => void
+  onOperationEvent: (event: { roomNumber: string; actionType: 'Limpieza solicitada' | 'Marcar sucia' | 'Inició limpieza' | 'Terminó limpieza' | 'Check confirmado' | 'Habitación aprobada' | 'Incidencia reportada' | 'Incidencia resuelta'; worker: string; work?: string; note?: string; eventId: string }) => Promise<boolean>
   onToursChange: (updater: (rows: TourBooking[]) => TourBooking[]) => void
   onCashMovementsChange: (updater: (rows: CashMovement[]) => CashMovement[]) => void
   onNotify: (message: string) => void
@@ -83,7 +84,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onToursChange, onCashMovementsChange, onNotify } = props
+  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, onReservationsChange, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
@@ -101,6 +102,11 @@ export function OperationsView(props: Props) {
     const active = container?.querySelector<HTMLElement>('button.active')
     if (container && active) container.scrollLeft = active.offsetLeft - container.clientWidth / 2 + active.clientWidth / 2
   }, [selectedDate])
+
+  const persistEvent = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work = '', note = '') => {
+    const eventId = 'HMS-OP-' + crypto.randomUUID()
+    void onOperationEvent({ roomNumber, actionType, work, note, worker: role, eventId })
+  }
 
   const isLiveDate = selectedDate === TODAY
   const selectedDay = days.find(day => day.date === selectedDate) ?? { date: selectedDate, status: 'No iniciado' as const }
@@ -147,7 +153,7 @@ export function OperationsView(props: Props) {
   const syncOperation = () => {
     const syncedAt = hotelTime()
     onDaysChange(rows => rows.some(day => day.date === TODAY) ? rows.map(day => day.date === TODAY ? { ...day, status: 'Abierto', openedBy: role, openedAt: syncedAt } : day) : [...rows, { date: TODAY, status: 'Abierto', openedBy: role, openedAt: syncedAt }])
-    onNotify('Operación actualizada con la información más reciente de Cloudbeds')
+    onNotify('Marca local de inicio de operación; Cloudbeds todavía no está conectado')
   }
   const confirmDeparture = (reservation: Reservation) => {
     onReservationsChange(rows => rows.map(row => row.id === reservation.id ? { ...row, status: 'Salida' } : row))
@@ -156,14 +162,15 @@ export function OperationsView(props: Props) {
       onRoomsChange(rows => rows.map(item => item.roomNumber === reservation.roomNumber ? { ...item, occupancy: 'Libre', cleaning: 'Sucia', currentReservationId: undefined, accessStatus: 'Normal' } : item))
       onTasksChange(rows => rows.some(task => task.date <= TODAY && task.roomNumber === reservation.roomNumber && CLEANING_TYPES.includes(task.type) && task.status !== 'Terminada') ? rows : [...rows, { id: `OP-${Date.now()}`, date: TODAY, roomNumber: reservation.roomNumber!, roomType: room?.roomType ?? reservation.roomType, type: 'Limpieza de salida', status: 'Pendiente', priority: 'Alta', assignedTo: 'Limpieza', requestedAt: hotelTime(), deadline: '15:00', note: 'Salida confirmada por recepción.', reservationId: reservation.id }])
     }
-    onNotify(`Salida de ${reservation.guestName} confirmada; habitación enviada a limpieza`)
+    onNotify('Confirma la salida desde Reservas para guardarla. La tarea de limpieza se conservará local hasta esa actualización.')
   }
   const markRoomReady = (roomNumber: string) => {
     const room = liveRooms.find(item => item.roomNumber === roomNumber)
     if (room?.issues?.some(issue => issue.status === 'Pendiente')) { onNotify(`${roomNumber} todavía tiene incidencias pendientes`); return }
     onRoomsChange(rows => rows.map(item => item.roomNumber === roomNumber ? { ...item, cleaning: 'Limpia' } : item))
     onTasksChange(rows => rows.map(task => task.date <= TODAY && task.roomNumber === roomNumber && task.type === 'Revisión' && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: completedNow() } : task))
-    onNotify(`${roomNumber} está lista para entregar`)
+    persistEvent(roomNumber, 'Habitación aprobada', 'Revisión')
+    onNotify(`${roomNumber}: se solicitó registrar la aprobación`)
   }
   const runPriorityAction = (item: PriorityItem) => {
     if (!isLiveDate) return
@@ -182,11 +189,11 @@ export function OperationsView(props: Props) {
     <section className="operation-controls"><div className="operation-tabs">{allowedTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => chooseTab(item)}>{item === 'Hoy' ? <CalendarDays size={15}/> : item === 'Habitaciones' ? <BedDouble size={15}/> : item === 'Tours' ? <MapPinned size={15}/> : item === 'Cierre diario' ? <FileText size={15}/> : <Sparkles size={15}/>} {item === 'Hoy' ? 'Control de hoy' : item}</button>)}</div><div className="day-actions">{(tab === 'Hoy' || tab === 'Tours') && !isLiveDate && <button onClick={() => setSelectedDate(TODAY)}><CalendarDays size={14}/>Volver a hoy</button>}{tab === 'Hoy' && isLiveDate && canUpdateOperation(role) && <button className="primary-action" onClick={syncOperation}><RefreshCw size={14}/>{selectedDay.status === 'Abierto' ? 'Actualizar operación' : 'Iniciar operación'}</button>}</div></section>
 
     {tab === 'Hoy' && <TodayView date={selectedDate} isLive={isLiveDate} metrics={displayMetrics} arrivals={arrivals} departures={departures} stays={stays} priorities={priorities} onPriority={runPriorityAction}/>}
-    {tab === 'Habitaciones' && <RoomsView role={role} rooms={liveRooms} reservations={reservations} tasks={tasks} filter={roomFilter} setFilter={setRoomFilter} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onOpenCleaning={() => chooseTab('Limpieza')} onNotify={onNotify}/>}
+    {tab === 'Habitaciones' && <RoomsView role={role} rooms={liveRooms} reservations={reservations} tasks={tasks} filter={roomFilter} setFilter={setRoomFilter} onRoomsChange={onRoomsChange} onTasksChange={onTasksChange} onOpenCleaning={() => chooseTab('Limpieza')} onOperationEvent={onOperationEvent} onNotify={onNotify}/>}
     {tab === 'Limpieza' && <CleaningView
       role={role} tasks={tasks.filter(task => task.date === TODAY || task.date < TODAY && (task.status !== 'Terminada' || task.completedAt?.startsWith(TODAY)))}
       rooms={liveRooms} reservations={reservations} onTasksChange={onTasksChange}
-      onRoomsChange={onRoomsChange} onNotify={onNotify}
+      onRoomsChange={onRoomsChange} onOperationEvent={onOperationEvent} onNotify={onNotify}
     />}
     {tab === 'Tours' && <ToursView
       role={role} date={selectedDate} tours={tours} reservations={reservations} cashMovements={cashMovements}
@@ -305,24 +312,29 @@ function DayAgenda({ date, arrivals, departures, stays }: { date: string; arriva
   return <article className="panel day-agenda"><header><div><span>AGENDA</span><h2>{shortDate(date)}</h2></div><b>{arrivals.length + departures.length}</b></header><div>{groups.map(group => <section key={group.title} className="agenda-group"><h3>{group.icon}{group.title}<b>{group.rows.length}</b></h3>{group.rows.map(row => <div className="agenda-row" key={`${group.title}-${row.id}`}><div><b>{row.roomNumber ?? 'Sin asignar'}</b><span>{row.guestName}</span></div><small>{row.status}</small></div>)}{!group.rows.length && <p>Sin movimientos</p>}</section>)}</div></article>
 }
 
-function RoomsView({ role, rooms, reservations, tasks, filter, setFilter, onRoomsChange, onTasksChange, onOpenCleaning, onNotify }: { role: Role; rooms: RoomState[]; reservations: Reservation[]; tasks: OperationTask[]; filter: 'Todas' | 'Atención' | 'Listas' | 'Ocupadas' | 'Bloqueadas'; setFilter: (value: 'Todas' | 'Atención' | 'Listas' | 'Ocupadas' | 'Bloqueadas') => void; onRoomsChange: Props['onRoomsChange']; onTasksChange: Props['onTasksChange']; onOpenCleaning: () => void; onNotify: (message: string) => void }) {
+function RoomsView({ role, rooms, reservations, tasks, filter, setFilter, onRoomsChange, onTasksChange, onOpenCleaning, onOperationEvent, onNotify }: { role: Role; rooms: RoomState[]; reservations: Reservation[]; tasks: OperationTask[]; filter: 'Todas' | 'Atención' | 'Listas' | 'Ocupadas' | 'Bloqueadas'; setFilter: (value: 'Todas' | 'Atención' | 'Listas' | 'Ocupadas' | 'Bloqueadas') => void; onRoomsChange: Props['onRoomsChange']; onTasksChange: Props['onTasksChange']; onOpenCleaning: () => void; onOperationEvent: Props['onOperationEvent']; onNotify: (message: string) => void }) {
   const [issueRoom, setIssueRoom] = useState<RoomState>()
   const [issueType, setIssueType] = useState<RoomIssueType>('Falta control de TV')
   const visible = rooms.filter(room => filter === 'Todas' || filter === 'Atención' && (room.cleaning !== 'Limpia' || room.occupancy === 'Bloqueada' || room.occupancy === 'Salida prevista' || hasPendingIssue(room)) || filter === 'Listas' && readyLabel(room) === 'Lista' || filter === 'Ocupadas' && ['Ocupada', 'Salida prevista'].includes(room.occupancy) || filter === 'Bloqueadas' && room.occupancy === 'Bloqueada')
   const guest = (id?: string) => reservations.find(row => row.id === id)
   const activity = (action: string) => ({ id: `ACT-${Date.now()}-${Math.random().toString(16).slice(2)}`, action, by: role, at: hotelTime() })
+  const persist = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work: string, note = '') => {
+    void onOperationEvent({ roomNumber, actionType, worker: role, work, note, eventId: 'HMS-OP-' + crypto.randomUUID() })
+  }
   const requestCleaning = (room: RoomState) => {
     const occupied = room.occupancy === 'Ocupada'
     onRoomsChange(rows => rows.map(item => item.roomNumber === room.roomNumber ? { ...item, cleaning: 'Sucia', accessStatus: occupied ? 'Limpieza solicitada' : item.accessStatus, activityLog: [...(item.activityLog ?? []), activity(occupied ? 'Solicitó limpieza de estancia' : 'Marcó la habitación como sucia')] } : item))
     const type: OperationTask['type'] = occupied ? 'Limpieza de estancia' : 'Limpieza general'
     onTasksChange(rows => rows.some(task => task.date <= TODAY && task.roomNumber === room.roomNumber && CLEANING_TYPES.includes(task.type) && task.status !== 'Terminada') ? rows : [...rows, { id: `OP-${Date.now()}`, date: TODAY, roomNumber: room.roomNumber, roomType: room.roomType, type, status: 'Pendiente', priority: room.nextReservationId && (guest(room.nextReservationId)?.checkIn ?? '9999-12-31') <= TODAY ? 'Alta' : 'Normal', assignedTo: 'Limpieza', requestedAt: hotelTime(), deadline: 'Hoy', note: occupied ? 'Limpieza solicitada durante la estancia.' : 'Habitación enviada a limpieza desde Operación.' }])
-    onNotify(`${room.roomNumber} fue enviada a Limpieza`)
+    persist(room.roomNumber, occupied ? 'Limpieza solicitada' : 'Marcar sucia', occupied ? 'Limpieza de estancia' : 'Limpieza general')
+    onNotify(`${room.roomNumber}: solicitud enviada al registro de limpieza`)
   }
   const approveRoom = (room: RoomState) => {
     if (room.issues?.some(issue => issue.status === 'Pendiente')) { onNotify(`${room.roomNumber} todavía tiene incidencias pendientes`); return }
     onRoomsChange(rows => rows.map(item => item.roomNumber === room.roomNumber ? { ...item, cleaning: 'Limpia', activityLog: [...(item.activityLog ?? []), activity('Aprobó la habitación para entrega')] } : item))
     onTasksChange(rows => rows.map(task => task.date <= TODAY && task.roomNumber === room.roomNumber && task.type === 'Revisión' && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: completedNow() } : task))
-    onNotify(`${room.roomNumber} está lista para entregar`)
+    persist(room.roomNumber, 'Habitación aprobada', 'Revisión')
+    onNotify(`${room.roomNumber}: aprobación enviada al registro`)
   }
   const reportIssue = () => {
     if (!issueRoom) return
@@ -331,7 +343,8 @@ function RoomsView({ role, rooms, reservations, tasks, filter, setFilter, onRoom
     const meta = issueTaskMeta(issueType)
     onRoomsChange(rows => rows.map(room => room.roomNumber === issueRoom.roomNumber ? { ...room, issues: [...(room.issues ?? []), { id: `INC-${Date.now()}`, type: issueType, status: 'Pendiente', reportedAt: hotelTime(), reportedBy: role, taskId }], activityLog: [...(room.activityLog ?? []), activity(`Reportó: ${issueType}`)] } : room))
     onTasksChange(rows => [...rows, { id: taskId, date: TODAY, roomNumber: issueRoom.roomNumber, roomType: issueRoom.roomType, type: meta.type, status: 'Pendiente', priority: meta.priority, assignedTo: meta.assignedTo, requestedAt: hotelTime(), deadline: 'Hoy', note: `${issueType}.` }])
-    onNotify(`${issueType} registrado en ${issueRoom.roomNumber}`)
+    persist(issueRoom.roomNumber, 'Incidencia reportada', meta.type, issueType)
+    onNotify(`${issueType}: incidencia enviada al registro`)
     setIssueRoom(undefined)
   }
   const updateAccess = (roomNumber: string, accessStatus: RoomAccessStatus) => {
@@ -369,13 +382,16 @@ function RoomsView({ role, rooms, reservations, tasks, filter, setFilter, onRoom
   </section>
 }
 
-function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRoomsChange, onNotify }: { role: Role; tasks: OperationTask[]; rooms: RoomState[]; reservations: Reservation[]; onTasksChange: Props['onTasksChange']; onRoomsChange: Props['onRoomsChange']; onNotify: (message: string) => void }) {
+function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRoomsChange, onOperationEvent, onNotify }: { role: Role; tasks: OperationTask[]; rooms: RoomState[]; reservations: Reservation[]; onTasksChange: Props['onTasksChange']; onRoomsChange: Props['onRoomsChange']; onOperationEvent: Props['onOperationEvent']; onNotify: (message: string) => void }) {
   const [queue, setQueue] = useState<CleaningQueue>('Salidas')
   const [finishItem, setFinishItem] = useState<CleaningWorkItem>()
   const [reportItem, setReportItem] = useState<CleaningWorkItem>()
   const [selectedIssues, setSelectedIssues] = useState<RoomIssueType[]>([])
   const [reportType, setReportType] = useState<RoomIssueType>('Falta control de TV')
   const activity = (action: string) => ({ id: `ACT-${Date.now()}-${Math.random().toString(16).slice(2)}`, action, by: role, at: hotelTime() })
+  const persist = (roomNumber: string, actionType: Parameters<Props['onOperationEvent']>[0]['actionType'], work: string, note = '') => {
+    void onOperationEvent({ roomNumber, actionType, worker: role, work, note, eventId: 'HMS-OP-' + crypto.randomUUID() })
+  }
   const grouped = new Map<string, OperationTask[]>()
   tasks.filter(task => CLEANING_TYPES.includes(task.type)).forEach(task => grouped.set(task.roomNumber, [...(grouped.get(task.roomNumber) ?? []), task]))
   const workItems: CleaningWorkItem[] = rooms.map(room => {
@@ -406,7 +422,8 @@ function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRooms
       return [...rows, { id: `OP-${Date.now()}`, date: TODAY, roomNumber: item.roomNumber, roomType: item.roomType, type, status: 'En proceso', priority: item.priority, assignedTo: role === 'Limpieza' ? 'Personal de limpieza' : 'Limpieza', requestedAt: hotelTime(), startedAt: hotelTime(), deadline: 'Hoy', note: 'Trabajo iniciado desde el panel de Limpieza.' }]
     })
     onRoomsChange(rows => rows.map(room => room.roomNumber === item.roomNumber ? { ...room, cleaning: itemHasCleaning(item) ? 'En limpieza' : room.cleaning, activityLog: [...(room.activityLog ?? []), activity('Inició el trabajo de habitación')] } : room))
-    onNotify(`${item.roomNumber}: trabajo iniciado`)
+    persist(item.roomNumber, 'Inició limpieza', item.tasks[0]?.type ?? 'Limpieza general')
+    onNotify(`${item.roomNumber}: inicio enviado al registro`)
   }
   const completeWork = (item: CleaningWorkItem, issues: RoomIssueType[] = []) => {
     const completedIds = new Set(item.tasks.map(task => task.id))
@@ -426,7 +443,9 @@ function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRooms
     setFinishItem(undefined)
     setSelectedIssues([])
     setQueue(issueRecords.some(record => record.meta.type === 'Reposición') ? 'Limpieza' : 'Check')
-    onNotify(`${item.roomNumber}: trabajo terminado`)
+    persist(item.roomNumber, 'Terminó limpieza', item.tasks[0]?.type ?? 'Limpieza general', issues.join(', '))
+    issues.forEach(issue => persist(item.roomNumber, 'Incidencia reportada', 'Revisión', issue))
+    onNotify(`${item.roomNumber}: finalización enviada al registro`)
   }
   const confirmCheck = (item: CleaningWorkItem) => {
     const room = rooms.find(room => room.roomNumber === item.roomNumber)
@@ -434,7 +453,8 @@ function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRooms
     if (hasPendingIssue(room)) { onNotify(`${item.roomNumber} todavía tiene incidencias pendientes`); return }
     onRoomsChange(rows => rows.map(row => row.roomNumber === item.roomNumber ? { ...row, cleaning: 'Limpia', activityLog: [...(row.activityLog ?? []), activity('Confirmó el check de habitación')] } : row))
     onTasksChange(rows => rows.map(task => task.roomNumber === item.roomNumber && task.type === 'Revisión' && task.status !== 'Terminada' ? { ...task, status: 'Terminada', completedAt: completedNow() } : task))
-    onNotify(`${item.roomNumber}: check confirmado`)
+    persist(item.roomNumber, 'Check confirmado', 'Revisión')
+    onNotify(`${item.roomNumber}: check enviado al registro`)
   }
   const reportProblem = () => {
     if (!reportItem) return
@@ -444,7 +464,8 @@ function CleaningView({ role, tasks, rooms, reservations, onTasksChange, onRooms
     const meta = issueTaskMeta(reportType)
     onTasksChange(rows => [...rows, { id: taskId, date: TODAY, roomNumber: reportItem.roomNumber, roomType: reportItem.roomType, type: meta.type, status: 'Pendiente', priority: meta.priority, assignedTo: meta.assignedTo, requestedAt: hotelTime(), deadline: 'Hoy', note: `${reportType}.` }])
     onRoomsChange(rows => rows.map(item => item.roomNumber === reportItem.roomNumber ? { ...item, issues: [...(item.issues ?? []), { id: `INC-${Date.now()}`, type: reportType, status: 'Pendiente', reportedAt: hotelTime(), reportedBy: role, taskId }], activityLog: [...(item.activityLog ?? []), activity(`Reportó: ${reportType}`)] } : item))
-    onNotify(`${reportType} registrado en ${reportItem.roomNumber}`)
+    persist(reportItem.roomNumber, 'Incidencia reportada', meta.type, reportType)
+    onNotify(`${reportType}: incidencia enviada al registro`)
     setReportItem(undefined)
   }
 
