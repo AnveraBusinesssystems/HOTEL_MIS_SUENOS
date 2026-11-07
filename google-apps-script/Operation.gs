@@ -95,11 +95,15 @@ function getOperation_(refresh) {
   var dayRows = ss.getSheetByName(HMS_CONFIG.SHEETS.DAILY_OPERATION);
   if (!dayRows) throw new Error('Falta OPERACION_DIARIA.');
   var daily = dayRows.getRange(7, 1, Math.max(1, dayRows.getLastRow()-6), 18).getValues();
-  var operationDays = daily.filter(function(row){return row[0] instanceof Date;}).map(function(row){
-    return {date:dateKey_(row[0]),status:'No iniciado'};
+  var dailyOperation = daily.filter(function(row){return row[0] instanceof Date;}).map(function(row){
+    return { date:dateKey_(row[0]), capacity:numberOrZero_(row[2]), occupied:numberOrZero_(row[3]),
+      arrivals:numberOrZero_(row[5]), departures:numberOrZero_(row[6]),
+      guests:numberOrZero_(row[9]), breakfasts:numberOrZero_(row[12]),
+      revenue:numberOrZero_(row[13]), adr:numberOrZero_(row[14]), revpar:numberOrZero_(row[15]) };
   });
+  var operationDays = dailyOperation.map(function(day){return {date:day.date,status:'No iniciado'};});
   var payload = {roomStates: rooms, operationTasks: operationTasks,
-    operationDays: operationDays, cleaningHistory: history,
+    operationDays: operationDays, dailyOperation: dailyOperation, cleaningHistory: history,
     tours: readHotelTours_(ss), cashMovements: readHotelCashMovements_(ss),
     generatedAt:new Date().toISOString()};
   cache.put(HMS_CONFIG.OPERATION_CACHE_KEY, JSON.stringify(payload), HMS_CONFIG.OPERATION_CACHE_SECONDS);
