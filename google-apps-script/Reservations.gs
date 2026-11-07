@@ -253,7 +253,16 @@ function recordReservationPayment_(request) {
     if (last >= 6) {
       var already = ledger.getRange(6, 1, last-5, 1)
         .createTextFinder(paymentId).matchEntireCell(true).findNext();
-      if (already) return mapReservationRow_(row, todayKey_());
+      if (already) {
+        var registered = ledger.getRange(already.getRow(), 1, 1, 21).getValues()[0];
+        var paidMatch = String(registered[15] || '').match(/HMS_PAID_AFTER:([0-9.]+)/);
+        var expectedPaid = paidMatch ? Number(paidMatch[1]) : NaN;
+        if (String(registered[9]) === key && Number(registered[8]) === amount &&
+            registered[7] === method && isFinite(expectedPaid) && previous + 0.001 >= expectedPaid) {
+          return mapReservationRow_(row, todayKey_());
+        }
+        throw new Error('El identificador del pago ya existe pero requiere conciliación. No repetir el cobro.');
+      }
     }
     var now = new Date();
     var rowCash = new Array(21).fill('');
@@ -269,6 +278,7 @@ function recordReservationPayment_(request) {
     rowCash[9] = key;                     // J clave de reserva
     rowCash[12] = 'Sistema HMS';          // M usuario
     rowCash[13] = 'Registrado';           // N estado
+    rowCash[15] = 'HMS_PAID_BEFORE:' + previous + ';HMS_PAID_AFTER:' + Math.round((previous + amount)*100)/100;
     rowCash[16] = now;                    // Q actualizado
     rowCash[20] = 'Reservas Web';         // U origen
     var cashRow = Math.max(6, last + 1);
@@ -279,7 +289,15 @@ function recordReservationPayment_(request) {
       sheet.getRange(rowNo, 23).setValue(Math.max(0, Math.round((total-newPaid)*100)/100)); // W: saldo
       sheet.getRange(rowNo, 26).setValue(now);
     } catch (error) {
-      ledger.getRange(cashRow, 1, 1, 21).clearContent();
+      // Apps Script no ofrece transacciones entre hojas: intentar restaurar
+      // ambos importes y limpiar el movimiento; registrar si rollback falla.
+      try {
+        sheet.getRange(rowNo, 22).setValue(previous);
+        sheet.getRange(rowNo, 23).setValue(row[22]);
+        ledger.getRange(cashRow, 1, 1, 21).clearContent();
+      } catch (rollbackError) {
+        console.error('CONCILIACION MANUAL REQUERIDA para pago ' + paymentId + ': ' + rollbackError);
+      }
       throw error;
     }
     SpreadsheetApp.flush();
