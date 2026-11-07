@@ -235,6 +235,7 @@ function App() {
     setData(current => current ? { ...current, reservations: updater(current.reservations) } : current)
   }
   const persistReservation = (reservationKey: string, changes: Partial<DashboardData['reservations'][number]>) => hotelService.updateReservation(reservationKey, changes)
+  const persistPayment = (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => hotelService.recordReservationPayment(reservationKey, amount, method, paymentId)
   const updateRooms = (updater: (rows: DashboardData['roomStates']) => DashboardData['roomStates']) => {
     setData(current => current ? { ...current, roomStates: updater(current.roomStates) } : current)
   }
@@ -331,7 +332,8 @@ function App() {
       {active === 'RMS / Tarifas' && <RatesView data={data} initialRecommendationId={selectedRecommendationId} onNotify={setToast}/>}
       {active === 'Reservas' && <ReservationsView
         reservations={data.reservations} onChange={updateReservations}
-        onPersist={hotelService.isConfigured ? persistReservation : undefined} onNotify={setToast}
+        onPersist={hotelService.isConfigured ? persistReservation : undefined}
+        onPayment={hotelService.isConfigured ? persistPayment : undefined} onNotify={setToast}
       />}
       {active === 'Operación diaria' && <OperationsView
         role={role} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
