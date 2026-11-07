@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, Banknote, CheckCircle2, Clock3, HandCoins, MapPinned,
   Plus, ReceiptText, Users, X,
@@ -14,6 +14,8 @@ type Props = {
   cashMovements: CashMovement[]
   onToursChange: (updater: (rows: TourBooking[]) => TourBooking[]) => void
   onCashMovementsChange: (updater: (rows: CashMovement[]) => CashMovement[]) => void
+  onTourPayment: (tourId: string, kind: 'Cobro huésped' | 'Pago proveedor' | 'Pago recepción' | 'Pago hotel', amount: number, method: CashPaymentMethod, eventId: string) => Promise<boolean>
+  onTourStatus: (tourId: string, status: TourBooking['status']) => Promise<boolean>
   onNotify: (message: string) => void
 }
 
@@ -55,27 +57,37 @@ const freshDraft = (date: string): TourDraft => ({
 
 export function ToursView({
   role, date, tours, reservations, cashMovements,
-  onToursChange, onCashMovementsChange, onNotify,
+  onToursChange, onCashMovementsChange, onTourPayment, onTourStatus, onNotify,
 }: Props) {
-  // TOURS/PAGOS_TOURS todavía no tienen una ruta de escritura completa.
-  const toursWriteConnected = false
+  // Cobros y estados de tours existentes están conectados. Crear tours sigue
+  // pendiente porque el origen no conserva proveedor, hora ni participantes.
+  const toursWriteConnected = true
+  const toursCreateConnected = false
   const [draft, setDraft] = useState<TourDraft | null>(null)
   const [action, setAction] = useState<MoneyAction | null>(null)
   const [method, setMethod] = useState<CashPaymentMethod>('Efectivo')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const retryPayment = useRef<{ key: string; id: string } | null>(null)
 
   const scheduled = tours.filter(tour => tour.serviceDate === date && tour.status !== 'Cancelado')
     .sort((left, right) => left.serviceTime.localeCompare(right.serviceTime))
   const activeTours = tours.filter(tour => tour.status !== 'Cancelado')
-  const unpaid = activeTours.filter(tour => tour.paymentStatus === 'Pendiente')
-  const providerPending = activeTours.filter(tour => tour.paymentStatus === 'Pagado' && tour.status === 'Realizado' && tour.providerSettlementStatus === 'Pendiente')
-  const commissionPending = activeTours.filter(tour => tour.providerSettlementStatus === 'Liquidado' && tour.receptionCommissionStatus === 'Pendiente')
+  const unpaid = activeTours.filter(tour => (tour.guestDue ?? 0) > 0)
+  const providerPending = activeTours.filter(tour => tour.status === 'Realizado' && (tour.providerDue ?? 0) > 0)
+  const commissionPending = activeTours.filter(tour => tour.status === 'Realizado' && tour.providerSettlementStatus === 'Liquidado' &&
+    (tour.collectedBy === 'Hotel' ? (tour.receptionDue ?? 0) > 0 : (tour.hotelDue ?? 0) > 0))
   const canSettle = ['Dueño', 'Gerencia', 'Administración'].includes(role)
 
+  const tourKind = (tour: TourBooking, type: MoneyAction['type']) => type === 'Cobrar' ? 'Cobro huésped' as const
+    : type === 'Liquidar' ? 'Pago proveedor' as const : tour.collectedBy === 'Hotel' ? 'Pago recepción' as const : 'Pago hotel' as const
+  const tourAmount = (tour: TourBooking, type: MoneyAction['type']) => type === 'Cobrar' ? (tour.guestDue ?? 0)
+    : type === 'Liquidar' ? (tour.providerDue ?? 0) : tour.collectedBy === 'Hotel' ? (tour.receptionDue ?? 0) : (tour.hotelDue ?? 0)
+
   const pendingItems = useMemo(() => [
-    ...unpaid.map(tour => ({ key: `pay-${tour.id}`, type: 'Cobro' as const, tour, amount: tour.salePrice, label: 'Cobrar huésped', overdue: tour.serviceDate < TODAY })),
-    ...providerPending.map(tour => ({ key: `provider-${tour.id}`, type: 'Proveedor' as const, tour, amount: tour.providerAmount, label: 'Liquidar proveedor', overdue: Boolean(tour.settlementDueDate) && tour.settlementDueDate <= TODAY })),
-    ...commissionPending.map(tour => ({ key: `commission-${tour.id}`, type: 'Comisión' as const, tour, amount: receptionShare(tour), label: 'Entregar comisión', overdue: false })),
+    ...unpaid.map(tour => ({ key: `pay-${tour.id}`, type: 'Cobro' as const, tour, amount: tour.guestDue ?? 0, label: 'Cobrar huésped', overdue: tour.serviceDate < TODAY })),
+    ...providerPending.map(tour => ({ key: `provider-${tour.id}`, type: 'Proveedor' as const, tour, amount: tour.providerDue ?? 0, label: 'Liquidar proveedor', overdue: Boolean(tour.settlementDueDate) && tour.settlementDueDate <= TODAY })),
+    ...commissionPending.map(tour => ({ key: `commission-${tour.id}`, type: 'Comisión' as const, tour, amount: tourAmount(tour,'Comisión'), label: tour.collectedBy === 'Hotel' ? 'Pagar recepción' : 'Pagar hotel', overdue: false })),
   ].sort((left, right) => Number(right.overdue) - Number(left.overdue) || left.tour.serviceDate.localeCompare(right.tour.serviceDate)), [unpaid, providerPending, commissionPending])
 
   const selectReservation = (reservationId: string) => {
@@ -109,62 +121,61 @@ export function ToursView({
     onNotify(`${newTour.tourType} agendado para ${newTour.guestName}`)
   }
 
-  const createCashMovement = (tour: TourBooking, type: CashMovement['type'], amount: number, category: CashMovement['category'], description: string) => {
-    const sameDayCount = cashMovements.filter(item => item.date === TODAY).length + 1
-    const movement: CashMovement = {
-      id: `MOV-${TODAY.replaceAll('-', '')}-${String(sameDayCount).padStart(3, '0')}`,
-      date: TODAY, time: hotelTime(), type, amount, paymentMethod: method,
-      area: type === 'Entrada' ? 'Recepción' : 'Administración', category, description,
-      status: 'Registrado', createdBy: role, reservationId: tour.reservationId, tourId: tour.id,
+  const confirmMoneyAction = async () => {
+    if (!action || saving) return
+    const kind = tourKind(action.tour,action.type)
+    const amount = tourAmount(action.tour,action.type)
+    if (!amount || amount<=0) {setError('No hay saldo confirmado para liquidar.');return}
+    const key=JSON.stringify({tourId:action.tour.id,kind,amount,method})
+    const id=retryPayment.current?.key===key ? retryPayment.current.id : 'HMS-TOUR-'+crypto.randomUUID()
+    retryPayment.current={key,id}
+    setSaving(true)
+    try {
+      await onTourPayment(action.tour.id,kind,amount,method,id)
+      retryPayment.current=null
+      setAction(null)
+      setError('')
+      onNotify(`${kind} · ${money(amount)} registrado en Caja y PAGOS_TOURS`)
+    } catch(error) {
+      console.warn('Pago de tour sin confirmación',error)
+      setError('No se confirmó el movimiento. Usa el mismo identificador al reintentar; si persiste, concilia Caja y Tours.')
+    } finally {setSaving(false)}
+  }
+
+  const markCompleted = async (tour: TourBooking) => {
+    if(saving)return
+    setSaving(true)
+    try {await onTourStatus(tour.id,'Realizado');onNotify('Tour marcado como realizado en Google Sheets')}
+    catch(error){console.warn(error);onNotify('No se guardó el estado del tour')}
+    finally {setSaving(false)}
+  }
+
+  const cancelTour = async (tour: TourBooking) => {
+    if(saving)return
+    if((tour.guestDue ?? 0)<tour.salePrice) {
+      onNotify('Tour con cobros registrados; requiere primero una conciliación de reembolso')
+      return
     }
-    onCashMovementsChange(rows => [movement, ...rows])
+    setSaving(true)
+    try {await onTourStatus(tour.id,'Cancelado');onNotify('Tour cancelado en Google Sheets')}
+    catch(error){console.warn(error);onNotify('No se confirmó la cancelación')}
+    finally {setSaving(false)}
   }
 
-  const confirmMoneyAction = () => {
-    if (!action) return
-    const { tour } = action
-    if (action.type === 'Cobrar') {
-      createCashMovement(tour, 'Entrada', tour.salePrice, 'Cobro de tour', `Cobro de ${tour.tourType} · ${tour.guestName}`)
-      onToursChange(rows => rows.map(row => row.id === tour.id ? { ...row, paymentStatus: 'Pagado', paymentMethod: method, paidAt: `${TODAY} ${hotelTime()}` } : row))
-      onNotify(`Tour cobrado · ${money(tour.salePrice)}`)
-    } else if (action.type === 'Liquidar') {
-      createCashMovement(tour, 'Salida', tour.providerAmount, 'Pago a proveedor de tour', `Liquidación a ${tour.provider} · ${tour.id}`)
-      onToursChange(rows => rows.map(row => row.id === tour.id ? { ...row, providerSettlementStatus: 'Liquidado', providerSettlementMethod: method, settledAt: `${TODAY} ${hotelTime()}` } : row))
-      onNotify(`Proveedor liquidado · ${money(tour.providerAmount)}`)
-    } else {
-      const amount = receptionShare(tour)
-      createCashMovement(tour, 'Salida', amount, 'Comisión de tour a recepción', `Comisión de recepción · ${tour.id}`)
-      onToursChange(rows => rows.map(row => row.id === tour.id ? { ...row, receptionCommissionStatus: 'Pagada', receptionCommissionMethod: method, receptionCommissionPaidAt: `${TODAY} ${hotelTime()}` } : row))
-      onNotify(`Comisión de recepción entregada · ${money(amount)}`)
-    }
-    setAction(null)
-  }
-
-  const markCompleted = (tour: TourBooking) => {
-    onToursChange(rows => rows.map(row => row.id === tour.id ? { ...row, status: 'Realizado' } : row))
-    onNotify(`${tour.tourType} marcado como realizado`)
-  }
-
-  const cancelTour = (tour: TourBooking) => {
-    if (tour.paymentStatus === 'Pagado') { onNotify('Este tour ya está pagado; primero registra el reembolso en Caja'); return }
-    onToursChange(rows => rows.map(row => row.id === tour.id ? { ...row, status: 'Cancelado' } : row))
-    onNotify('Tour cancelado; se conservó en el historial')
-  }
-
-  const openAction = (type: MoneyAction['type'], tour: TourBooking) => { setMethod('Efectivo'); setAction({ type, tour }) }
+  const openAction = (type: MoneyAction['type'], tour: TourBooking) => { setMethod('Efectivo'); setError('');retryPayment.current=null;setAction({ type, tour }) }
   const hasTourData = tours.length > 0 || cashMovements.length > 0
 
   return <section className="tour-workspace">
     <section className="tour-summary">
       <article><span><MapPinned size={14}/> Tours del día</span><strong>{hasTourData ? scheduled.length : '—'}</strong><small>{hasTourData ? scheduled.some(tour => tour.people > 0) ? `${scheduled.reduce((sum, tour) => sum + tour.people, 0)} personas registradas` : 'Participantes sin registro' : 'Sin datos'}</small></article>
-      <article><span><ReceiptText size={14}/> Por cobrar</span><strong>{hasTourData ? money(unpaid.reduce((sum, tour) => sum + tour.salePrice, 0)) : '—'}</strong><small>{hasTourData ? `${unpaid.length} tour${unpaid.length === 1 ? '' : 's'}` : 'Sin datos'}</small></article>
-      <article><span><Banknote size={14}/> A proveedores</span><strong>{hasTourData ? money(providerPending.reduce((sum, tour) => sum + tour.providerAmount, 0)) : '—'}</strong><small>{hasTourData ? `${providerPending.length} liquidación${providerPending.length === 1 ? '' : 'es'}` : 'Sin datos'}</small></article>
-      <article><span><HandCoins size={14}/> Comisión recepción</span><strong>{hasTourData ? money(commissionPending.reduce((sum, tour) => sum + receptionShare(tour), 0)) : '—'}</strong><small>{hasTourData ? 'Pendiente de entregar' : 'Sin datos'}</small></article>
+      <article><span><ReceiptText size={14}/> Por cobrar</span><strong>{hasTourData ? money(unpaid.reduce((sum, tour) => sum + (tour.guestDue ?? 0), 0)) : '—'}</strong><small>{hasTourData ? `${unpaid.length} tour${unpaid.length === 1 ? '' : 's'}` : 'Sin datos'}</small></article>
+      <article><span><Banknote size={14}/> A proveedores</span><strong>{hasTourData ? money(providerPending.reduce((sum, tour) => sum + (tour.providerDue ?? 0), 0)) : '—'}</strong><small>{hasTourData ? `${providerPending.length} liquidación${providerPending.length === 1 ? '' : 'es'}` : 'Sin datos'}</small></article>
+      <article><span><HandCoins size={14}/> Participación pendiente</span><strong>{hasTourData ? money(commissionPending.reduce((sum, tour) => sum + tourAmount(tour,'Comisión'), 0)) : '—'}</strong><small>{hasTourData ? 'Pendiente de entregar' : 'Sin datos'}</small></article>
     </section>
 
     <div className="tour-layout">
       <article className="panel tour-agenda">
-        <header><div><span>AGENDA DE TOURS</span><h2>{longDate(date)}</h2></div><button className="primary-action" disabled={!toursWriteConnected} title="La escritura de tours se conectará con Caja" onClick={() => { setError(''); setDraft(freshDraft(date)) }}><Plus size={14}/>Agendar tour</button></header>
+        <header><div><span>AGENDA DE TOURS</span><h2>{longDate(date)}</h2></div><button className="primary-action" disabled={!toursCreateConnected} title="Agendar tours requiere integrar proveedor, horario y participantes" onClick={() => { setError(''); setDraft(freshDraft(date)) }}><Plus size={14}/>Agendar tour</button></header>
         <div className="tour-table-wrap"><table className="tour-table"><thead><tr><th>Hora</th><th>Huésped / reserva</th><th>Tour</th><th>Personas</th><th>Importes</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{scheduled.map(tour => <tr key={tour.id}>
           <td><b>{tour.serviceTime || '—'}</b></td>
           <td><b>{tour.guestName}</b><small>{tour.reservationId ?? 'Cliente externo'}</small></td>
@@ -172,7 +183,7 @@ export function ToursView({
           <td><span className="tour-people"><Users size={13}/>{tour.people > 0 ? tour.people : '—'}</span></td>
           <td><b>{money(tour.salePrice)}</b><small>Proveedor {money(tour.providerAmount)}</small></td>
           <td><span className={`tour-badge ${tour.status.toLowerCase()}`}>{tour.status}</span><span className={`tour-badge ${tour.paymentStatus.toLowerCase()}`}>{tour.paymentStatus}</span></td>
-          <td><div className="tour-row-actions">{tour.paymentStatus === 'Pendiente' && <button disabled={!toursWriteConnected} onClick={() => openAction('Cobrar', tour)}>Cobrar</button>}{tour.status === 'Agendado' && <button disabled={!toursWriteConnected} onClick={() => markCompleted(tour)}>Realizado</button>}{tour.status === 'Agendado' && tour.paymentStatus === 'Pendiente' && <button className="muted" disabled={!toursWriteConnected} onClick={() => cancelTour(tour)}>Cancelar</button>}</div></td>
+          <td><div className="tour-row-actions">{(tour.paymentStatus === 'Pendiente' || tour.paymentStatus === 'Parcial') && (tour.guestDue ?? 0)>0 && <button disabled={!toursWriteConnected || saving} onClick={() => openAction('Cobrar', tour)}>Cobrar</button>}{tour.status === 'Agendado' && <button disabled={!toursWriteConnected || saving} onClick={() => void markCompleted(tour)}>Realizado</button>}{tour.status === 'Agendado' && (tour.guestDue ?? 0)===tour.salePrice && <button className="muted" disabled={!toursWriteConnected || saving} onClick={() => void cancelTour(tour)}>Cancelar</button>}</div></td>
         </tr>)}</tbody></table>{!scheduled.length && <div className="tour-empty"><MapPinned size={24}/><b>Sin tours en esta fecha</b><span>Agenda uno nuevo o selecciona otro día.</span></div>}</div>
       </article>
 
@@ -181,7 +192,7 @@ export function ToursView({
         <div>{pendingItems.slice(0, 8).map(item => <section key={item.key} className={item.overdue ? 'overdue' : ''}>
           <div><span>{item.overdue && <AlertTriangle size={12}/>} {item.type} · {shortDate(item.tour.serviceDate)}</span><b>{item.tour.guestName}</b><small>{item.tour.tourType} · {item.tour.provider}</small></div>
           <strong>{money(item.amount)}</strong>
-          <button disabled={!toursWriteConnected || (item.type !== 'Cobro' && !canSettle)} onClick={() => openAction(item.type === 'Cobro' ? 'Cobrar' : item.type === 'Proveedor' ? 'Liquidar' : 'Comisión', item.tour)}>{item.label}</button>
+          <button disabled={!toursWriteConnected || saving || (item.type !== 'Cobro' && !canSettle)} onClick={() => openAction(item.type === 'Cobro' ? 'Cobrar' : item.type === 'Proveedor' ? 'Liquidar' : 'Comisión', item.tour)}>{item.label}</button>
         </section>)}{!pendingItems.length && <div className="tour-all-clear"><CheckCircle2 size={22}/><b>Todo liquidado</b><span>No hay cobros ni pagos pendientes.</span></div>}</div>
       </aside>
     </div>
@@ -203,13 +214,14 @@ export function ToursView({
         <label className="full"><span>Nota breve (opcional)</span><textarea value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })}/></label>
         {error && <div className="tour-form-error full"><AlertTriangle size={14}/>{error}</div>}
       </div>
-      <footer><button onClick={() => setDraft(null)}>Cancelar</button><button className="primary-action" disabled={!toursWriteConnected} onClick={saveTour}>Guardar tour</button></footer>
+      <footer><button onClick={() => setDraft(null)}>Cancelar</button><button className="primary-action" disabled={!toursCreateConnected} onClick={saveTour}>Guardar tour</button></footer>
     </section></div>}
 
     {action && <div className="dialog-backdrop" role="presentation"><section className="tour-action-dialog" role="dialog" aria-modal="true" aria-label={action.type}>
       <header><div><span>{action.tour.id}</span><h2>{action.type === 'Cobrar' ? 'Cobrar al huésped' : action.type === 'Liquidar' ? 'Liquidar al proveedor' : 'Entregar comisión'}</h2><p>{action.tour.tourType} · {action.tour.guestName}</p></div><button onClick={() => setAction(null)} aria-label="Cerrar"><X size={18}/></button></header>
-      <div className="tour-action-body"><span>Monto del movimiento</span><strong>{money(action.type === 'Cobrar' ? action.tour.salePrice : action.type === 'Liquidar' ? action.tour.providerAmount : receptionShare(action.tour))}</strong><label><span>Método de pago</span><select value={method} onChange={event => setMethod(event.target.value as CashPaymentMethod)}>{methods.map(item => <option key={item}>{item}</option>)}</select></label><p>Se generará automáticamente un movimiento enlazado en Caja. El historial del tour conservará quién y cuándo lo registró.</p></div>
-      <footer><button onClick={() => setAction(null)}>Cancelar</button><button className="primary-action" disabled={!toursWriteConnected} onClick={confirmMoneyAction}>Confirmar movimiento</button></footer>
+      <div className="tour-action-body"><span>Monto del movimiento</span><strong>{money(tourAmount(action.tour,action.type))}</strong><label><span>Método de pago</span><select value={method} onChange={event => setMethod(event.target.value as CashPaymentMethod)}>{methods.map(item => <option key={item}>{item}</option>)}</select></label><p>Se generará automáticamente un movimiento enlazado en Caja. El historial del tour conservará quién y cuándo lo registró.</p></div>
+      {error && <div className="tour-form-error"><AlertTriangle size={14}/>{error}</div>}
+      <footer><button disabled={saving} onClick={() => setAction(null)}>Cancelar</button><button className="primary-action" disabled={!toursWriteConnected || saving || tourAmount(action.tour,action.type)<=0} onClick={() => void confirmMoneyAction()}>{saving ? 'Guardando…' : 'Confirmar movimiento'}</button></footer>
     </section></div>}
   </section>
 }
