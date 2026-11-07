@@ -594,10 +594,9 @@ function App() {
       />}
       {active === 'Inventario' && <InventoryView
         role={role} items={data.inventory} requests={data.purchaseRequests}
-        onChange={updateInventory} onRequestsChange={updatePurchaseRequests}
         canWrite={hotelService.isConfigured && inventoryReady && !inventoryLoading}
         onSaveCount={saveInventoryCount}
-        onOpenCash={openPurchaseRequestInCash} onNotify={setToast}
+        onNotify={setToast}
       />}
       {active === 'Personal' && <StaffView
         role={role} staff={data.staff} schedules={data.staffSchedules}
