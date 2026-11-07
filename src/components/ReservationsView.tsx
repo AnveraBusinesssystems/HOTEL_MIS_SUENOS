@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, BedDouble, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
   CircleDollarSign, Cloud, List, LogIn, LogOut, Search, Sparkles, UserRound, X,
@@ -68,13 +68,12 @@ export function ReservationsView({ reservations, onChange, onPersist, onPayment,
   const balance = balanceKnown.reduce((sum, row) => sum + Math.max(0, row.total - row.paid), 0)
   const attention = reservations.filter(row => ACTIVE_STATUSES.includes(row.status) && (!row.roomNumber || row.paymentKnown === false || row.total > row.paid)).length
 
-  const registerPayment = async (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia') => {
+  const registerPayment = async (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => {
     if (!onPayment) {
       onNotify('El registro de pagos requiere desplegar Apps Script')
       return false
     }
     try {
-      const paymentId = 'HMS-PAGO-' + crypto.randomUUID()
       const saved = await onPayment(reservationKey, amount, method, paymentId)
       onChange(rows => rows.map(row => row.subReservationId === reservationKey ? saved : row))
       onNotify('Pago registrado en RESERVAS y MOVIMIENTOS_CAJA')
@@ -203,7 +202,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onRequestCleaning, 
   onClose: () => void
   onUpdate: (reservationKey: string, changes: Partial<Reservation>, message: string) => Promise<void>
   onRequestCleaning: (reservation: Reservation) => Promise<void>
-  onPayment: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia') => Promise<boolean>
+  onPayment: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) => Promise<boolean>
   canRegisterPayment: boolean
   onNotify: (message: string) => void
 }) {
@@ -211,6 +210,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onRequestCleaning, 
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo')
   const [savingPayment, setSavingPayment] = useState(false)
+  const retryPayment = useRef<{ id: string; amount: number; method: typeof paymentMethod } | null>(null)
   const due = Math.max(0, reservation.total - reservation.paid)
   const requestedPayment = Number(paymentAmount)
   const canPay = canRegisterPayment && !savingPayment && reservation.paymentKnown !== false && requestedPayment > 0 && requestedPayment <= due
@@ -230,7 +230,7 @@ function ReservationDrawer({ reservation, onClose, onUpdate, onRequestCleaning, 
 
       <section className="drawer-section"><span className="drawer-label">HUÉSPED</span><div className="guest-contact"><b>{reservation.email}</b><span>{reservation.phone}</span></div>{reservation.notes && <p className="reservation-notes">{reservation.notes}</p>}</section>
 
-      <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{reservation.paymentKnown === false ? 'Sin registro' : money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 && reservation.paymentKnown !== false ? 'negative' : 'positive'}>{reservation.paymentKnown === false ? 'Sin determinar' : money(due)}</b></div></div>{due > 0 && reservation.paymentKnown !== false && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as typeof paymentMethod)}><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { setSavingPayment(true); void onPayment(reservation.subReservationId, requestedPayment, paymentMethod).then(ok => { if (ok) setPaymentAmount('') }).finally(() => setSavingPayment(false)) }}>{savingPayment ? 'Guardando…' : 'Registrar'}</button></div>}</section>
+      <section className="drawer-section"><span className="drawer-label">PAGO</span><div className="payment-balance"><div><small>Total</small><b>{money(reservation.total)}</b></div><div><small>Pagado</small><b>{reservation.paymentKnown === false ? 'Sin registro' : money(reservation.paid)}</b></div><div><small>Saldo</small><b className={due > 0 && reservation.paymentKnown !== false ? 'negative' : 'positive'}>{reservation.paymentKnown === false ? 'Sin determinar' : money(due)}</b></div></div>{due > 0 && reservation.paymentKnown !== false && <div className="payment-entry"><span>$</span><input type="number" min="1" max={due} value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} placeholder="Cantidad"/><select aria-label="Método de pago" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as typeof paymentMethod)}><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select><button disabled={!canPay} onClick={() => { setSavingPayment(true); const saved = retryPayment.current; const id = saved && saved.amount === requestedPayment && saved.method === paymentMethod ? saved.id : 'HMS-PAGO-' + crypto.randomUUID(); retryPayment.current = {id,amount:requestedPayment,method:paymentMethod}; void onPayment(reservation.subReservationId, requestedPayment, paymentMethod, id).then(ok => { if (ok) { setPaymentAmount(''); retryPayment.current = null } }).finally(() => setSavingPayment(false)) }}>{savingPayment ? 'Guardando…' : 'Registrar'}</button></div>}</section>
 
       <footer className="reservation-actions"><button disabled={!reservation.roomNumber || reservation.status === 'Cancelada' || reservation.status === 'No show'} onClick={() => void onRequestCleaning(reservation)}><Sparkles size={14}/>Solicitar limpieza</button>{reservation.status === 'Confirmada' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Hospedado' }, 'check-in confirmado')}><CheckCircle2 size={14}/>Confirmar check-in</button>}{reservation.status === 'Hospedado' && <button className="primary-action" onClick={() => void onUpdate(reservation.subReservationId, { status: 'Salida' }, 'salida confirmada')}><LogOut size={14}/>Confirmar salida</button>}<button onClick={() => onNotify('El enlace directo se activará al conectar la API de Cloudbeds')}>Abrir en Cloudbeds</button></footer>
     </aside>
