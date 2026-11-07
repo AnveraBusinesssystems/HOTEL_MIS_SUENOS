@@ -244,14 +244,14 @@ function recordReservationPayment_(request) {
     if (amount > due + 0.001) throw new Error('El pago supera el saldo pendiente.');
     var ledger = ss.getSheetByName('MOVIMIENTOS_CAJA');
     if (!ledger) throw new Error('Falta MOVIMIENTOS_CAJA.');
-    var header = ledger.getRange(6, 1, 1, 21).getDisplayValues()[0];
+    var header = ledger.getRange(5, 1, 1, 21).getDisplayValues()[0];
     if (header[0] !== 'ID movimiento' || header[8] !== 'Monto' || header[9] !== 'Clave de reserva') {
       throw new Error('Estructura de MOVIMIENTOS_CAJA incompatible.');
     }
     // Idempotencia: reenvíos del mismo paymentId no duplican movimientos.
     var last = ledger.getLastRow();
-    if (last >= 7) {
-      var already = ledger.getRange(7, 1, last-6, 1)
+    if (last >= 6) {
+      var already = ledger.getRange(6, 1, last-5, 1)
         .createTextFinder(paymentId).matchEntireCell(true).findNext();
       if (already) return mapReservationRow_(row, todayKey_());
     }
@@ -271,7 +271,7 @@ function recordReservationPayment_(request) {
     rowCash[13] = 'Registrado';           // N estado
     rowCash[16] = now;                    // Q actualizado
     rowCash[20] = 'Reservas Web';         // U origen
-    var cashRow = Math.max(7, last + 1);
+    var cashRow = Math.max(6, last + 1);
     ledger.getRange(cashRow, 1, 1, 21).setValues([rowCash]);
     try {
       var newPaid = Math.round((previous + amount) * 100) / 100;
