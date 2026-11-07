@@ -62,7 +62,7 @@ function readHotelTours_(ss) {
       status:status, paymentStatus:paid?'Pagado':'Pendiente',
       providerSettlementStatus:numberOrZero_(r[15])<=0?'Liquidado':'Pendiente',
       receptionCommissionStatus:numberOrZero_(r[16])<=0?'Pagada':'Pendiente',
-      settlementDueDate:r[2] instanceof Date?dateKey_(r[2]):String(r[2]||'').slice(0,10),
+      settlementDueDate:'', // Plazo no registrado en la hoja.
       createdAt:r[1] instanceof Date?Utilities.formatDate(r[1],HMS_CONFIG.TIME_ZONE,"yyyy-MM-dd HH:mm"):'',
       createdBy:String(r[18] || ''), notes:String(r[20] || '') || undefined
     };
