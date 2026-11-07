@@ -165,6 +165,27 @@ function App() {
     return true
   }
 
+  const recordTourPayment = async (
+    tourId: string, kind: Parameters<typeof hotelService.recordTourPayment>[1],
+    amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', eventId: string,
+  ) => {
+    await hotelService.recordTourPayment(tourId, kind, amount, method, eventId)
+    const [operation, cash] = await Promise.all([
+      hotelService.getOperation(true),hotelService.getCash(true),
+    ])
+    setData(current => current ? { ...current, ...operation, ...cash } : current)
+    return true
+  }
+
+  const updateTourStatus = async (
+    tourId: string, status: Parameters<typeof hotelService.updateTourStatus>[1],
+  ) => {
+    await hotelService.updateTourStatus(tourId,status)
+    const operation = await hotelService.getOperation(true)
+    setData(current => current ? { ...current, ...operation } : current)
+    return true
+  }
+
   const loadOperation = async (refresh = false) => {
     if (!hotelService.isConfigured || operationLoading) return false
     setOperationLoading(true)
@@ -480,7 +501,8 @@ function App() {
         staff={data.staff} staffTimeEntries={data.staffTimeEntries} dailyOperation={data.dailyOperation}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
         onDaysChange={updateOperationDays} onPersistReservation={persistReservation} onOperationEvent={recordOperationEvent} onToursChange={updateTours}
-        onCashMovementsChange={updateCashMovements} onNotify={setToast}
+        onCashMovementsChange={updateCashMovements} onTourPayment={recordTourPayment}
+        onTourStatus={updateTourStatus} onNotify={setToast}
       />}
       {active === 'Caja' && <CashView
         role={role} reservations={data.reservations} movements={data.cashMovements} days={data.cashDays}
