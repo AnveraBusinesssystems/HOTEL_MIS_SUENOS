@@ -124,32 +124,20 @@ function App() {
       setToast('Google Apps Script todavía no está conectado')
       return false
     }
-    // Las pantallas operativas todavía realizan algunos cambios optimistas.
-    // Conservar una referencia anterior para recuperar el estado si la
-    // escritura es rechazada; no confirmar sin respuesta del servidor.
-    const roomSnapshot = data?.roomStates ?? []
-    const taskSnapshot = data?.operationTasks ?? []
     try {
-      await hotelService.recordOperationEvent(event)
+      const result = await hotelService.recordOperationEvent(event)
+      if (!result.recorded) throw new Error('Apps Script no confirmó el evento')
     } catch (error) {
       console.warn('Escritura operativa no confirmada.', error)
-      try {
-        const payload = await hotelService.getOperation(true)
-        setData(current => current ? { ...current, ...payload } : current)
-      } catch {
-        setData(current => current ? {
-          ...current, roomStates: roomSnapshot, operationTasks: taskSnapshot,
-        } : current)
-      }
-      setToast('Evento no confirmado. Se recuperó el estado anterior o el registrado.')
+      setToast('El evento no fue confirmado en el servidor')
       return false
     }
     try {
       const payload = await hotelService.getOperation(true)
       setData(current => current ? { ...current, ...payload } : current)
     } catch (error) {
-      console.warn('Evento guardado, pero no se pudo refrescar Operación.', error)
-      setToast('Evento guardado; actualiza la pantalla para recuperar su estado')
+      console.warn('Evento guardado, pero falló la lectura posterior.', error)
+      setToast('Evento guardado; actualiza Operación para ver el estado reciente')
     }
     return true
   }
@@ -404,7 +392,9 @@ function App() {
       {active === 'Reservas' && <ReservationsView
         reservations={data.reservations} onChange={updateReservations}
         onPersist={hotelService.isConfigured ? persistReservation : undefined}
-        onPayment={hotelService.isConfigured ? persistPayment : undefined} onNotify={setToast}
+        onPayment={hotelService.isConfigured ? persistPayment : undefined}
+        onRequestCleaning={async roomNumber => recordOperationEvent({roomNumber,actionType:'Limpieza solicitada',worker:role,work:'Limpieza de estancia',eventId:'HMS-OP-'+crypto.randomUUID()})}
+        onNotify={setToast}
       />}
       {active === 'Operación diaria' && <OperationsView
         role={role} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
