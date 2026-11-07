@@ -58,6 +58,8 @@ type Props = {
   onDaysChange: (updater: (rows: OperationDay[]) => OperationDay[]) => void
   onOperationEvent: (event: { roomNumber: string; actionType: 'Limpieza solicitada' | 'Marcar sucia' | 'Inició limpieza' | 'Terminó limpieza' | 'Check confirmado' | 'Habitación aprobada' | 'Incidencia reportada' | 'Incidencia resuelta'; worker: string; work?: string; note?: string; eventId: string }) => Promise<boolean>
   onToursChange: (updater: (rows: TourBooking[]) => TourBooking[]) => void
+  onTourPayment: (tourId: string, kind: 'Cobro huésped' | 'Pago proveedor' | 'Pago recepción' | 'Pago hotel', amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', eventId: string) => Promise<boolean>
+  onTourStatus: (tourId: string, status: TourBooking['status']) => Promise<boolean>
   onCashMovementsChange: (updater: (rows: CashMovement[]) => CashMovement[]) => void
   onNotify: (message: string) => void
 }
@@ -86,7 +88,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, dailyOperation, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onCashMovementsChange, onNotify } = props
+  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, dailyOperation, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onTourPayment, onTourStatus, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
