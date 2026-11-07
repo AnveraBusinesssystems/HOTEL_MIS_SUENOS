@@ -62,6 +62,23 @@ export interface RMSRecommendation {
   reason: string
 }
 
+export interface RMSCalendarEntry {
+  id: string
+  date: string
+  roomCode: RoomCode
+  roomName: string
+  capacity: number
+  occupied: number
+  available: number
+  occupancy: number
+  currentRate: number | null
+  recommendedRate: number | null
+  pickup7: number | null
+  demand: RMSRecommendation['demand'] | null
+  reason: string | null
+  overbooked: boolean
+}
+
 export interface RateDay {
   date: string
   occupancy: number
@@ -376,6 +393,7 @@ export interface DashboardData {
   roomPerformance: RoomPerformance[]
   rateDays: RateDay[]
   recommendations: RMSRecommendation[]
+  rmsCalendar: RMSCalendarEntry[]
   monthly: MonthlySummary[]
   expenses: ExpenseRecord[]
   roomMonthly: RoomMonthlyPerformance[]
