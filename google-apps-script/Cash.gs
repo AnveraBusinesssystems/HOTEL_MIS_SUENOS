@@ -45,7 +45,7 @@ function cashMovementRow_(sheet,id) {
 }
 function cashDate_(value) {
   var text=String(value||'');
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) throw new Error('Fecha operativa inválida.');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error('Fecha operativa inválida.');
   var date=new Date(text+'T12:00:00Z');
   if(isNaN(date.getTime()) || Utilities.formatDate(date,'UTC','yyyy-MM-dd')!==text) throw new Error('Fecha inexistente.');
   return date;
@@ -70,7 +70,7 @@ function registerCashMovement_(request) {
   };
   if(!/^HMS-CASH-[a-zA-Z0-9-]{8,}$/.test(id) || !valid[type] ||
       valid[type].indexOf(category)<0 || !isFinite(amount) || amount<=0 ||
-      Math.round(amount*100)!==amount*100 && Math.abs(Math.round(amount*100)-amount*100)>0.00001 ||
+      Math.abs(Math.round(amount*100)-amount*100)>0.00001 ||
       ['Efectivo','Tarjeta','Transferencia'].indexOf(method)<0 || !desc || desc.length>250)
     throw new Error('Movimiento inválido o requiere una ruta especializada.');
   var date=String(m.date||'');
@@ -88,7 +88,7 @@ function registerCashMovement_(request) {
       var old=ledger.getRange(existing,1,1,21).getValues()[0];
       if(old[3]===type && old[4]===category && old[7]===method &&
         numberOrZero_(old[8])===amount && String(old[6])===desc &&
-        String(old[2])===date) return {movementId:id,duplicate:true};
+        (old[2] instanceof Date ? dateKey_(old[2]) : String(old[2]))===date) return {movementId:id,duplicate:true};
       throw new Error('ID existente con distinto contenido; conciliar.');
     }
     var dept={'Venta de restaurante':'Restaurante','Otro ingreso':'Recepción',
@@ -161,7 +161,7 @@ function saveCashDay_(request) {
     if(existing && String(sh.getRange(row,18).getValue())==='Cerrado')
       throw new Error('El cierre está cerrado; requiere reapertura administrativa.');
     if(!existing) {
-      if(opening===undefined) throw new Error('Registra primero el fondo inicial.');
+      if(opening===undefined) opening=0; // Saldo inicial explícito en primera creación; posteriormente editable.
       var key='CIERRE-'+date.replace(/-/g,'');
       sh.getRange(row,1,1,3).setValues([[key,cashDate_(date),Number(opening)]]);
       sh.getRange(row,18).setValue('Abierto');
