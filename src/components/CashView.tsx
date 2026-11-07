@@ -121,7 +121,7 @@ export function CashView({
   const canAccess = ['Dueño', 'Gerencia', 'Administración', 'Recepción'].includes(role)
   const canAnnul = ['Dueño', 'Gerencia', 'Administración'].includes(role)
   const recordedDay = days.find(item => item.date === selectedDate)
-  const day = recordedDay ?? { date: selectedDate, openingCash: 0 }
+  const day: CashDay = recordedDay ?? { date: selectedDate, openingCash: 0 }
   const isClosed = recordedDay?.closed === true
   const dayMovements = movements.filter(item => item.date === selectedDate)
   const activeMovements = dayMovements.filter(item => item.status === 'Registrado')
@@ -204,6 +204,10 @@ export function CashView({
     }
     const linksReservation = draft.type === 'Entrada' && ['Pago de reserva', 'Anticipo de reserva'].includes(draft.category)
     const reservation = reservations.find(item => item.subReservationId === draft.reservationId)
+    if (linksReservation && selectedDate !== today) {
+      setFormError('Los pagos de reservas se registran en la fecha operativa actual, no de forma retroactiva.')
+      return
+    }
     if (linksReservation && (!reservation || reservation.paymentKnown === false)) {
       setFormError('Selecciona una reserva conciliada con monto pagado conocido.')
       return
