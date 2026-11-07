@@ -33,10 +33,18 @@ function cashSheet_(ss,name,headers) {
 }
 function cashNextRow_(sheet,col) {
   var n=Math.max(0,sheet.getLastRow()-5);
-  if (!n) return 6;
-  var vals=sheet.getRange(6,col,n,1).getValues();
-  for(var i=vals.length-1;i>=0;i--) if(vals[i][0]!=='' && vals[i][0]!==null) return i+7;
-  return 6;
+  var target=6;
+  if(n) {
+    var vals=sheet.getRange(6,col,n,1).getValues();
+    for(var i=vals.length-1;i>=0;i--) {
+      if(vals[i][0]!=='' && vals[i][0]!==null) {target=i+7;break;}
+    }
+  }
+  // Los SUMIFS preexistentes de CIERRES_CAJA y TOURS solo cubren filas 6:1000.
+  // No agregar filas fuera del rango silenciosamente: se perderían del total.
+  if(target>1000) throw new Error('Se alcanzó la fila 1000 de '+sheet.getName()+
+    '. Se deben ampliar primero las fórmulas/rangos de Sheets.');
+  return target;
 }
 function cashMovementRow_(sheet,id) {
   var last=sheet.getLastRow();
