@@ -50,3 +50,9 @@
 **Cambios:** acciones de Habitaciones y Limpieza esperan `operation.event` y su lectura posterior, sin confirmar cambios optimistas; solicitudes de limpieza desde Reservas llaman a la misma ruta; confirmar salida primero guarda Q de RESERVAS y luego solicita limpieza, con estado parcial explícito; los reintentos de pago conservan `paymentId`; en Operation.gs se impiden aprobaciones con incidencia activa y se intenta restaurar escrituras parciales; «Iniciar operación» y cambios de acceso sin persistencia quedan deshabilitados.
 
 **Pendiente:** registro estructurado de tareas y múltiples incidencias, asociación de solicitud de limpieza con reserva, escritura formal de apertura de jornada y permisos por rol de servidor. Es necesario validar manualmente todas las rutas cuando se copie Apps Script, no se han ejecutado pruebas.
+
+## Conexiones de Caja y Tours (6 nov 2026)
+
+`Cash.gs` y `TourPayments.gs` se agregaron al puente de Apps Script. Caja dispone de `cash.get`, `cash.movement.create`, `cash.movement.annul`, `cash.day.save` y `cash.day.close`; Tours existentes disponen de `tour.payment` y `tour.update`; los pagos/anticipos de huéspedes reutilizan `reservations.payment`. Se preservan fórmulas de cierres y tours. Los registros desconocidos no se convierten en dinero disponible ni en efectivo.
+
+**Pendiente:** el flujo de compra de inventario y los reembolsos necesitan integraciones con sus fuentes antes de habilitarse. Autenticación, autorización, transacciones multihoja y pruebas siguen pendientes para despliegue real. Ver `CAJA_MAPEO.md`.
