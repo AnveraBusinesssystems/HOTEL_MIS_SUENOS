@@ -111,7 +111,8 @@ function readRoomIndicators_(spreadsheet) {
         occupancy: occupancy,
         adr: adr,
         revpar: revpar,
-        currentRate: adr
+        // ADR histórico, no tarifa vigente de venta.
+        historicalAdr: adr
       };
     })
   };
