@@ -25,6 +25,7 @@ export const hotelService = {
     }
   },
 
+  purchaseInventory(input: Parameters<typeof inventoryService.purchase>[0],purchaseId:string) {return inventoryService.purchase(input,purchaseId)},
   getInventory(refresh = false) {return inventoryService.get(refresh)},
   saveInventoryCount(changes: Parameters<typeof inventoryService.count>[0], countId: string) {return inventoryService.count(changes,countId)},
 
