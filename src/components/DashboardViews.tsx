@@ -34,7 +34,7 @@ function KpiCards({ kpis, empty = false }: { kpis: KPI[]; empty?: boolean }) {
         <div className="kpi-comparison">
           {unavailable || missingComparison ? <><b className="neutral">—</b><small>{unavailable ? 'Sin datos' : 'Sin comparativo'}</small></> : <><b className={neutral ? 'neutral' : difference > 0 ? 'positive' : 'negative'}>
             {neutral ? '—' : difference > 0 ? '▲' : '▼'} {neutral ? 'Sin cambio' : comparison}
-          </b><small>Mes anterior {kpiValue(kpi, kpi.previous)}</small></>}
+          </b><small>Mes anterior {kpiValue(kpi, kpi.previous ?? kpi.value)}</small></>}
         </div>
       </article>
     })}
