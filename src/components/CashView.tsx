@@ -110,7 +110,7 @@ export function CashView({
   const [selectedMovement, setSelectedMovement] = useState<CashMovement | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'Todos' | CashMovementType>('Todos')
-  const [methodFilter, setMethodFilter] = useState<'Todos' | CashPaymentMethod>('Todos')
+  const [methodFilter, setMethodFilter] = useState<'Todos' | CashPaymentMethod | 'Sin registro'>('Todos')
   const [counted, setCounted] = useState('')
   const [openingDraft, setOpeningDraft] = useState('')
   const [closeNote, setCloseNote] = useState('')
@@ -124,13 +124,14 @@ export function CashView({
   const recordedDay = days.find(item => item.date === selectedDate)
   const day: CashDay = recordedDay ?? { date: selectedDate, openingCash: 0 }
   const isClosed = recordedDay?.closed === true
+  const hasOpening = Boolean(recordedDay) && recordedDay?.openingKnown !== false
   const dayMovements = movements.filter(item => item.date === selectedDate)
   const activeMovements = dayMovements.filter(item => item.status === 'Registrado')
   const entries = activeMovements.filter(item => item.type === 'Entrada').reduce((sum, item) => sum + item.amount, 0)
   const exits = activeMovements.filter(item => item.type === 'Salida').reduce((sum, item) => sum + item.amount, 0)
   const cashEntries = activeMovements.filter(item => item.type === 'Entrada' && item.paymentMethod === 'Efectivo').reduce((sum, item) => sum + item.amount, 0)
   const cashExits = activeMovements.filter(item => item.type === 'Salida' && item.paymentMethod === 'Efectivo').reduce((sum, item) => sum + item.amount, 0)
-  const expectedCash = recordedDay ? day.openingCash + cashEntries - cashExits : null
+  const expectedCash = hasOpening ? day.openingCash + cashEntries - cashExits : null
   const knownReservations = reservations.filter(item => activeReservation(item) && item.paymentKnown !== false)
   const outstanding = knownReservations.reduce((sum, item) => sum + balance(item), 0)
   const unknownBalances = reservations.filter(item => activeReservation(item) && item.paymentKnown === false).length
@@ -138,6 +139,7 @@ export function CashView({
   const readyPurchaseRequests = purchaseRequests.filter(item => item.status === 'Tomada en cuenta')
   const hasCashData = movements.length > 0 || days.length > 0
   const unverifiedMovements = dayMovements.filter(item => item.status === 'Por revisar')
+  const unknownMethods = activeMovements.filter(item => item.paymentMethod === 'Sin registro')
   const allowCashWrite = canWrite && !isClosed
 
   const openPurchaseRequest = (request: PurchaseRequest) => {
@@ -269,7 +271,7 @@ export function CashView({
   }
 
   const saveCount = async () => {
-    if (saving || !allowCashWrite || !recordedDay) return
+    if (saving || !allowCashWrite || !hasOpening) return
     if (counted.trim()==='' || !Number.isFinite(Number(counted)) || Number(counted)<0) {
       onNotify('Ingresa un conteo de efectivo válido.')
       return
@@ -336,7 +338,7 @@ export function CashView({
       <article><span><CircleDollarSign size={14}/> Entradas</span><strong className="positive">{hasCashData ? money(entries) : '—'}</strong><small>{hasCashData ? `${activeMovements.filter(item => item.type === 'Entrada').length} movimientos` : 'Sin datos'}</small></article>
       <article><span><Receipt size={14}/> Salidas</span><strong className="negative">{hasCashData ? money(exits) : '—'}</strong><small>{hasCashData ? `${activeMovements.filter(item => item.type === 'Salida').length} movimientos` : 'Sin datos'}</small></article>
       <article><span><Landmark size={14}/> Flujo neto</span><strong className={hasCashData ? entries - exits >= 0 ? 'positive' : 'negative' : ''}>{hasCashData ? money(entries - exits) : '—'}</strong><small>{hasCashData ? 'Entradas menos salidas' : 'Sin datos'}</small></article>
-      <article><span><Banknote size={14}/> Efectivo esperado</span><strong>{expectedCash !== null ? money(expectedCash) : '—'}</strong><small>{recordedDay ? `Incluye fondo inicial de ${money(day.openingCash)}` : 'Fondo inicial sin registrar'}</small></article>
+      <article><span><Banknote size={14}/> Efectivo esperado</span><strong>{expectedCash !== null ? money(expectedCash) : '—'}</strong><small>{hasOpening ? `Incluye fondo inicial de ${money(day.openingCash)}` : 'Fondo inicial sin registrar'}</small></article>
       <article><span><FileText size={14}/> Pendiente en reservas</span><strong>{knownReservations.length ? money(outstanding) : '—'}</strong><small>{`${pendingReservations.length} con saldo conocido · ${unknownBalances} sin conciliar`}</small></article>
     </section>
 
@@ -345,7 +347,7 @@ export function CashView({
         <span>{method === 'Efectivo' ? <Banknote size={14}/> : method === 'Tarjeta' ? <CreditCard size={14}/> : <Landmark size={14}/>} {method}</span>
         <div><b>{hasCashData ? money(methodEntries) : '—'}</b><small>entradas</small></div><div><b>{hasCashData ? money(methodExits) : '—'}</b><small>salidas</small></div>
       </article>)}
-      <p><AlertTriangle size={14}/><span>Solo se contabilizan movimientos con estado Activo. {unverifiedMovements.length ? `${unverifiedMovements.length} movimientos tienen estado por revisar.` : 'Los pagos de Tours se muestran al registrarse en Caja.'}</span></p>
+      <p><AlertTriangle size={14}/><span>Solo se contabilizan movimientos con estado Activo. {unverifiedMovements.length || unknownMethods.length ? `${unverifiedMovements.length} estados y ${unknownMethods.length} métodos de pago requieren revisión.` : 'Los pagos de Tours se muestran al registrarse en Caja.'}</span></p>
     </section>
 
     <section className="cash-layout">
@@ -354,7 +356,7 @@ export function CashView({
         <div className="cash-toolbar">
           <label className="cash-search"><Search size={14}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar concepto, ID o reserva"/></label>
           <select value={typeFilter} onChange={event => setTypeFilter(event.target.value as typeof typeFilter)}><option>Todos</option><option>Entrada</option><option>Salida</option></select>
-          <select value={methodFilter} onChange={event => setMethodFilter(event.target.value as typeof methodFilter)}><option>Todos</option>{methods.map(item => <option key={item}>{item}</option>)}</select>
+          <select value={methodFilter} onChange={event => setMethodFilter(event.target.value as typeof methodFilter)}><option>Todos</option>{methods.map(item => <option key={item}>{item}</option>)}<option>Sin registro</option></select>
         </div>
         <div className="table-scroll"><table className="cash-table"><thead><tr><th>Hora / ID</th><th>Concepto / categoría</th><th>Método</th><th>Entrada</th><th>Salida</th><th>Responsable</th><th></th></tr></thead><tbody>
           {filtered.map(item => <tr key={item.id} className={item.status === 'Anulado' ? 'annulled' : ''} onClick={() => setSelectedMovement(item)}>
@@ -366,10 +368,10 @@ export function CashView({
 
       <aside className="cash-side">
         <section className="panel cash-control"><header><div><span>CONTROL DE EFECTIVO</span><h2>Conteo del día</h2></div></header><div className="cash-control-body">
-          <div><span>Fondo inicial</span><b>{recordedDay ? money(day.openingCash) : 'Sin registro'}</b></div><div><span>Movimiento neto</span><b>{hasCashData ? money(cashEntries - cashExits) : '—'}</b></div><div className="expected"><span>Efectivo esperado</span><b>{expectedCash !== null ? money(expectedCash) : '—'}</b></div>
+          <div><span>Fondo inicial</span><b>{hasOpening ? money(day.openingCash) : 'Sin registro'}</b></div><div><span>Movimiento neto</span><b>{hasCashData ? money(cashEntries - cashExits) : '—'}</b></div><div className="expected"><span>Efectivo esperado</span><b>{expectedCash !== null ? money(expectedCash) : '—'}</b></div>
           {day.countedCash !== undefined && <div className="count-result"><span>Efectivo contado</span><b>{money(day.countedCash)}</b><em className={difference === 0 ? 'positive' : 'negative'}>{difference === 0 ? 'Caja cuadrada' : `Diferencia ${money(difference ?? 0)}`}</em></div>}
           <label><span>FONDO INICIAL</span><div><input type="number" min="0" step="0.01" disabled={isClosed || saving || !canWrite} value={openingDraft} onChange={event => setOpeningDraft(event.target.value)} placeholder={recordedDay ? money(day.openingCash) : 'Registrar apertura'}/><button disabled={isClosed || saving || !canWrite} onClick={() => void saveOpening()}>Guardar fondo</button></div></label>
-          <label><span>REGISTRAR CONTEO</span><div><input type="number" min="0" step="0.01" disabled={!recordedDay || isClosed || saving || !canWrite} value={counted} onChange={event => setCounted(event.target.value)} placeholder="0.00"/><button disabled={!recordedDay || isClosed || saving || !canWrite} onClick={() => void saveCount()}>Guardar conteo</button></div></label>
+          <label><span>REGISTRAR CONTEO</span><div><input type="number" min="0" step="0.01" disabled={!hasOpening || isClosed || saving || !canWrite} value={counted} onChange={event => setCounted(event.target.value)} placeholder="0.00"/><button disabled={!hasOpening || isClosed || saving || !canWrite} onClick={() => void saveCount()}>Guardar conteo</button></div></label>
           <label><span>CIERRE DEL DÍA</span><div><input value={closeNote} disabled={!recordedDay || isClosed || saving || !canWrite} onChange={event => setCloseNote(event.target.value)} placeholder="Nota de cierre / justificación"/></div></label>
           {difference !== undefined && Math.abs(difference) > .009 && <label><input type="checkbox" disabled={isClosed || saving} checked={acceptDifference} onChange={event => setAcceptDifference(event.target.checked)}/> Acepto la diferencia de efectivo indicada</label>}
           <button className="primary-action" disabled={!recordedDay || recordedDay.countedCash === undefined || isClosed || saving || !canWrite} onClick={() => void closeDay()}>{isClosed ? 'Día cerrado' : 'Cerrar caja del día'}</button>
