@@ -227,7 +227,9 @@ function recordReservationPayment_(request) {
   var amount = Number(request.amount);
   var method = String(request.method || '').trim();
   var paymentId = String(request.paymentId || '').trim();
+  var paymentCategory = String(request.category || 'Pago de reserva');
   if (!key || !paymentId || !isFinite(amount) || amount <= 0 ||
+      ['Pago de reserva', 'Anticipo de reserva'].indexOf(paymentCategory) < 0 ||
       ['Efectivo', 'Tarjeta', 'Transferencia'].indexOf(method) < 0)
     throw new Error('Datos de pago incompletos o inválidos.');
 
@@ -263,7 +265,8 @@ function recordReservationPayment_(request) {
         var paidMatch = String(registered[15] || '').match(/HMS_PAID_AFTER:([0-9.]+)/);
         var expectedPaid = paidMatch ? Number(paidMatch[1]) : NaN;
         if (String(registered[9]) === key && Number(registered[8]) === amount &&
-            registered[7] === method && isFinite(expectedPaid) && previous + 0.001 >= expectedPaid) {
+            registered[7] === method && registered[4] === paymentCategory &&
+            isFinite(expectedPaid) && previous + 0.001 >= expectedPaid) {
           return mapReservationRow_(row, todayKey_());
         }
         throw new Error('El identificador del pago ya existe pero requiere conciliación. No repetir el cobro.');
@@ -275,7 +278,7 @@ function recordReservationPayment_(request) {
     rowCash[1] = now;                     // B fecha y hora
     rowCash[2] = cashDate_(dateKey_(now)); // C fecha operativa: tipo Date para SUMIFS
     rowCash[3] = 'Entrada';               // D movimiento
-    rowCash[4] = 'Pago de reserva';       // E categoría
+    rowCash[4] = paymentCategory;         // E categoría
     rowCash[5] = 'Recepción y Reservas';  // F departamento
     rowCash[6] = 'Pago de reserva ' + key;// G concepto
     rowCash[7] = method;                  // H método
