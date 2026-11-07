@@ -5,6 +5,7 @@ import { rmsService } from './rmsService'
 import { operationService } from './operationService'
 import { reservationsService } from './reservationsService'
 import { cashService } from './cashService'
+import { inventoryService } from './inventoryService'
 import { tourPaymentsService } from './tourPaymentsService'
 import { summaryService } from './summaryService'
 
@@ -23,6 +24,9 @@ export const hotelService = {
       return dashboard
     }
   },
+
+  getInventory(refresh = false) {return inventoryService.get(refresh)},
+  saveInventoryCount(changes: Parameters<typeof inventoryService.count>[0], countId: string) {return inventoryService.count(changes,countId)},
 
   getCash(refresh = false) { return cashService.get(refresh) },
   recordTourPayment(...args: Parameters<typeof tourPaymentsService.payment>) {
