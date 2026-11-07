@@ -29,6 +29,8 @@ function doPost(event) {
         return jsonResponse_({ ok: true, data: registerCashMovement_(request) });
       case 'cash.movement.annul':
         return jsonResponse_({ ok: true, data: annulCashMovement_(request) });
+      case 'cash.day.close':
+        return jsonResponse_({ ok: true, data: closeCashDay_(request) });
       case 'cash.day.save':
         return jsonResponse_({ ok: true, data: saveCashDay_(request) });
       case 'operation.get':
