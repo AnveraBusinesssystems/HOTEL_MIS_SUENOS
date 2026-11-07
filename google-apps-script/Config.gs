@@ -7,6 +7,8 @@ var HMS_CONFIG = Object.freeze({
   INDICATORS_CACHE_KEY: 'hms:indicators:v1',
   RMS_CACHE_SECONDS: 180,
   RMS_CACHE_KEY: 'hms:rms:v1',
+  CASH_CACHE_SECONDS: 60,
+  CASH_CACHE_KEY: 'hms:cash:v1',
   OPERATION_CACHE_SECONDS: 60,
   OPERATION_CACHE_KEY: 'hms:operation:v1',
   RESERVATIONS_CACHE_SECONDS: 60,
