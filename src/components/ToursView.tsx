@@ -57,6 +57,8 @@ export function ToursView({
   role, date, tours, reservations, cashMovements,
   onToursChange, onCashMovementsChange, onNotify,
 }: Props) {
+  // TOURS/PAGOS_TOURS todavía no tienen una ruta de escritura completa.
+  const toursWriteConnected = false
   const [draft, setDraft] = useState<TourDraft | null>(null)
   const [action, setAction] = useState<MoneyAction | null>(null)
   const [method, setMethod] = useState<CashPaymentMethod>('Efectivo')
@@ -162,7 +164,7 @@ export function ToursView({
 
     <div className="tour-layout">
       <article className="panel tour-agenda">
-        <header><div><span>AGENDA DE TOURS</span><h2>{longDate(date)}</h2></div><button className="primary-action" onClick={() => { setError(''); setDraft(freshDraft(date)) }}><Plus size={14}/>Agendar tour</button></header>
+        <header><div><span>AGENDA DE TOURS</span><h2>{longDate(date)}</h2></div><button className="primary-action" disabled={!toursWriteConnected} title="La escritura de tours se conectará con Caja" onClick={() => { setError(''); setDraft(freshDraft(date)) }}><Plus size={14}/>Agendar tour</button></header>
         <div className="tour-table-wrap"><table className="tour-table"><thead><tr><th>Hora</th><th>Huésped / reserva</th><th>Tour</th><th>Personas</th><th>Importes</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{scheduled.map(tour => <tr key={tour.id}>
           <td><b>{tour.serviceTime}</b></td>
           <td><b>{tour.guestName}</b><small>{tour.reservationId ?? 'Cliente externo'}</small></td>
@@ -170,7 +172,7 @@ export function ToursView({
           <td><span className="tour-people"><Users size={13}/>{tour.people}</span></td>
           <td><b>{money(tour.salePrice)}</b><small>Proveedor {money(tour.providerAmount)}</small></td>
           <td><span className={`tour-badge ${tour.status.toLowerCase()}`}>{tour.status}</span><span className={`tour-badge ${tour.paymentStatus.toLowerCase()}`}>{tour.paymentStatus}</span></td>
-          <td><div className="tour-row-actions">{tour.paymentStatus === 'Pendiente' && <button onClick={() => openAction('Cobrar', tour)}>Cobrar</button>}{tour.status === 'Agendado' && <button onClick={() => markCompleted(tour)}>Realizado</button>}{tour.status === 'Agendado' && tour.paymentStatus === 'Pendiente' && <button className="muted" onClick={() => cancelTour(tour)}>Cancelar</button>}</div></td>
+          <td><div className="tour-row-actions">{tour.paymentStatus === 'Pendiente' && <button disabled={!toursWriteConnected} onClick={() => openAction('Cobrar', tour)}>Cobrar</button>}{tour.status === 'Agendado' && <button disabled={!toursWriteConnected} onClick={() => markCompleted(tour)}>Realizado</button>}{tour.status === 'Agendado' && tour.paymentStatus === 'Pendiente' && <button className="muted" disabled={!toursWriteConnected} onClick={() => cancelTour(tour)}>Cancelar</button>}</div></td>
         </tr>)}</tbody></table>{!scheduled.length && <div className="tour-empty"><MapPinned size={24}/><b>Sin tours en esta fecha</b><span>Agenda uno nuevo o selecciona otro día.</span></div>}</div>
       </article>
 
@@ -179,7 +181,7 @@ export function ToursView({
         <div>{pendingItems.slice(0, 8).map(item => <section key={item.key} className={item.overdue ? 'overdue' : ''}>
           <div><span>{item.overdue && <AlertTriangle size={12}/>} {item.type} · {shortDate(item.tour.serviceDate)}</span><b>{item.tour.guestName}</b><small>{item.tour.tourType} · {item.tour.provider}</small></div>
           <strong>{money(item.amount)}</strong>
-          <button disabled={item.type !== 'Cobro' && !canSettle} onClick={() => openAction(item.type === 'Cobro' ? 'Cobrar' : item.type === 'Proveedor' ? 'Liquidar' : 'Comisión', item.tour)}>{item.label}</button>
+          <button disabled={!toursWriteConnected || (item.type !== 'Cobro' && !canSettle)} onClick={() => openAction(item.type === 'Cobro' ? 'Cobrar' : item.type === 'Proveedor' ? 'Liquidar' : 'Comisión', item.tour)}>{item.label}</button>
         </section>)}{!pendingItems.length && <div className="tour-all-clear"><CheckCircle2 size={22}/><b>Todo liquidado</b><span>No hay cobros ni pagos pendientes.</span></div>}</div>
       </aside>
     </div>
@@ -201,13 +203,13 @@ export function ToursView({
         <label className="full"><span>Nota breve (opcional)</span><textarea value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })}/></label>
         {error && <div className="tour-form-error full"><AlertTriangle size={14}/>{error}</div>}
       </div>
-      <footer><button onClick={() => setDraft(null)}>Cancelar</button><button className="primary-action" onClick={saveTour}>Guardar tour</button></footer>
+      <footer><button onClick={() => setDraft(null)}>Cancelar</button><button className="primary-action" disabled={!toursWriteConnected} onClick={saveTour}>Guardar tour</button></footer>
     </section></div>}
 
     {action && <div className="dialog-backdrop" role="presentation"><section className="tour-action-dialog" role="dialog" aria-modal="true" aria-label={action.type}>
       <header><div><span>{action.tour.id}</span><h2>{action.type === 'Cobrar' ? 'Cobrar al huésped' : action.type === 'Liquidar' ? 'Liquidar al proveedor' : 'Entregar comisión'}</h2><p>{action.tour.tourType} · {action.tour.guestName}</p></div><button onClick={() => setAction(null)} aria-label="Cerrar"><X size={18}/></button></header>
       <div className="tour-action-body"><span>Monto del movimiento</span><strong>{money(action.type === 'Cobrar' ? action.tour.salePrice : action.type === 'Liquidar' ? action.tour.providerAmount : receptionShare(action.tour))}</strong><label><span>Método de pago</span><select value={method} onChange={event => setMethod(event.target.value as CashPaymentMethod)}>{methods.map(item => <option key={item}>{item}</option>)}</select></label><p>Se generará automáticamente un movimiento enlazado en Caja. El historial del tour conservará quién y cuándo lo registró.</p></div>
-      <footer><button onClick={() => setAction(null)}>Cancelar</button><button className="primary-action" onClick={confirmMoneyAction}>Confirmar movimiento</button></footer>
+      <footer><button onClick={() => setAction(null)}>Cancelar</button><button className="primary-action" disabled={!toursWriteConnected} onClick={confirmMoneyAction}>Confirmar movimiento</button></footer>
     </section></div>}
   </section>
 }
