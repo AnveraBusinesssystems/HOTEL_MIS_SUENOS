@@ -345,7 +345,7 @@ export interface CashMovement {
   area: CashArea
   category: CashMovementCategory
   description: string
-  status: 'Registrado' | 'Anulado'
+  status: 'Registrado' | 'Anulado' | 'Por revisar'
   createdBy: string
   reservationId?: string
   tourId?: string
