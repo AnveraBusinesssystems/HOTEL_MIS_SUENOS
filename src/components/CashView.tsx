@@ -90,7 +90,7 @@ const freshDraft = (type: CashMovementType): Draft => ({
   type,
   amount: '',
   paymentMethod: 'Efectivo',
-  category: type === 'Entrada' ? 'Pago de reserva' : 'Compra de inventario',
+  category: type === 'Entrada' ? 'Pago de reserva' : 'Mantenimiento',
   description: '',
   reservationId: '',
   purchaseRequestId: '',
@@ -429,7 +429,7 @@ function MovementDialog({ draft, reservations, inventory, error, saving, canWrit
     <div className="cash-type-switch"><button className={draft.type === 'Entrada' ? 'active income' : ''} onClick={() => onSwitchType('Entrada')}>Entrada</button><button className={draft.type === 'Salida' ? 'active expense' : ''} onClick={() => onSwitchType('Salida')}>Salida</button></div>
     <div className="cash-form">
       {draft.purchaseRequestId && <div className="linked-purchase-request full"><FileText size={16}/><p><b>Compra ligada a {draft.purchaseRequestId}</b><span>Esta factura es editable: ajusta, elimina o añade productos según lo comprado realmente. La solicitud original no cambiará.</span></p></div>}
-      <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label className="full"><span>Categoría</span><select value={draft.category} onChange={event => changeCategory(event.target.value as CashMovementCategory)}>{categories.map(item => <option key={item} disabled={item === 'Compra de inventario' || item === 'Reembolso'}>{item}{item === 'Compra de inventario' || item === 'Reembolso' ? ' · pendiente' : ''}</option>)}</select></label>
       {needsReservation && <label className="full"><span>Reserva pendiente de pago</span><select value={draft.reservationId} onChange={event => onChange({ ...draft, reservationId: event.target.value })}><option value="">Seleccionar reserva…</option>{reservations.map(item => <option key={item.subReservationId} value={item.subReservationId}>{item.guestName} · {item.roomNumber ?? item.roomType} · saldo {money(balance(item))}</option>)}</select></label>}
       {linkedReservation && <div className="reservation-payment-preview full"><span><small>Huésped</small><b>{linkedReservation.guestName}</b></span><span><small>Total</small><b>{money(linkedReservation.total)}</b></span><span><small>Pagado</small><b>{money(linkedReservation.paid)}</b></span><span><small>Saldo máximo</small><b>{money(balance(linkedReservation))}</b></span></div>}
       {isInventory ? <section className="invoice-items full">
