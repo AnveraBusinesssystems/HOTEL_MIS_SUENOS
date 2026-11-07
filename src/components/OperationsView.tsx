@@ -42,6 +42,7 @@ type OperationMetric = { label: string; value: string | number; detail: string; 
 
 type Props = {
   role: Role
+  canWrite: boolean
   reservations: Reservation[]
   rooms: RoomState[]
   tasks: OperationTask[]
@@ -88,7 +89,7 @@ const liveRoomsFrom = (rooms: RoomState[], reservations: Reservation[]) => rooms
 })
 
 export function OperationsView(props: Props) {
-  const { role, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, dailyOperation, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onTourPayment, onTourStatus, onCashMovementsChange, onNotify } = props
+  const { role, canWrite, reservations, rooms, tasks, days, tours, cashMovements, staff, staffTimeEntries, dailyOperation, onReservationsChange, onPersistReservation, onRoomsChange, onTasksChange, onDaysChange, onOperationEvent, onToursChange, onTourPayment, onTourStatus, onCashMovementsChange, onNotify } = props
   const allowedTabs = allowedTabsFor(role)
   const [tab, setTab] = useState<OperationTab>(allowedTabs[0])
   const [selectedDate, setSelectedDate] = useState(TODAY)
