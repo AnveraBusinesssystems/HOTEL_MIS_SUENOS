@@ -4,6 +4,7 @@ import { indicatorsService } from './indicatorsService'
 import { rmsService } from './rmsService'
 import { operationService } from './operationService'
 import { reservationsService } from './reservationsService'
+import { cashService } from './cashService'
 import { summaryService } from './summaryService'
 
 export const hotelService = {
@@ -21,6 +22,14 @@ export const hotelService = {
       return dashboard
     }
   },
+
+  getCash(refresh = false) { return cashService.get(refresh) },
+  createCashMovement(movement: Parameters<typeof cashService.create>[0], movementId: string) {
+    return cashService.create(movement, movementId)
+  },
+  annulCashMovement(movementId: string, reason: string) { return cashService.annul(movementId, reason) },
+  saveCashDay(date: string, fields: { openingCash?: number; countedCash?: number }) { return cashService.saveDay(date, fields) },
+  closeCashDay(date: string, note: string, acceptDifference = false) { return cashService.closeDay(date, note, acceptDifference) },
 
   getIndicators(includeMonthly = false) {
     return indicatorsService.get(includeMonthly)
