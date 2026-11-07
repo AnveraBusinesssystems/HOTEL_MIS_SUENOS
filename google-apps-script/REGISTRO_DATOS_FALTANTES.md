@@ -101,3 +101,11 @@ Actualizar este archivo al concluir cada pestaña.
 Se corrigieron el tratamiento de datos desconocidos en finanzas, la selección de mes de Resumen en horario de Cancún, la denominación de ADR histórico, los límites del caché de RMS/Reservas, la invalidación de caché de Operación, los reintentos de pagos y la recuperación básica de operaciones fallidas. **Esto no añade nuevas columnas ni implica despliegue o pruebas.**
 
 **Riesgos pendientes de alta prioridad:** autenticación y permisos del servidor, transacciones interhojas para pagos, eliminación total de cambios optimistas locales, normalización de reservas multihabitación y disponibilidad de fuentes reales de costos/tarifas. Ver `CONSOLIDACION_AUDITORIA.md`.
+
+## 6. Consolidación de Reservas y Operación diaria — 6 nov 2026
+
+- **Sin nuevas columnas:** se reutiliza `operation.event` para solicitudes de limpieza desde Reservas y Operación; `reservations.update` para salidas, estados y asignaciones.
+- **Confirmación de escrituras:** ya no se presentan como guardados los cambios locales de limpieza/habitaciones si falla Apps Script.
+- **Estructura todavía faltante:** apertura de jornada persistente; acceso/no molestar; tareas individuales con IDs/prioridades; resoluciones individuales de incidencias; vínculo entre cada solicitud de limpieza y reserva.
+- **Precaución financiera:** reintentos de pago con el mismo ID, con conciliación obligatoria si el libro de caja y el monto acumulado no coinciden.
+- **Previo a producción:** autenticación y autorización servidor, y verificación manual de las rutas y de la recuperación ante fallos interhojas.
