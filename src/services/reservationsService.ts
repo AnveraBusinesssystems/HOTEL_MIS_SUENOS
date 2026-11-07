@@ -9,8 +9,8 @@ export type ReservationsPayload = {
 export const reservationsService = {
   isConfigured: apiClient.isConfigured,
   get: (refresh = false) => apiClient.post<ReservationsPayload>('reservations.get', { refresh }),
-  payment: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string) =>
-    apiClient.post<Reservation>('reservations.payment', { reservationKey, amount, method, paymentId }),
+  payment: (reservationKey: string, amount: number, method: 'Efectivo' | 'Tarjeta' | 'Transferencia', paymentId: string, category: 'Pago de reserva' | 'Anticipo de reserva' = 'Pago de reserva') =>
+    apiClient.post<Reservation>('reservations.payment', { reservationKey, amount, method, paymentId, category }),
   update: (reservationKey: string, changes: Partial<Reservation>) => {
     const serializedChanges = Object.prototype.hasOwnProperty.call(changes, 'roomNumber')
       ? { ...changes, roomNumber: changes.roomNumber ?? null }
