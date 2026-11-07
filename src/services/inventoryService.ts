@@ -21,7 +21,19 @@ export interface InventoryCountChange {
   counted: number
 }
 
+export interface InventoryPurchaseItem {product:string; quantity:number; unit:string; total:number}
+
+export interface InventoryPurchaseInput {
+  items: InventoryPurchaseItem[]
+  method: 'Efectivo' | 'Tarjeta' | 'Transferencia'
+  description: string
+  supplier?: string
+  place?: string
+}
+
 export const inventoryService = {
+  purchase: (input:InventoryPurchaseInput,purchaseId:string) =>
+    apiClient.post<{purchaseId:string;duplicate:boolean;amount:number}>('inventory.purchase',{...input,purchaseId}),
   get: (refresh = false) => apiClient.post<InventoryPayload>('inventory.get', { refresh }),
   count: (changes: InventoryCountChange[], countId: string) =>
     apiClient.post<{ countId: string; changed: number }>('inventory.count', {changes,countId}),
