@@ -13,27 +13,33 @@ function readHotelCashMovements_(ss) {
   if (!count) return [];
   var rows = sh.getRange(6,1,count,21).getValues();
   return rows.filter(function(r){return r[0] && r[3];}).map(function(r){
-    var type = /salida/i.test(String(r[3])) ? 'Salida' : 'Entrada';
-    var method = String(r[7] || 'Efectivo').trim();
-    if (['Efectivo','Tarjeta','Transferencia'].indexOf(method) < 0) method='Efectivo';
+    var sourceType = String(r[3] || '').trim();
+    if (sourceType !== 'Entrada' && sourceType !== 'Salida') return null;
+    var type = sourceType;
+    var method = String(r[7] || '').trim();
+    if (['Efectivo','Tarjeta','Transferencia'].indexOf(method) < 0) method='Sin registro';
     var category = String(r[4] || '');
     var known = ['Pago de reserva','Anticipo de reserva','Venta de restaurante','Otro ingreso',
       'Compra de inventario','Mantenimiento','Lavandería','Servicios','Reembolso',
       'Retiro de efectivo','Gastos externos','Otro gasto','Cobro de tour',
       'Pago a proveedor de tour','Comisión de tour a recepción'];
-    if (known.indexOf(category)<0) category=type==='Entrada'?'Otro ingreso':'Otro gasto';
+    if (known.indexOf(category)<0) category='Sin clasificar';
+    var sourceArea = String(r[5] || '').trim();
+    var validAreas = ['Reservas','Recepción','Restaurante','Lavandería','Limpieza','Mantenimiento','Administración','Otros'];
+    var area = validAreas.indexOf(sourceArea)>=0 ? sourceArea :
+      /recepci[oó]n/i.test(sourceArea) ? 'Recepción' : 'Otros';
     return {
       id:String(r[0]), date:r[2] instanceof Date ? dateKey_(r[2]) : String(r[2] || '').slice(0,10),
       time:r[1] instanceof Date ? Utilities.formatDate(r[1],HMS_CONFIG.TIME_ZONE,'HH:mm'):'',
       type:type, amount:numberOrZero_(r[8]), paymentMethod:method,
-      area:String(r[5] || 'Otros'), category:category,
+      area:area, category:category,
       description:String(r[6] || ''), status:/anulad/i.test(String(r[13]))?'Anulado':'Registrado',
       createdBy:String(r[12] || ''),
       reservationId:String(r[9] || '') || undefined,
       tourId:String(r[10] || '') || undefined,
       purchaseId:String(r[11] || '') || undefined
     };
-  });
+  }).filter(function(r) {return !!r;});
 }
 
 function readHotelTours_(ss) {
@@ -48,7 +54,8 @@ function readHotelTours_(ss) {
   return sh.getRange(6,1,count,22).getValues().filter(function(r){return r[0];}).map(function(r){
     var sale = numberOrZero_(r[7]);
     var collected = numberOrZero_(r[12]);
-    var paid = sale>0 && collected>=sale;
+    var collectedKnown = r[12] !== '' && r[12] !== null;
+    var paid = collectedKnown && sale>0 && collected>=sale;
     var status = String(r[19] || 'Agendado').trim();
     if (['Agendado','Realizado','Cancelado'].indexOf(status)<0) status='Agendado';
     return {
@@ -59,9 +66,9 @@ function readHotelTours_(ss) {
       serviceTime:'', // B representa fecha/hora de alta, no horario confirmado del servicio.
       people:0, // No existe columna de número de participantes.
       salePrice:sale, providerAmount:numberOrZero_(r[8]),
-      status:status, paymentStatus:paid?'Pagado':'Pendiente',
-      providerSettlementStatus:numberOrZero_(r[15])<=0?'Liquidado':'Pendiente',
-      receptionCommissionStatus:numberOrZero_(r[16])<=0?'Pagada':'Pendiente',
+      status:status, paymentStatus:!collectedKnown ? 'Sin registro' : paid?'Pagado':'Pendiente',
+      providerSettlementStatus:r[15]==='' || r[15]===null ? 'Sin registro' : numberOrZero_(r[15])<=0?'Liquidado':'Pendiente',
+      receptionCommissionStatus:r[16]==='' || r[16]===null ? 'Sin registro' : numberOrZero_(r[16])<=0?'Pagada':'Pendiente',
       settlementDueDate:'', // Plazo no registrado en la hoja.
       createdAt:r[1] instanceof Date?Utilities.formatDate(r[1],HMS_CONFIG.TIME_ZONE,"yyyy-MM-dd HH:mm"):'',
       createdBy:String(r[18] || ''), notes:String(r[20] || '') || undefined
