@@ -200,6 +200,19 @@ export interface OperationTask {
   reservationId?: string
 }
 
+export interface DailyOperationMetric {
+  date: string
+  capacity: number
+  occupied: number
+  arrivals: number
+  departures: number
+  guests: number
+  breakfasts: number
+  revenue: number
+  adr: number
+  revpar: number
+}
+
 export interface CleaningHistory {
   id: string
   date: string
@@ -415,6 +428,7 @@ export interface DashboardData {
   operationTasks: OperationTask[]
   operationDays: OperationDay[]
   cleaningHistory: CleaningHistory[]
+  dailyOperation: DailyOperationMetric[]
   tours: TourBooking[]
   staff: StaffMember[]
   staffSchedules: StaffScheduleEntry[]
