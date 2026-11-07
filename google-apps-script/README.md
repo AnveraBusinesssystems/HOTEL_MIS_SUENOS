@@ -5,7 +5,7 @@ Este directorio contiene el código que se copiará manualmente al proyecto de A
 ## Instalación manual
 
 1. Crea un proyecto de Apps Script ligado a la cuenta propietaria del hotel.
-2. Crea y copia todos los archivos ejecutables `.gs` desde esta carpeta: `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs`, `RMS.gs`, `Reservations.gs`, `Operation.gs`, `FinanceReaders.gs`, `Cash.gs` y `TourPayments.gs`. No copies los archivos `.md` como scripts.
+2. Crea y copia todos los archivos ejecutables `.gs` desde esta carpeta: `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs`, `RMS.gs`, `Reservations.gs`, `Operation.gs`, `FinanceReaders.gs`, `Cash.gs`, `TourPayments.gs`, `Inventory.gs` y `InventoryPurchases.gs`. No copies los archivos `.md` como scripts.
 3. En **Configuración del proyecto**, activa la visualización del archivo de manifiesto y reemplaza `appsscript.json`.
 4. Implementa como **Aplicación web**, ejecutando como el propietario. Copia la URL que termina en `/exec`.
 5. Antes de activar datos reales en GitHub Pages, completa el módulo de autenticación. No uses la URL pública como si fuera una contraseña.
@@ -48,7 +48,7 @@ La web app todavía no incluye autenticación de servidor. El código puede copi
 - `INDICADORES` y `INDICADORES_HABITACIONES` contienen ADR histórico; no equivale a tarifa publicada. `OPERACION_DIARIA` estima ingresos por noche proporcionalmente.
 - Columnas `RESERVAS!AA:AI` contienen fórmulas y no deben sobrescribirse. `ESTADO_HABITACIONES!B:F` también se considera calculado y de solo lectura.
 - El registro de datos pendientes está en `REGISTRO_DATOS_FALTANTES.md`; detalles por módulo en `*_MAPEO.md`.
-- **Caja** cuenta con lectura, escritura de movimientos independientes, cobros de reservas y tours existentes, apertura, conteo, cierre y anulación controlada. Las compras de inventario y los reembolsos especializados siguen pendientes por depender de otros módulos. **Inventario, Personal y Configuración** aún tienen conexiones de escritura pendientes. La presencia de interfaz no significa persistencia real.
+- **Caja** cuenta con lectura, escritura de movimientos independientes, cobros de reservas y tours existentes, apertura, conteo, cierre y anulación controlada. Las compras de inventario y los reembolsos especializados siguen pendientes por depender de otros módulos. **Inventario** ya tiene lectura de productos y existencias, registro de conteos y compras reales conectadas con Caja. Sus solicitudes de compra y el ajuste estadístico de PAR requieren una estructura/fórmula adicional. **Personal y Configuración** siguen pendientes. La presencia de interfaz no significa persistencia real.
 - No se han ejecutado pruebas de integración ni se ha desplegado el conjunto actual de archivos.
 
 ## Caja (conexiones nuevas)
@@ -61,3 +61,13 @@ La web app todavía no incluye autenticación de servidor. El código puede copi
 - `tour.payment`: cobro huésped / proveedor / recepción / hotel desde Tours existentes, registrado en `PAGOS_TOURS` y `MOVIMIENTOS_CAJA`.
 - `tour.update`: estado de tour, sin sobrescribir las fórmulas de TOURS.
 - Detalle y campos pendientes en [`CAJA_MAPEO.md`](CAJA_MAPEO.md). Se requiere control de acceso **en el servidor** antes del despliegue de operaciones reales.
+
+## Inventario
+
+- El segundo spreadsheet se configura en `HMS_CONFIG.INVENTORY_SPREADSHEET_ID`.
+- `inventory.get`: leer existencias, nivel PAR y últimos precios de la hoja calculada Inventario.
+- `inventory.count`: registrar diferencias del conteo como eventos en Transacciones, sin sobrescribir el stock calculado.
+- `inventory.purchase`: comprar productos oficiales en Transacciones y crear una única salida coordinada en MOVIMIENTOS_CAJA; la factura usa identificador compartido.
+- Los scripts nuevos deben copiarse **junto con** Cash.gs y sus dependencias al mismo proyecto Apps Script.
+- Solicitudes de compra siguen sin fuente persistente; crear/aprobar queda deshabilitado. Los ajustes por conteo negativo pueden modificar el PAR ponderado porque las fórmulas actuales cuentan filas uso.
+- Ver INVENTARIO_MAPEO.md para columnas, advertencias y datos que faltan.
