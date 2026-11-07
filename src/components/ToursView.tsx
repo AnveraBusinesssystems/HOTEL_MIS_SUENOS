@@ -8,6 +8,7 @@ import { longDate, money, shortDate } from '../utils'
 
 type Props = {
   role: Role
+  canWrite: boolean
   date: string
   tours: TourBooking[]
   reservations: Reservation[]
@@ -56,12 +57,12 @@ const freshDraft = (date: string): TourDraft => ({
 })
 
 export function ToursView({
-  role, date, tours, reservations, cashMovements,
+  role, canWrite, date, tours, reservations, cashMovements,
   onToursChange, onCashMovementsChange, onTourPayment, onTourStatus, onNotify,
 }: Props) {
   // Cobros y estados de tours existentes están conectados. Crear tours sigue
   // pendiente porque el origen no conserva proveedor, hora ni participantes.
-  const toursWriteConnected = true
+  const toursWriteConnected = canWrite
   const toursCreateConnected = false
   const [draft, setDraft] = useState<TourDraft | null>(null)
   const [action, setAction] = useState<MoneyAction | null>(null)
