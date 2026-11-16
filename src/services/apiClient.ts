@@ -1,8 +1,9 @@
 const appsScriptUrl = (import.meta.env.VITE_APPS_SCRIPT_URL ?? '').trim()
 
-// Demo login lives entirely in the browser and therefore cannot authorize writes.
-// Keep this false until a verified server-session flow is integrated throughout HMS.
+// No server-authenticated session exists yet. Only aggregate dashboard reads
+// are enabled for connection testing. This is not a security boundary on Apps Script.
 const serverAuthenticated = false
+const aggregateReadActions = new Set(['summary.get', 'indicators.get', 'rms.get'])
 
 type ApiEnvelope<T> = {
   ok: boolean
@@ -11,13 +12,14 @@ type ApiEnvelope<T> = {
 }
 
 export const apiClient = {
-  isConfigured: Boolean(appsScriptUrl) && serverAuthenticated,
+  isConfigured: Boolean(appsScriptUrl),
+  canReadPrivate: serverAuthenticated,
   canWrite: serverAuthenticated,
 
   async post<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
     if (!appsScriptUrl) throw new Error('VITE_APPS_SCRIPT_URL no está configurada.')
-    if (!serverAuthenticated) {
-      throw new Error('Modo demostración: acceso a datos reales deshabilitado hasta configurar autenticación del servidor.')
+    if (!serverAuthenticated && !aggregateReadActions.has(action)) {
+      throw new Error('Acción protegida: solo Resumen, Indicadores y RMS permiten lectura temporal sin sesión verificada.')
     }
 
     const controller = new AbortController()
