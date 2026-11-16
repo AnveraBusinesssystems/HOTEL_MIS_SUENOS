@@ -1,4 +1,5 @@
 import { emptyDashboard } from '../data/emptyData'
+import { apiClient } from './apiClient'
 import type { DashboardData } from '../types'
 import { indicatorsService } from './indicatorsService'
 import { rmsService } from './rmsService'
@@ -11,6 +12,7 @@ import { summaryService } from './summaryService'
 
 export const hotelService = {
   isConfigured: summaryService.isConfigured,
+  canWrite: apiClient.canWrite,
 
   async getDashboard(): Promise<DashboardData> {
     const dashboard = emptyDashboard()
