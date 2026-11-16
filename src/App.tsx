@@ -599,7 +599,7 @@ function App() {
         onNotify={setToast}
       />}
       {active === 'Personal' && <StaffView
-        role={role} staff={data.staff} schedules={data.staffSchedules}
+        role={role} staff={data.staff} accounts={data.userAccounts} onStaffChange={updateStaff} onAccountsChange={updateUserAccounts} schedules={data.staffSchedules}
         timeEntries={data.staffTimeEntries} requests={data.staffRequests}
         onSchedulesChange={updateStaffSchedules} onTimeEntriesChange={updateStaffTimeEntries}
         onRequestsChange={updateStaffRequests} onNotify={setToast}
