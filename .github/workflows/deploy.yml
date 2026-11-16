@@ -35,7 +35,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_APPS_SCRIPT_URL: ${{ vars.VITE_APPS_SCRIPT_URL }}
+          VITE_APPS_SCRIPT_URL: https://script.google.com/macros/s/AKfycbxniR_Md07zeK39dWTEw_QCgnKCdNtwHBTCnRUPlk7qErc9cDfB-hWhCEWsb9Q9sJK0/exec
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
