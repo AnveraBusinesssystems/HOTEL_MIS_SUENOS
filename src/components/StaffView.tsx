@@ -87,6 +87,15 @@ export function StaffView({ role, persistence, staff, accounts, schedules, timeE
     if (canManage && !staff.some(employee => employee.id === selectedEmployeeId)) setSelectedEmployeeId(staff[0]?.id ?? '')
   }, [canManage, selectedEmployeeId, staff])
 
+  // Lazy weekly fetch only when the server has a verified logged-in user.
+  // The demo session never contacts staff.get or sends salary data to a public endpoint.
+  useEffect(() => {
+    if (persistence.mode !== 'live') return
+    void persistence.load(weekStart, moveDays(weekStart, 6)).catch(cause => {
+      onNotify(cause instanceof Error ? cause.message : 'No fue posible cargar Personal')
+    })
+  }, [persistence.mode, weekStart])
+
   const todayScheduled = activeStaff.filter(employee => {
     const schedule = scheduleFor(schedules, employee.id, TODAY)
     return schedule && !schedule.isRest
