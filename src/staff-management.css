@@ -72,3 +72,24 @@
 .staff-admin-dialog footer{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
 .staff-admin-dialog footer .staff-danger{color:#a03531;border-color:#dfb9b3}
 @media(max-width:760px){.staff-section-nav{margin:0 -6px;padding:4px 6px 12px;gap:6px}.staff-section-nav button{min-height:44px;padding:9px 12px;font-size:11px}.staff-admin-toolbar{align-items:stretch}.staff-admin-toolbar h2{font-size:19px}.staff-admin-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.staff-admin-actions .staff-primary{grid-column:1/-1}.staff-admin-toolbar>button{width:100%}.staff-planner-controls{display:grid;grid-template-columns:1fr 1fr}.staff-period{grid-column:1/-1;justify-content:space-between}.staff-filter{grid-column:1/-1}.staff-planner-controls select{min-width:0;width:100%}.staff-plan-metrics span:last-child{width:100%}.staff-schedule-table .staff-sticky-name{min-width:135px;max-width:135px}.staff-schedule-table th,.staff-schedule-table td{min-width:85px}.staff-team-grid{grid-template-columns:1fr}.staff-admin-form{grid-template-columns:1fr}.staff-admin-dialog{padding:17px}.staff-admin-dialog footer button{flex:1;min-height:44px}}
+
+/* Mobile scheduling is a focused day-by-day view, while desktop keeps the full grid. */
+.staff-mobile-schedule{display:none}
+@media(max-width:760px){
+.staff-schedule-scroll{display:none}
+.staff-mobile-schedule{display:block;background:#fff;border:1px solid #e0d7ca;border-radius:10px;overflow:hidden}
+.staff-mobile-date-strip{display:flex;gap:6px;overflow-x:auto;padding:11px;scroll-snap-type:x proximity;border-bottom:1px solid #ece3d9}
+.staff-mobile-date-strip button{flex:0 0 49px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid #e8e0d5;border-radius:9px;background:#faf7f2;color:#6e6358;padding:9px 5px;min-height:53px;font-size:10px}
+.staff-mobile-date-strip button b{font-size:13px}
+.staff-mobile-date-strip button.active{background:#345344;color:#fff;border-color:#345344}
+.staff-mobile-day-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 14px;background:#fbf8f3;font-size:12px}
+.staff-mobile-day-heading span{color:#8c7e70;font-size:10px}
+.staff-mobile-employee-list{display:grid}
+.staff-mobile-employee-list button{display:flex;align-items:center;text-align:left;gap:9px;min-height:65px;width:100%;padding:12px 14px;border:0;border-bottom:1px solid #eee7dd;background:#fff;color:#453e37}
+.staff-mobile-employee-list button:last-child{border-bottom:0}
+.staff-mobile-employee-list button>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.staff-mobile-employee-list button b{font-size:12px}
+.staff-mobile-employee-list button small{font-size:10px;color:#8e8174}
+.staff-mobile-employee-list button strong{font-size:11px;color:#456d52}
+.staff-planner-hint{display:none}
+}
