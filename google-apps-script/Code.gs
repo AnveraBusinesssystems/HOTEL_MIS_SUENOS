@@ -1,11 +1,43 @@
 /**
  * Web App entry point. GET intentionally exposes health only, never hotel data.
  */
-function doGet() {
-  return jsonResponse_({
-    ok: true,
-    data: { service: 'HMS API', status: 'ready', version: '1.0.0' }
-  });
+function doGet(event) {
+  // Cross-origin GET for the three non-personal aggregate reports only.
+  // The browser uses a script tag because Apps Script ContentService redirects
+  // cross-origin fetch responses. JSONP is public: NEVER add guest, payroll,
+  // cash transactions, personnel or mutation routes to this allowlist.
+  var params = event && event.parameter ? event.parameter : {};
+  var action = String(params.action || '');
+  var callback = String(params.callback || '');
+  if (!action) {
+    return jsonResponse_({
+      ok: true,
+      data: { service: 'HMS API', status: 'ready', version: '1.1.0' }
+    });
+  }
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]{0,90}$/.test(callback)) {
+    return jsonResponse_({ok:false,error:{code:'BAD_CALLBACK',message:'Callback no válido.'}});
+  }
+  if (['summary.get', 'indicators.get', 'rms.get'].indexOf(action) === -1) {
+    return staffJsonp_(callback, {ok:false,error:{code:'FORBIDDEN',message:'Solo reportes agregados permitidos.'}});
+  }
+  try {
+    var result;
+    switch (action) {
+      case 'summary.get': result = getSummary_(); break;
+      case 'indicators.get': result = getIndicators_(params.includeMonthly === 'true'); break;
+      case 'rms.get': result = getRms_(params.refresh === 'true'); break;
+    }
+    return staffJsonp_(callback, {ok:true,data:result});
+  } catch (error) {
+    console.error('Aggregate API '+action+': '+(error && error.stack ? error.stack : error));
+    return staffJsonp_(callback, {ok:false,error:{code:'READ_ERROR',message:'Error al leer '+action+'; revisa las ejecuciones de Apps Script.'}});
+  }
+}
+
+function staffJsonp_(callback, payload) {
+  return ContentService.createTextOutput(callback+'('+JSON.stringify(payload)+');')
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 /**
