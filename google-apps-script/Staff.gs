@@ -49,6 +49,13 @@ function staffRead_(sh,name) {
   return sh.getRange(HMS_STAFF.FIRST,1,limit-HMS_STAFF.FIRST+1,HMS_STAFF.COLS[name]).getValues();
 }
 function staffText_(v) {return v===null||v===undefined?'':String(v).trim();}
+function staffUserText_(v,max) {
+  var value=staffText_(v);
+  if(value.length>(max||500))throw new Error('Texto demasiado largo.');
+  // Neutralize spreadsheet formula injection on ALL user-authored free text fields.
+  if (/^[=+@]/.test(value)) value="'"+value;
+  return value;
+}
 function staffDate_(v) {
   if (v instanceof Date) return Utilities.formatDate(v,HMS_CONFIG.TIME_ZONE,'yyyy-MM-dd');
   var s=staffText_(v);
@@ -170,7 +177,7 @@ function getStaff_(req) {
 }
 function saveStaffEmployee_(req) {
   staffAuth_(req,true);
-  var input=req.employee||{},name=staffText_(input.name),role=staffText_(input.role);
+  var input=req.employee||{},name=staffUserText_(input.name,120),role=staffText_(input.role);
   if(!name||name.length>120||!HMS_STAFF.ROLE_DEPT[role])throw new Error('Nombre o puesto inválido.');
   var type=staffText_(input.payType)||'Semanal';
   if(['Por hora','Por día','Semanal','Quincenal','Mensual'].indexOf(type)<0)throw new Error('Tipo de pago no válido.');
@@ -183,8 +190,8 @@ function saveStaffEmployee_(req) {
     if(!id) {id=staffNewId_('EMP');index=staffFree_(rows);}
     var previous=rows[index].slice(),updated=previous.slice(),now=staffNow_();
     updated[0]=id;updated[1]=name;updated[2]=HMS_STAFF.ROLE_DEPT[role];updated[3]=role;
-    if(input.email!==undefined)updated[4]=staffText_(input.email);
-    if(input.phone!==undefined)updated[5]=staffText_(input.phone);
+    if(input.email!==undefined)updated[4]=staffUserText_(input.email,180);
+    if(input.phone!==undefined)updated[5]=staffUserText_(input.phone,40);
     updated[6]=type;updated[7]=amount;
     if(input.weeklyHours!==undefined)updated[8]=Math.max(0,Number(input.weeklyHours)||0);
     if(!updated[9])updated[9]=now;
@@ -233,7 +240,7 @@ function saveStaffSchedules_(req) {
       current[8]=rest?'':staffClockValue_(end);
       current[9]=Math.max(0,Number(item.breakMinutes)||0);
       current[11]=prior[0]?'Modificado':'Publicado';current[12]=staffText_(item.requestId)||prior[12]||'';
-      current[13]=staffText_(item.note)||prior[13]||'';current[14]=staffNow_();
+      current[13]=item.note===undefined?(prior[13]||''):staffUserText_(item.note,300);current[14]=staffNow_();
       rows[i]=current;changed[i]=true;indexByKey[key]=i;
       if(!prior[0])newCount++;
     });
@@ -259,12 +266,13 @@ function createStaffRequest_(req) {
   if(['Cambio de descanso','Día libre sin goce'].indexOf(kind)<0)throw new Error('Tipo de solicitud inválido.');
   var proposed=kind==='Cambio de descanso'?staffValidDate_(input.proposedDate):'';
   if(proposed&&proposed===date)throw new Error('El descanso debe cambiar a otra fecha.');
-  var reason=staffText_(input.reason);
+  var reason=staffUserText_(input.reason,500);
   if(!reason||reason.length>500)throw new Error('Motivo inválido.');
   return staffWithLock_(function(){
     var ss=staffBook_();staffAssertEmployee_(staffRead_(staffSheet_(ss,'PERSONAL'),'PERSONAL'),id);
     var sh=staffSheet_(ss,'SOLICITUDES_PERSONAL'),rows=staffRead_(sh,'SOLICITUDES_PERSONAL');
     var i=staffFree_(rows),requestId=staffText_(input.id)||staffNewId_('SOL');
+    if(!/^[a-zA-Z0-9_-]{4,80}$/.test(requestId))throw new Error('ID de solicitud inválido.');
     if(staffFind_(rows,0,requestId)>=0)throw new Error('La solicitud ya existe.');
     var newRow=rows[i].slice(),now=staffNow_();
     newRow[0]=requestId;newRow[1]=now;newRow[2]=id;
@@ -307,7 +315,7 @@ function reviewStaffRequest_(req) {
       var changed={};change.forEach(function(n){changed[n]=true;});staffPut_(shiftsSheet,shifts,changed);
     }
     var now=staffNow_(),updated=rows[i].slice();
-    updated[8]=decision;updated[9]=principal.id;updated[10]=now;updated[11]=staffText_(req.note);
+    updated[8]=decision;updated[9]=principal.id;updated[10]=now;updated[11]=staffUserText_(req.note,300);
     updated[12]=now;rows[i]=updated;var touched={};touched[i]=true;staffPut_(sh,rows,touched);
     staffInvalidate_();return {request:staffMapRequest_(updated)};
   });
