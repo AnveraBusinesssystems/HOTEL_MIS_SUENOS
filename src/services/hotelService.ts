@@ -15,7 +15,7 @@ export const hotelService = {
   canReadPrivate: apiClient.canReadPrivate,
   canWrite: apiClient.canWrite,
 
-  async getDashboardWithStatus(): Promise<{ dashboard: DashboardData; connected: boolean }> {
+  async getDashboardWithStatus(): Promise<{ dashboard: DashboardData; connected: boolean; error?: string }> {
     const dashboard = emptyDashboard()
     if (!summaryService.isConfigured) return { dashboard, connected: false }
 
@@ -24,7 +24,7 @@ export const hotelService = {
       return { dashboard: { ...dashboard, ...summary }, connected: true }
     } catch (error) {
       console.warn('No fue posible cargar Resumen; se conserva el estado vacío.', error)
-      return { dashboard, connected: false }
+      return { dashboard, connected: false, error: error instanceof Error ? error.message : 'Error desconocido de conexión.' }
     }
   },
 
