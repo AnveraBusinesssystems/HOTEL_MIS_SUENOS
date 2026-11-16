@@ -53,6 +53,21 @@ src/
   styles.css  sistema visual
 ```
 
+## Configurar el despliegue de Google Apps Script
+
+El build de GitHub Pages consume la variable de GitHub Actions **`VITE_APPS_SCRIPT_URL`** en `.github/workflows/deploy.yml`. Debe contener la URL `/exec` del Web App. No se necesita pegar ese valor en `App.tsx`, `apiClient.ts` ni `Config.gs`.
+
+**Importante — no activar aún:** el proyecto HMS_INTERNO dispone de un despliegue Apps Script pero todavía hay rutas anteriores a Personal sin autenticación de servidor. Por lo tanto, **no copiar la URL real a un archivo público ni incrustarla en el bundle de GitHub Pages** hasta proteger todas las rutas. Una URL de Apps Script no es un secreto de autenticación y las variables `VITE_*` se publican en JavaScript al compilar.
+
+Cuando esté listo el sistema de sesiones y permisos:
+
+1. GitHub → repositorio HOTEL_MIS_SUENOS → Settings → Secrets and variables → Actions → Variables → New repository variable.
+2. Nombre: `VITE_APPS_SCRIPT_URL`. Valor: la URL de despliegue Apps Script que termina en `/exec`.
+3. Volver a Actions y ejecutar el workflow de GitHub Pages para recompilar con la variable.
+4. Verificar lectura autorizada, rechazo anónimo, rol de dueño/gerencia, protección de escrituras y expiración de sesión.
+
+**No basta colocar la variable:** `src/services/apiClient.ts` bloquea todas las llamadas hasta que exista autenticación real del servidor. No cambiar `serverAuthenticated` a `true` como atajo. El enlace del deployment actual se mantiene fuera de GitHub por seguridad.
+
 ## Conexión Google Sheets
 
 La interfaz consume `hotelService`. Si `VITE_APPS_SCRIPT_URL` está vacía o la API no responde, conserva el estado visual vacío. Cuando la variable apunta a una implementación `/exec`, `Resumen` carga todo su paquete con una sola petición.
