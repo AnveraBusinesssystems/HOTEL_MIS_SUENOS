@@ -17,6 +17,22 @@ function doPost(event) {
     var request = parseRequest_(event);
 
     switch (request.action) {
+      case 'staff.get':
+        return jsonResponse_({ ok: true, data: getStaff_(request) });
+      case 'staff.employee.save':
+        return jsonResponse_({ ok: true, data: saveStaffEmployee_(request) });
+      case 'staff.employee.status':
+        return jsonResponse_({ ok: true, data: setStaffStatus_(request) });
+      case 'staff.schedule.save':
+        return jsonResponse_({ ok: true, data: saveStaffSchedules_(request) });
+      case 'staff.schedule.delete':
+        return jsonResponse_({ ok: true, data: deleteStaffSchedule_(request) });
+      case 'staff.request.create':
+        return jsonResponse_({ ok: true, data: createStaffRequest_(request) });
+      case 'staff.request.review':
+        return jsonResponse_({ ok: true, data: reviewStaffRequest_(request) });
+      case 'staff.attendance.punch':
+        return jsonResponse_({ ok: true, data: punchStaff_(request) });
       case 'inventory.purchase':
         return jsonResponse_({ok:true,data:recordInventoryPurchase_(request)});
       case 'inventory.get':
