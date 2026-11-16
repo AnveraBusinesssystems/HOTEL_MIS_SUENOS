@@ -51,6 +51,6 @@ test('deployment blocks on synthetic tests and TypeScript build', () => {
 })
 
 test('production launch docs and demo warning exist', () => {
-  assert.match(app, /ENTORNO DE DEMOSTRACIÓN/)
+  assert.match(app, /DATOS AGREGADOS EN VIVO/)
   assert.match(file('src/staff-management.css'), /\.system-demo-banner/)
 })
