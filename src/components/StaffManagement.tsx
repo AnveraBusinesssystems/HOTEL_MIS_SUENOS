@@ -33,11 +33,12 @@ type Draft = { id?: string; name: string; role: StaffRole; weeklySalary: string;
 const blankEmployee = (): Draft => ({ name: '', role: 'Recepción', weeklySalary: '', defaultShiftStart: '08:00', defaultShiftEnd: '16:00', defaultRestDay: 0 })
 const asDraft = (employee: StaffMember): Draft => ({ id: employee.id, name: employee.name, role: employee.role, weeklySalary: String(employee.weeklySalary), defaultShiftStart: employee.defaultShiftStart, defaultShiftEnd: employee.defaultShiftEnd, defaultRestDay: employee.defaultRestDay })
 
-export function StaffManagement({ mode, staff, schedules, entries, requests, accounts, onStaffChange, onSchedulesChange, onAccountsChange, onNotify }: Props) {
+export function StaffManagement({ mode, staff, schedules, entries, requests, onStaffChange, onSchedulesChange, onAccountsChange, onNotify }: Props) {
   const today = hotelToday()
   const [view, setView] = useState<'week' | 'month'>('week')
   const [anchor, setAnchor] = useState(mondayOf(today))
   const [filter, setFilter] = useState('')
+  const [mobileDate, setMobileDate] = useState(today)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -57,6 +58,7 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, acc
     return rangeDates(periodStart, size)
   }, [periodStart, periodEnd])
   const visibleDates = periodDates
+  const focusedDate = periodDates.includes(mobileDate) ? mobileDate : periodDates[0]
   const currentShift = (id: string, date: string) => schedules.find(entry => entry.employeeId === id && entry.date === date)
   const rosterCount = visibleStaff.reduce((count, employee) => count + periodDates.filter(date => currentShift(employee.id, date)?.isRest === false).length, 0)
   const uncovered = visibleStaff.filter(employee => !currentShift(employee.id, today) && employee.status === 'Activo').length
@@ -169,6 +171,11 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, acc
         <select aria-label="Filtrar departamento" value={filter} onChange={event => setFilter(event.target.value)}><option value="">Todas las áreas</option>{roles.map(role => <option key={role}>{role}</option>)}</select>
       </div>
       <div className="staff-plan-metrics"><span><b>{visibleStaff.length}</b> empleados visibles</span><span><b>{rosterCount}</b> turnos asignados</span><span><b>{uncovered}</b> sin horario hoy</span><span>Marca empleados para asignar en lote; sin selección se usarán todos los visibles.</span></div>
+      <div className="staff-mobile-schedule">
+        <div className="staff-mobile-date-strip" aria-label="Elegir día">{periodDates.map(date => <button key={date} className={focusedDate === date ? 'active' : ''} onClick={() => setMobileDate(date)}><span>{days[(dateUTC(date).getUTCDay() + 6) % 7]}</span><b>{date.slice(8)}</b></button>)}</div>
+        <div className="staff-mobile-day-heading"><strong>{displayDate(focusedDate)}</strong><span>{visibleStaff.filter(item => currentShift(item.id, focusedDate)?.isRest === false).length} turnos programados</span></div>
+        <div className="staff-mobile-employee-list">{visibleStaff.map(employee => { const shift = currentShift(employee.id, focusedDate); return <button key={employee.id} onClick={() => setShift(employee, focusedDate)}><span><b>{employee.name}</b><small>{employee.role}</small></span><strong>{!shift ? 'Asignar +' : shift.unpaidLeave ? 'Sin goce' : shift.isRest ? 'Descanso' : shift.shiftStart + ' – ' + shift.shiftEnd}</strong><Pencil size={15}/></button> })}</div>
+      </div>
       <div className="staff-schedule-scroll">
         <table className="staff-schedule-table"><thead><tr><th className="staff-sticky-name">Empleado</th>{visibleDates.map(date => <th key={date} className={date === today ? 'staff-today' : ''}>{days[(dateUTC(date).getUTCDay() + 6) % 7]}<small>{date.slice(8)}</small></th>)}</tr></thead>
           <tbody>{visibleStaff.map(employee => <tr key={employee.id}><th className="staff-sticky-name"><label><input type="checkbox" checked={selected.includes(employee.id)} onChange={() => toggleEmployee(employee.id)}/><span><b>{employee.name}</b><small>{employee.role}</small></span></label></th>{visibleDates.map(date => {
