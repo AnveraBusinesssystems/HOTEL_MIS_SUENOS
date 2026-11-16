@@ -7,10 +7,15 @@ import type {
   Role, StaffMember, StaffRequest, StaffRequestType, StaffScheduleEntry, StaffTimeEntry,
 } from '../types'
 import { longDate, money, shortDate } from '../utils'
+import { StaffManagement } from './StaffManagement'
+import type { UserAccount } from '../types'
 
 type Props = {
   role: Role
   staff: StaffMember[]
+  accounts: UserAccount[]
+  onStaffChange: (updater: (rows: StaffMember[]) => StaffMember[]) => void
+  onAccountsChange: (updater: (rows: UserAccount[]) => UserAccount[]) => void
   schedules: StaffScheduleEntry[]
   timeEntries: StaffTimeEntry[]
   requests: StaffRequest[]
@@ -60,8 +65,9 @@ function payrollFor(employee: StaffMember, monday: string, schedules: StaffSched
   return { planned, worked, hours, estimated }
 }
 
-export function StaffView({ role, staff, schedules, timeEntries, requests, onSchedulesChange, onTimeEntriesChange, onRequestsChange, onNotify }: Props) {
+export function StaffView({ role, staff, accounts, schedules, timeEntries, requests, onStaffChange, onAccountsChange, onSchedulesChange, onTimeEntriesChange, onRequestsChange, onNotify }: Props) {
   const canManage = managerRoles.includes(role)
+  const [section, setSection] = useState<'hoy' | 'horarios' | 'equipo' | 'solicitudes'>('hoy')
   const [weekStart, setWeekStart] = useState(mondayOf(TODAY))
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(staff[0]?.id ?? '')
   const [editSchedule, setEditSchedule] = useState<StaffScheduleEntry | null>(null)
@@ -179,7 +185,11 @@ export function StaffView({ role, staff, schedules, timeEntries, requests, onSch
   return <section className="page staff-page">
     <section className="page-heading staff-heading"><div><p className="eyebrow">PERSONAL Y ASISTENCIA</p><h1>{canManage ? 'Equipo y nómina semanal' : 'Mi semana'}</h1><p>{canManage ? 'Horarios, asistencia, solicitudes y estimación del pago de lunes a domingo.' : 'Consulta tus turnos, registra tu asistencia y solicita cambios.'}</p></div><WeekPicker monday={weekStart} sunday={weekEnd} onPrevious={() => updateWeek(-1)} onNext={() => updateWeek(1)} onToday={() => setWeekStart(mondayOf(TODAY))}/></section>
 
-    {canManage ? <>
+    {canManage && <nav className="staff-section-nav" aria-label="Áreas de Personal">
+      {([['hoy', 'Hoy'], ['horarios', 'Horarios'], ['equipo', 'Equipo'], ['solicitudes', 'Solicitudes']] as const).map(([key, name]) => <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>{name}{key === 'solicitudes' && pendingRequests.length > 0 ? <span>{pendingRequests.length}</span> : null}</button>)}
+    </nav>}
+    {canManage && (section === 'horarios' || section === 'equipo') && <StaffManagement mode={section === 'horarios' ? 'planner' : 'team'} staff={staff} schedules={schedules} entries={timeEntries} requests={requests} accounts={accounts} onStaffChange={onStaffChange} onAccountsChange={onAccountsChange} onSchedulesChange={onSchedulesChange} onNotify={onNotify}/>}
+    {canManage && section === 'hoy' && <>
       <section className="staff-summary">
         <article><span><Users size={14}/>Personal activo</span><strong>{staff.length ? activeStaff.length : '—'}</strong><small>{staff.length ? `${todayScheduled.length} programados hoy` : 'Sin datos'}</small></article>
         <article><span><Clock3 size={14}/>En turno</span><strong>{staff.length ? workingNow.length : '—'}</strong><small>{staff.length ? `${notStarted.length} sin iniciar` : 'Sin datos'}</small></article>
@@ -197,11 +207,14 @@ export function StaffView({ role, staff, schedules, timeEntries, requests, onSch
           canEdit showPayroll onEdit={entry => { setError(''); setEditSchedule(entry) }}
         />}
       </div>
+    </>}
+    {canManage && section === 'solicitudes' && <>
       <section className="panel staff-requests-panel"><header><div><span>SOLICITUDES DEL PERSONAL</span><h2>{pendingRequests.length ? `${pendingRequests.length} por revisar` : 'Sin pendientes'}</h2></div><button onClick={() => openRequest('Día libre sin goce', selectedEmployeeId)}><Plus size={14}/>Crear solicitud</button></header><div className="staff-request-list">{requests.map(request => {
         const employee = staff.find(item => item.id === request.employeeId)
         return <article key={request.id} className={request.status.toLowerCase()}><div><span>{request.type}</span><b>{employee?.name ?? request.employeeId}</b><small>{request.type === 'Cambio de descanso' ? `${shortDate(request.requestedDate)} → ${shortDate(request.proposedDate ?? '')}` : shortDate(request.requestedDate)} · {request.reason}</small></div><strong>{request.status}</strong>{request.status === 'Pendiente' && <div className="request-actions"><button onClick={() => reviewRequest(request, 'Rechazada')}>Rechazar</button><button onClick={() => reviewRequest(request, 'Aprobada')}>Aprobar</button></div>}</article>
       })}</div></section>
-    </> : currentEmployee && <EmployeePortal
+    </>}
+    {!canManage && currentEmployee && <EmployeePortal
       employee={currentEmployee} monday={weekStart} schedules={schedules}
       entries={timeEntries} requests={requests} onPunch={punch} onRequest={openRequest}
     />}
