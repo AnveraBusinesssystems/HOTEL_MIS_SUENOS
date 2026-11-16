@@ -48,6 +48,16 @@ function doPost(event) {
   try {
     var request = parseRequest_(event);
 
+    // TEMPORARY SECURITY GATE: the legacy POST routes have no globally
+    // authenticated user. Do not expose private records or writes merely
+    // because the Apps Script Web App URL is public.
+    if (['summary.get','indicators.get','rms.get'].indexOf(request.action) < 0) {
+      return jsonResponse_({ok:false,error:{
+        code:'AUTH_REQUIRED',
+        message:'Se requiere autenticación de servidor para esta acción.'
+      }});
+    }
+
     switch (request.action) {
       case 'staff.get':
         return jsonResponse_({ ok: true, data: getStaff_(request) });
