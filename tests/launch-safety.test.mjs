@@ -41,7 +41,7 @@ test('server-side Personal route requires authenticated identity for every write
 })
 
 test('deployment blocks on synthetic tests and TypeScript build', () => {
-  const testStep = workflow.indexOf('npm run test:staff')
+  const testStep = workflow.indexOf('npm test')
   const buildStep = workflow.indexOf('npm run build')
   assert.ok(testStep > 0 && buildStep > testStep)
   assert.match(file('package.json'), /test:staff/)
