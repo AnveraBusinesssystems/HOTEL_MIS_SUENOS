@@ -70,6 +70,7 @@ function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [summaryConnection, setSummaryConnection] = useState<'checking' | 'connected' | 'failed' | 'disabled'>('checking')
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
   const [inventoryLoaded, setInventoryLoaded] = useState(false)
@@ -94,7 +95,9 @@ function App() {
 
   const load = async () => {
     setLoading(true)
-    const next = await hotelService.getDashboard()
+    setSummaryConnection(hotelService.isConfigured ? 'checking' : 'disabled')
+    const { dashboard: next, connected } = await hotelService.getDashboardWithStatus()
+    setSummaryConnection(connected ? 'connected' : hotelService.isConfigured ? 'failed' : 'disabled')
     setData(current => current ? {
       ...next,
       roomPerformance: current.roomPerformance,
@@ -116,7 +119,7 @@ function App() {
   }
 
   const loadInventory = async (refresh = false) => {
-    if (!hotelService.isConfigured || inventoryLoading) return false
+    if (!hotelService.canReadPrivate || inventoryLoading) return false
     setInventoryLoading(true)
     try {
       const result = await hotelService.getInventory(refresh)
@@ -167,7 +170,7 @@ function App() {
   }
 
   const loadCash = async (refresh = false) => {
-    if (!hotelService.isConfigured || cashLoading) return false
+    if (!hotelService.canReadPrivate || cashLoading) return false
     setCashLoading(true)
     try {
       const payload = await hotelService.getCash(refresh)
@@ -250,7 +253,7 @@ function App() {
   }
 
   const loadOperation = async (refresh = false) => {
-    if (!hotelService.isConfigured || operationLoading) return false
+    if (!hotelService.canReadPrivate || operationLoading) return false
     setOperationLoading(true)
     try {
       const operation = await hotelService.getOperation(refresh)
@@ -269,8 +272,8 @@ function App() {
   }
 
   const recordOperationEvent = async (event: Parameters<typeof hotelService.recordOperationEvent>[0]) => {
-    if (!hotelService.isConfigured) {
-      setToast('Google Apps Script todavía no está conectado')
+    if (!hotelService.canWrite) {
+      setToast('La escritura requiere una sesión verificada')
       return false
     }
     try {
@@ -308,7 +311,7 @@ function App() {
   }
 
   const loadReservations = async (refresh = false) => {
-    if (!hotelService.isConfigured || reservationsLoading) return false
+    if (!hotelService.canReadPrivate || reservationsLoading) return false
     setReservationsLoading(true)
     try {
       const payload = await hotelService.getReservations(refresh)
@@ -537,17 +540,17 @@ function App() {
   const signOut = () => { localStorage.removeItem(AUTH_STORAGE_KEY); localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY); setData(null); setIndicatorsLoaded(false); setReservationsLoaded(false); setRmsLoaded(false); setOperationLoaded(false); setCashLoaded(false); setCashReady(false); setOperationReady(false); setInventoryLoaded(false); setInventoryReady(false); setSessionUser(null); setMobileNavOpen(false) }
 
   const refreshActivePage = async () => {
-    if (active === 'Inventario' && hotelService.isConfigured) {
+    if (active === 'Inventario' && hotelService.canReadPrivate) {
       const ok = await loadInventory(true)
       setToast(ok ? 'Inventario actualizado' : 'Error al leer Inventory')
       return
     }
-    if (active === 'Caja' && hotelService.isConfigured) {
+    if (active === 'Caja' && hotelService.canReadPrivate) {
       const updated = await loadCash(true)
       setToast(updated ? 'Caja actualizada' : 'No se pudo actualizar Caja')
       return
     }
-    if (active === 'Operación diaria' && hotelService.isConfigured) {
+    if (active === 'Operación diaria' && hotelService.canReadPrivate) {
       const updated = await loadOperation(true)
       setToast(updated ? 'Operación diaria actualizada' : 'No se pudo actualizar Operación diaria')
       return
@@ -562,17 +565,17 @@ function App() {
       setToast(updated ? 'Indicadores actualizados' : 'No se pudieron actualizar los indicadores')
       return
     }
-    if (active === 'Reservas' && hotelService.isConfigured) {
+    if (active === 'Reservas' && hotelService.canReadPrivate) {
       const updated = await loadReservations(true)
       setToast(updated ? 'Reservas actualizadas' : 'No se pudieron actualizar las reservas')
       return
     }
     if (!hotelService.isConfigured) {
-      setToast('Vista previa: no hay conexión autenticada con Google Sheets')
+      setToast('No hay un endpoint Apps Script configurado')
       return
     }
     await load()
-    setToast('Datos actualizados')
+    setToast(summaryConnection === 'failed' ? 'No se pudo conectar a Apps Script' : 'Conexión consultada; revisa el estado')
   }
 
   return <div className={`app-shell ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
@@ -589,7 +592,7 @@ function App() {
       <header className="topbar">
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
-          <span className="updated">{hotelService.isConfigured ? `Actualizado · ${new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}` : 'Vista previa · sin datos reales'}</span>
+          <span className="updated">{summaryConnection === 'connected' ? `Resumen conectado · ${new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}` : summaryConnection === 'checking' ? 'Consultando Apps Script…' : summaryConnection === 'failed' ? 'No se pudo conectar · Reintenta' : 'Sin conexión Apps Script'}</span>
           <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading || cashLoading || inventoryLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
@@ -597,15 +600,15 @@ function App() {
         </div>
       </header>
 
-      {!hotelService.isConfigured && <div className="system-demo-banner" role="status"><strong>ENTORNO DE DEMOSTRACIÓN</strong><span>Los datos reales, pagos, reservas y cambios operativos están deshabilitados hasta configurar el acceso seguro del propietario y Apps Script.</span></div>}
+      <div className="system-demo-banner" role="status"><strong>{summaryConnection === 'connected' ? 'DATOS AGREGADOS EN VIVO' : summaryConnection === 'checking' ? 'VERIFICANDO CONEXIÓN' : summaryConnection === 'failed' ? 'ERROR DE CONEXIÓN' : 'MODO SIN CONEXIÓN'}</strong><span>{summaryConnection === 'connected' ? 'Resumen, Indicadores y RMS consultan Google Sheets. Reservas, huéspedes, Caja, Inventario, Personal y todas las escrituras continúan protegidas.' : summaryConnection === 'failed' ? 'El resumen no respondió correctamente. Comprueba que el despliegue de Apps Script esté disponible y configurado; las cifras no se han inventado.' : summaryConnection === 'checking' ? 'Solicitando datos reales de Resumen a Google Apps Script.' : 'El endpoint de Google Apps Script no está disponible.'}</span></div>
 
       {active === 'Resumen' && <SummaryView data={data} role={role} onOpenRms={openRms}/>}
       {active === 'Indicadores' && <IndicatorsView data={data} role={role}/>}
       {active === 'RMS / Tarifas' && <RatesView data={data} initialRecommendationId={selectedRecommendationId} onNotify={setToast}/>}
       {active === 'Reservas' && <ReservationsView
         reservations={data.reservations} onChange={updateReservations}
-        onPersist={hotelService.isConfigured && hotelService.canWrite ? persistReservation : undefined}
-        onPayment={hotelService.isConfigured && hotelService.canWrite ? persistPayment : undefined}
+        onPersist={hotelService.canWrite ? persistReservation : undefined}
+        onPayment={hotelService.canWrite ? persistPayment : undefined}
         onRequestCleaning={async roomNumber => recordOperationEvent({roomNumber,actionType:'Limpieza solicitada',worker:role,work:'Limpieza de estancia',eventId:'HMS-OP-'+crypto.randomUUID()})}
         onNotify={setToast}
       />}
