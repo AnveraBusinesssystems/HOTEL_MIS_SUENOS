@@ -567,6 +567,10 @@ function App() {
       setToast(updated ? 'Reservas actualizadas' : 'No se pudieron actualizar las reservas')
       return
     }
+    if (!hotelService.isConfigured) {
+      setToast('Vista previa: no hay conexión autenticada con Google Sheets')
+      return
+    }
     await load()
     setToast('Datos actualizados')
   }
@@ -585,7 +589,7 @@ function App() {
       <header className="topbar">
         <div className="topbar-leading"><button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen}><Menu size={20}/></button><strong className="topbar-title">Panel interno · RMS</strong><strong className="mobile-page-title">{active}</strong></div>
         <div className="topbar-right">
-          <span className="updated">Actualizado · {new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}</span>
+          <span className="updated">{hotelService.isConfigured ? `Actualizado · ${new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt))}` : 'Vista previa · sin datos reales'}</span>
           <button className="icon-button" onClick={() => void refreshActivePage()} disabled={loading || indicatorsLoading || reservationsLoading || rmsLoading || operationLoading || cashLoading || inventoryLoading} title="Actualizar datos"><RefreshCw size={16}/></button>
           {pagesByRole[role].includes('RMS / Tarifas') && <div className="notification-wrap"><button className="icon-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Notificaciones"><Bell size={16}/>{data.alerts.length > 0 && <i>{data.alerts.length}</i>}</button>{notificationsOpen && <div className="notification-popover"><header><b>Alertas RMS</b><button onClick={() => setNotificationsOpen(false)} aria-label="Cerrar">×</button></header>{data.alerts.length ? data.alerts.map(alert => <button key={alert.id} onClick={() => { setNotificationsOpen(false); openRms(alert.recommendationId) }}><b>{alert.title}</b><span>{alert.message}</span></button>) : <p className="notification-empty">Sin alertas</p>}</div>}</div>}
           <div className="session-identity" aria-label={`Sesión de ${sessionUser.name}, rol ${role}`}><span className="session-avatar" aria-hidden="true">{sessionUser.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><span className="session-copy"><b>{sessionUser.name}</b><small>{role}</small></span></div>
@@ -593,18 +597,20 @@ function App() {
         </div>
       </header>
 
+      {!hotelService.isConfigured && <div className="system-demo-banner" role="status"><strong>ENTORNO DE DEMOSTRACIÓN</strong><span>Los datos reales, pagos, reservas y cambios operativos están deshabilitados hasta configurar el acceso seguro del propietario y Apps Script.</span></div>}
+
       {active === 'Resumen' && <SummaryView data={data} role={role} onOpenRms={openRms}/>}
       {active === 'Indicadores' && <IndicatorsView data={data} role={role}/>}
       {active === 'RMS / Tarifas' && <RatesView data={data} initialRecommendationId={selectedRecommendationId} onNotify={setToast}/>}
       {active === 'Reservas' && <ReservationsView
         reservations={data.reservations} onChange={updateReservations}
-        onPersist={hotelService.isConfigured ? persistReservation : undefined}
-        onPayment={hotelService.isConfigured ? persistPayment : undefined}
+        onPersist={hotelService.isConfigured && hotelService.canWrite ? persistReservation : undefined}
+        onPayment={hotelService.isConfigured && hotelService.canWrite ? persistPayment : undefined}
         onRequestCleaning={async roomNumber => recordOperationEvent({roomNumber,actionType:'Limpieza solicitada',worker:role,work:'Limpieza de estancia',eventId:'HMS-OP-'+crypto.randomUUID()})}
         onNotify={setToast}
       />}
       {active === 'Operación diaria' && <OperationsView
-        role={role} canWrite={hotelService.isConfigured && operationReady && !operationLoading} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
+        role={role} canWrite={hotelService.canWrite && operationReady && !operationLoading} reservations={data.reservations} rooms={data.roomStates} tasks={data.operationTasks}
         days={data.operationDays} tours={data.tours} cashMovements={data.cashMovements}
         staff={data.staff} staffTimeEntries={data.staffTimeEntries} dailyOperation={data.dailyOperation}
         onReservationsChange={updateReservations} onRoomsChange={updateRooms} onTasksChange={updateTasks}
@@ -618,7 +624,7 @@ function App() {
         onReservationsChange={updateReservations} onMovementsChange={updateCashMovements}
         onDaysChange={updateCashDays} onInventoryChange={updateInventory}
         onPurchaseRequestsChange={updatePurchaseRequests} onPurchaseRequestOpened={() => setCashPurchaseRequestId(undefined)}
-        canWrite={hotelService.isConfigured && cashReady && !cashLoading}
+        canWrite={hotelService.canWrite && cashReady && !cashLoading}
         inventoryReady={inventoryReady && !inventoryLoading}
         onInventoryPurchase={recordInventoryPurchase}
         onCreateCash={createCashMovement} onAnnulCash={annulCashMovement} onSaveCashDay={saveCashDay}
@@ -626,7 +632,7 @@ function App() {
       />}
       {active === 'Inventario' && <InventoryView
         role={role} items={data.inventory} requests={data.purchaseRequests}
-        canWrite={hotelService.isConfigured && inventoryReady && !inventoryLoading}
+        canWrite={hotelService.canWrite && inventoryReady && !inventoryLoading}
         onSaveCount={saveInventoryCount}
         onNotify={setToast}
       />}
