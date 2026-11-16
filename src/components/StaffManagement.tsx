@@ -3,9 +3,11 @@ import '../staff-management.css'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Pencil, Plus, Search, Trash2, UserRoundPlus, UserX, X } from 'lucide-react'
 import type { StaffMember, StaffRole, StaffScheduleEntry, StaffRequest, StaffTimeEntry, UserAccount } from '../types'
 import { money } from '../utils'
+import type { StaffPersistence } from '../services/staffIntegration'
 
 type Props = {
   mode: 'planner' | 'team'
+  persistence: StaffPersistence
   staff: StaffMember[]
   schedules: StaffScheduleEntry[]
   entries: StaffTimeEntry[]
@@ -33,7 +35,7 @@ type Draft = { id?: string; name: string; role: StaffRole; weeklySalary: string;
 const blankEmployee = (): Draft => ({ name: '', role: 'Recepción', weeklySalary: '', defaultShiftStart: '08:00', defaultShiftEnd: '16:00', defaultRestDay: 0 })
 const asDraft = (employee: StaffMember): Draft => ({ id: employee.id, name: employee.name, role: employee.role, weeklySalary: String(employee.weeklySalary), defaultShiftStart: employee.defaultShiftStart, defaultShiftEnd: employee.defaultShiftEnd, defaultRestDay: employee.defaultRestDay })
 
-export function StaffManagement({ mode, staff, schedules, entries, requests, onStaffChange, onSchedulesChange, onAccountsChange, onNotify }: Props) {
+export function StaffManagement({ mode, persistence, staff, schedules, entries, requests, onStaffChange, onSchedulesChange, onAccountsChange, onNotify }: Props) {
   const today = hotelToday()
   const [view, setView] = useState<'week' | 'month'>('week')
   const [anchor, setAnchor] = useState(mondayOf(today))
@@ -48,6 +50,7 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
   const [bulkDay, setBulkDay] = useState('all')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const activeStaff = staff.filter(employee => employee.status === 'Activo')
   const visibleStaff = activeStaff.filter(employee => (!filter || employee.role === filter) && (!search || employee.name.toLowerCase().includes(search.toLowerCase())))
@@ -72,7 +75,25 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
       return [...map.values()]
     })
   }
-  const applyBulk = () => {
+  const saveScheduleBatch = async (entries: StaffScheduleEntry[], done: string) => {
+    if (!entries.length) return
+    if (saving) return
+    setSaving(true)
+    try {
+      if (persistence.mode === 'live') {
+        // App Script limits one write to 700 entries; avoid partial multi-chunk writes.
+        if (entries.length > 700) throw new Error('Máximo 700 turnos por lote. Selecciona menos empleados o una semana.')
+        await persistence.saveSchedules(entries)
+      }
+      mergeSchedule(entries)
+      setError('')
+      onNotify(done + (persistence.mode === 'preview' ? ' · vista previa, sin guardar en Sheets' : ' · guardado en Sheets'))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudieron guardar los horarios.')
+      onNotify('Los horarios no se guardaron')
+    } finally { setSaving(false) }
+  }
+  const applyBulk = async () => {
     if (!targetIds.length) { setError('Selecciona al menos un empleado.'); return }
     if (!bulkRest && bulkEnd <= bulkStart) { setError('La hora de salida debe ser posterior a la entrada.'); return }
     const changes: StaffScheduleEntry[] = []
@@ -84,11 +105,10 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
       changes.push({ employeeId: id, date, isRest: bulkRest, unpaidLeave: false, shiftStart: bulkRest ? undefined : bulkStart, shiftEnd: bulkRest ? undefined : bulkEnd })
     }
     if (!changes.length) { setError('No hay turnos editables en el periodo.'); return }
-    mergeSchedule(changes)
-    setBulkOpen(false); setError('')
-    onNotify(changes.length + ' turnos actualizados en esta vista (sin sincronizar)')
+    await saveScheduleBatch(changes, changes.length + ' turnos actualizados')
+    if (persistence.mode === 'preview' || !error) setBulkOpen(false)
   }
-  const populateDefaults = () => {
+  const populateDefaults = async () => {
     const changes: StaffScheduleEntry[] = []
     for (const employee of visibleStaff) for (const date of periodDates) {
       if (currentShift(employee.id, date)) continue
@@ -96,10 +116,9 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
       changes.push({ employeeId: employee.id, date, isRest: rest, shiftStart: rest ? undefined : employee.defaultShiftStart, shiftEnd: rest ? undefined : employee.defaultShiftEnd })
     }
     if (!changes.length) { onNotify('El periodo ya tiene horarios asignados'); return }
-    mergeSchedule(changes)
-    onNotify(changes.length + ' turnos creados con horarios habituales (sin sincronizar)')
+    await saveScheduleBatch(changes, changes.length + ' turnos creados con horarios habituales')
   }
-  const copyPrevious = () => {
+  const copyPrevious = async () => {
     const offset = view === 'week' ? 7 : periodDates.length
     const sourceDates = rangeDates(shiftDate(periodStart, -offset), offset)
     const changes: StaffScheduleEntry[] = []
@@ -109,9 +128,8 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
       if (!original || original.unpaidLeave || currentShift(employee.id, periodDates[i])) continue
       changes.push({ ...original, date: periodDates[i] })
     }
-    if (!changes.length) { onNotify('Sin turnos anteriores disponibles para copiar o todos los días ya están asignados'); return }
-    mergeSchedule(changes)
-    onNotify(changes.length + ' turnos copiados sin sobrescribir los existentes (sin sincronizar)')
+    if (!changes.length) { onNotify('Sin turnos anteriores disponibles o todos los días ya están asignados'); return }
+    await saveScheduleBatch(changes, changes.length + ' turnos copiados')
   }
   const setShift = (employee: StaffMember, date: string) => {
     const current = currentShift(employee.id, date)
@@ -119,58 +137,84 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
     setShiftDraft(current ?? { employeeId: employee.id, date, isRest: dateUTC(date).getUTCDay() === employee.defaultRestDay, shiftStart: employee.defaultShiftStart, shiftEnd: employee.defaultShiftEnd })
   }
   const [shiftDraft, setShiftDraft] = useState<StaffScheduleEntry | null>(null)
-  const removeShift = () => {
-    if (!shiftDraft) return
+  const removeShift = async () => {
+    if (!shiftDraft || saving) return
     if (shiftDraft.unpaidLeave) { setError('No se puede eliminar un permiso aprobado desde Horarios.'); return }
-    onSchedulesChange(rows => rows.filter(row => !(row.employeeId === shiftDraft.employeeId && row.date === shiftDraft.date)))
-    setShiftDraft(null)
-    setError('')
-    onNotify('Horario eliminado localmente; la fecha queda sin asignación')
+    setSaving(true)
+    try {
+      if (persistence.mode === 'live') await persistence.deleteSchedule(shiftDraft.employeeId, shiftDraft.date)
+      onSchedulesChange(rows => rows.filter(row => !(row.employeeId === shiftDraft.employeeId && row.date === shiftDraft.date)))
+      setShiftDraft(null); setError('')
+      onNotify('Turno retirado' + (persistence.mode === 'preview' ? ' de la vista previa' : ' en Sheets'))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Error al quitar turno') }
+    finally { setSaving(false) }
   }
-  const saveShift = () => {
-    if (!shiftDraft) return
+  const saveShift = async () => {
+    if (!shiftDraft || saving) return
     if (!shiftDraft.isRest && (!shiftDraft.shiftStart || !shiftDraft.shiftEnd || shiftDraft.shiftEnd <= shiftDraft.shiftStart)) { setError('Especifica un turno válido con salida posterior a la entrada.'); return }
-    if (shiftDraft.unpaidLeave) { setError('Un permiso sin goce aprobado se modifica desde Solicitudes.'); return }
-    mergeSchedule([{ ...shiftDraft, shiftStart: shiftDraft.isRest ? undefined : shiftDraft.shiftStart, shiftEnd: shiftDraft.isRest ? undefined : shiftDraft.shiftEnd }])
-    setShiftDraft(null); setError(''); onNotify('Horario actualizado localmente')
+    if (shiftDraft.unpaidLeave) { setError('Un permiso aprobado se modifica desde Solicitudes.'); return }
+    const next = { ...shiftDraft, shiftStart: shiftDraft.isRest ? undefined : shiftDraft.shiftStart, shiftEnd: shiftDraft.isRest ? undefined : shiftDraft.shiftEnd }
+    setSaving(true)
+    try {
+      if (persistence.mode === 'live') await persistence.saveSchedules([next])
+      mergeSchedule([next])
+      setShiftDraft(null); setError('')
+      onNotify('Horario actualizado' + (persistence.mode === 'preview' ? ' en vista previa' : ' en Sheets'))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Error al guardar turno') }
+    finally { setSaving(false) }
   }
-  const saveEmployee = () => {
-    if (!draft) return
+  const saveEmployee = async () => {
+    if (!draft || saving) return
     const salary = Number(draft.weeklySalary)
     if (!draft.name.trim() || !Number.isFinite(salary) || salary <= 0) { setError('Agrega nombre y salario semanal válido.'); return }
     if (draft.defaultShiftEnd <= draft.defaultShiftStart) { setError('Revisa las horas del turno habitual.'); return }
-    if (draft.id) {
-      onStaffChange(rows => rows.map(employee => employee.id === draft.id ? { ...employee, name: draft.name.trim(), role: draft.role, weeklySalary: salary, defaultShiftStart: draft.defaultShiftStart, defaultShiftEnd: draft.defaultShiftEnd, defaultRestDay: draft.defaultRestDay } : employee))
-      onAccountsChange(rows => rows.map(account => account.employeeId === draft.id ? { ...account, role: draft.role } : account))
-      onNotify('Perfil actualizado localmente')
-    } else {
-      const next = Math.max(0, ...staff.map(employee => Number(employee.id.replace('EMP-', '')) || 0)) + 1
-      const employee: StaffMember = { id: 'EMP-' + String(next).padStart(3, '0'), name: draft.name.trim(), role: draft.role, weeklySalary: salary, defaultShiftStart: draft.defaultShiftStart, defaultShiftEnd: draft.defaultShiftEnd, defaultRestDay: draft.defaultRestDay, status: 'Activo' }
-      onStaffChange(rows => [...rows, employee])
-      onNotify('Empleado agregado localmente. Acceso al sistema pendiente en Configuración.')
+    const newId = 'EMP-' + String(Math.max(0, ...staff.map(employee => Number(employee.id.replace('EMP-', '')) || 0)) + 1).padStart(3, '0')
+    const previous = staff.find(employee => employee.id === draft.id)
+    const employee: StaffMember = {
+      id: draft.id ?? newId, name: draft.name.trim(), role: draft.role, weeklySalary: salary,
+      defaultShiftStart: draft.defaultShiftStart, defaultShiftEnd: draft.defaultShiftEnd,
+      defaultRestDay: draft.defaultRestDay, status: previous?.status ?? 'Activo',
     }
-    setDraft(null); setError('')
+    setSaving(true)
+    try {
+      const saved = persistence.mode === 'live' ? await persistence.saveEmployee({
+        ...employee, id: draft.id ?? '',
+      }) : employee
+      onStaffChange(rows => rows.some(item => item.id === saved.id) ? rows.map(item => item.id === saved.id ? saved : item) : [...rows, saved])
+      if (draft.id) onAccountsChange(rows => rows.map(account => account.employeeId === draft.id ? { ...account, role: draft.role } : account))
+      setDraft(null); setError('')
+      onNotify((draft.id ? 'Perfil actualizado' : 'Empleado agregado') + (persistence.mode === 'preview' ? ' · vista previa' : ' · guardado en Sheets'))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se guardó el empleado') }
+    finally { setSaving(false) }
   }
-  const deactivate = (employee: StaffMember) => {
-    onStaffChange(rows => rows.map(item => item.id === employee.id ? { ...item, status: employee.status === 'Activo' ? 'Inactivo' : 'Activo' } : item))
-    if (employee.status === 'Activo') onAccountsChange(rows => rows.map(account => account.employeeId === employee.id ? { ...account, status: 'Inactivo' } : account))
-    onNotify(employee.status === 'Activo' ? 'Empleado dado de baja y acceso desactivado localmente' : 'Empleado reactivado; revisa su acceso en Configuración')
-    setConfirmId(null)
+  const deactivate = async (employee: StaffMember) => {
+    if (saving) return
+    const status = employee.status === 'Activo' ? 'Inactivo' : 'Activo'
+    setSaving(true)
+    try {
+      if (persistence.mode === 'live') await persistence.changeStatus(employee.id, status)
+      onStaffChange(rows => rows.map(item => item.id === employee.id ? { ...item, status } : item))
+      if (employee.status === 'Activo') onAccountsChange(rows => rows.map(account => account.employeeId === employee.id ? { ...account, status: 'Inactivo' } : account))
+      onNotify(employee.status === 'Activo' ? 'Empleado dado de baja' : 'Empleado reactivado; revisa su acceso')
+      setConfirmId(null); setError('')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se modificó el estado') }
+    finally { setSaving(false) }
   }
   const erase = (employee: StaffMember) => {
+    if (persistence.mode === 'live') { setError('Para conservar el historial, utiliza Dar de baja. La eliminación no está habilitada en Sheets.'); return }
     const history = entries.some(item => item.employeeId === employee.id) || requests.some(item => item.employeeId === employee.id)
-    if (history) { setError('Este empleado tiene historial de asistencia o solicitudes: usa Dar de baja para conservarlo.'); return }
+    if (history) { setError('Este empleado tiene historial: usa Dar de baja para conservarlo.'); return }
     onStaffChange(rows => rows.filter(item => item.id !== employee.id))
     onAccountsChange(rows => rows.filter(item => item.employeeId !== employee.id))
     onSchedulesChange(rows => rows.filter(item => item.employeeId !== employee.id))
-    setConfirmId(null); setError(''); onNotify('Registro sin historial eliminado localmente')
+    setConfirmId(null); setError(''); onNotify('Registro eliminado de la vista previa')
   }
 
   return <section className="staff-admin-module">
     {mode === 'planner' ? <>
       <div className="staff-admin-toolbar">
-        <div><span className="staff-overline">PLANIFICACIÓN DE TURNOS</span><h2>Calendario del equipo</h2><p>Edita turnos individuales o asigna un periodo completo. Los cambios aún son locales.</p></div>
-        <div className="staff-admin-actions"><button onClick={populateDefaults}><Plus size={15}/> Completar vacíos</button><button onClick={copyPrevious}><Copy size={15}/> Copiar anterior</button><button className="staff-primary" onClick={() => { setError(''); setBulkOpen(true) }}><CalendarDays size={15}/> Asignar en lote</button></div>
+        <div><span className="staff-overline">PLANIFICACIÓN DE TURNOS</span><h2>Calendario del equipo</h2><p>Edita turnos individuales o asigna un periodo completo. Los cambios se muestran como vista previa mientras no se configure el acceso real.</p></div>
+        <div className="staff-admin-actions"><button disabled={saving} onClick={populateDefaults}><Plus size={15}/> Completar vacíos</button><button disabled={saving} onClick={copyPrevious}><Copy size={15}/> Copiar anterior</button><button className="staff-primary" disabled={saving} onClick={() => { setError(''); setBulkOpen(true) }}><CalendarDays size={15}/> Asignar en lote</button></div>
       </div>
       <div className="staff-planner-controls">
         <div className="staff-period"><button aria-label="Periodo anterior" onClick={() => movePeriod(-1)}><ChevronLeft size={17}/></button><strong>{periodLabel(periodStart, periodEnd)}</strong><button aria-label="Periodo siguiente" onClick={() => movePeriod(1)}><ChevronRight size={17}/></button><button onClick={() => setAnchor(mondayOf(today))}>Hoy</button></div>
@@ -204,9 +248,9 @@ export function StaffManagement({ mode, staff, schedules, entries, requests, onS
       {!staff.length && <p className="staff-admin-empty">No hay empleados registrados. Comienza con Añadir empleado.</p>}
     </>}
 
-    {bulkOpen && <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Asignar horarios en lote"><header><div><span className="staff-overline">PLANIFICACIÓN</span><h2>Asignar turnos en lote</h2><p>{targetIds.length} empleados · {periodLabel(periodStart, periodEnd)}</p></div><button aria-label="Cerrar" onClick={() => setBulkOpen(false)}><X size={18}/></button></header><div className="staff-admin-form"><label>Aplicar a<select value={bulkDay} onChange={event => setBulkDay(event.target.value)}><option value="all">Todos los días del periodo</option>{['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label className="staff-check"><input type="checkbox" checked={bulkRest} onChange={event => setBulkRest(event.target.checked)}/> Marcar como descanso</label>{!bulkRest && <><label>Entrada<input type="time" value={bulkStart} onChange={event => setBulkStart(event.target.value)}/></label><label>Salida<input type="time" value={bulkEnd} onChange={event => setBulkEnd(event.target.value)}/></label></>}<p className="staff-form-note">Se reemplazarán los turnos elegidos, salvo días libres sin goce aprobados. Revisa la selección antes de aplicar.</p>{error && <p className="staff-admin-error">{error}</p>}</div><footer><button onClick={() => setBulkOpen(false)}>Cancelar</button><button className="staff-primary" onClick={applyBulk}><Check size={15}/> Aplicar horarios</button></footer></section></div>}
-    {shiftDraft && <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Editar turno"><header><div><span className="staff-overline">HORARIO INDIVIDUAL</span><h2>{staff.find(item => item.id === shiftDraft.employeeId)?.name}</h2><p>{displayDate(shiftDraft.date)}</p></div><button aria-label="Cerrar" onClick={() => setShiftDraft(null)}><X size={18}/></button></header><div className="staff-admin-form"><label className="staff-check"><input type="checkbox" checked={shiftDraft.isRest} onChange={event => setShiftDraft({ ...shiftDraft, isRest: event.target.checked })}/> Día de descanso</label>{!shiftDraft.isRest && <><label>Entrada<input type="time" value={shiftDraft.shiftStart ?? ''} onChange={event => setShiftDraft({ ...shiftDraft, shiftStart: event.target.value })}/></label><label>Salida<input type="time" value={shiftDraft.shiftEnd ?? ''} onChange={event => setShiftDraft({ ...shiftDraft, shiftEnd: event.target.value })}/></label></>}{shiftDraft.unpaidLeave && <p className="staff-form-note">Día libre sin goce aprobado; modifícalo desde Solicitudes.</p>}{error && <p className="staff-admin-error">{error}</p>}</div><footer><button onClick={() => setShiftDraft(null)}>Cancelar</button><button className="staff-danger" disabled={shiftDraft.unpaidLeave} onClick={removeShift}><Trash2 size={14}/> Quitar turno</button><button className="staff-primary" onClick={saveShift}>Guardar turno</button></footer></section></div>}
-    {draft && <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Perfil de empleado"><header><div><span className="staff-overline">EQUIPO</span><h2>{draft.id ? 'Editar empleado' : 'Añadir empleado'}</h2></div><button aria-label="Cerrar" onClick={() => setDraft(null)}><X size={18}/></button></header><div className="staff-admin-form"><label className="wide">Nombre completo<input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })}/></label><label>Puesto<select value={draft.role} onChange={event => setDraft({ ...draft, role: event.target.value as StaffRole })}>{roles.map(role => <option key={role}>{role}</option>)}</select></label><label>Salario semanal (MXN)<input type="number" min="1" value={draft.weeklySalary} onChange={event => setDraft({ ...draft, weeklySalary: event.target.value })}/></label><label>Entrada habitual<input type="time" value={draft.defaultShiftStart} onChange={event => setDraft({ ...draft, defaultShiftStart: event.target.value })}/></label><label>Salida habitual<input type="time" value={draft.defaultShiftEnd} onChange={event => setDraft({ ...draft, defaultShiftEnd: event.target.value })}/></label><label className="wide">Descanso habitual<select value={draft.defaultRestDay} onChange={event => setDraft({ ...draft, defaultRestDay: Number(event.target.value) })}>{['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><p className="staff-form-note">Crear un empleado no crea automáticamente su cuenta de acceso. Por ahora los registros no se guardan en Sheets.</p>{error && <p className="staff-admin-error">{error}</p>}</div><footer><button onClick={() => setDraft(null)}>Cancelar</button><button className="staff-primary" onClick={saveEmployee}>{draft.id ? 'Guardar cambios' : 'Agregar empleado'}</button></footer></section></div>}
-    {confirmId && (() => { const employee = staff.find(item => item.id === confirmId); if (!employee) return null; return <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Gestionar baja"><header><div><span className="staff-overline">CONTROL DE REGISTROS</span><h2>{employee.name}</h2></div><button aria-label="Cerrar" onClick={() => setConfirmId(null)}><X size={18}/></button></header><p className="staff-confirm-text">Dar de baja conserva los horarios, las asistencias y solicitudes históricas. Eliminar permanentemente solo está permitido si no existe historial de asistencia o solicitudes.</p>{error && <p className="staff-admin-error">{error}</p>}<footer><button onClick={() => setConfirmId(null)}>Cancelar</button>{employee.status === 'Inactivo' && <button className="staff-danger" onClick={() => erase(employee)}><Trash2 size={14}/> Eliminar</button>}<button className="staff-primary" onClick={() => deactivate(employee)}>{employee.status === 'Activo' ? 'Confirmar baja' : 'Reactivar'}</button></footer></section></div> })()}
+    {bulkOpen && <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Asignar horarios en lote"><header><div><span className="staff-overline">PLANIFICACIÓN</span><h2>Asignar turnos en lote</h2><p>{targetIds.length} empleados · {periodLabel(periodStart, periodEnd)}</p></div><button aria-label="Cerrar" onClick={() => setBulkOpen(false)}><X size={18}/></button></header><div className="staff-admin-form"><label>Aplicar a<select value={bulkDay} onChange={event => setBulkDay(event.target.value)}><option value="all">Todos los días del periodo</option>{['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label className="staff-check"><input type="checkbox" checked={bulkRest} onChange={event => setBulkRest(event.target.checked)}/> Marcar como descanso</label>{!bulkRest && <><label>Entrada<input type="time" value={bulkStart} onChange={event => setBulkStart(event.target.value)}/></label><label>Salida<input type="time" value={bulkEnd} onChange={event => setBulkEnd(event.target.value)}/></label></>}<p className="staff-form-note">Se reemplazarán los turnos elegidos, salvo días libres sin goce aprobados. Revisa la selección antes de aplicar.</p>{error && <p className="staff-admin-error">{error}</p>}</div><footer><button onClick={() => setBulkOpen(false)}>Cancelar</button><button className="staff-primary" disabled={saving} onClick={applyBulk}><Check size={15}/> Aplicar horarios</button></footer></section></div>}
+    {shiftDraft && <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Editar turno"><header><div><span className="staff-overline">HORARIO INDIVIDUAL</span><h2>{staff.find(item => item.id === shiftDraft.employeeId)?.name}</h2><p>{displayDate(shiftDraft.date)}</p></div><button aria-label="Cerrar" onClick={() => setShiftDraft(null)}><X size={18}/></button></header><div className="staff-admin-form"><label className="staff-check"><input type="checkbox" checked={shiftDraft.isRest} onChange={event => setShiftDraft({ ...shiftDraft, isRest: event.target.checked })}/> Día de descanso</label>{!shiftDraft.isRest && <><label>Entrada<input type="time" value={shiftDraft.shiftStart ?? ''} onChange={event => setShiftDraft({ ...shiftDraft, shiftStart: event.target.value })}/></label><label>Salida<input type="time" value={shiftDraft.shiftEnd ?? ''} onChange={event => setShiftDraft({ ...shiftDraft, shiftEnd: event.target.value })}/></label></>}{shiftDraft.unpaidLeave && <p className="staff-form-note">Día libre sin goce aprobado; modifícalo desde Solicitudes.</p>}{error && <p className="staff-admin-error">{error}</p>}</div><footer><button onClick={() => setShiftDraft(null)}>Cancelar</button><button className="staff-danger" disabled={saving || shiftDraft.unpaidLeave} onClick={removeShift}><Trash2 size={14}/> Quitar turno</button><button className="staff-primary" disabled={saving} onClick={saveShift}>Guardar turno</button></footer></section></div>}
+    {draft && <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Perfil de empleado"><header><div><span className="staff-overline">EQUIPO</span><h2>{draft.id ? 'Editar empleado' : 'Añadir empleado'}</h2></div><button aria-label="Cerrar" onClick={() => setDraft(null)}><X size={18}/></button></header><div className="staff-admin-form"><label className="wide">Nombre completo<input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })}/></label><label>Puesto<select value={draft.role} onChange={event => setDraft({ ...draft, role: event.target.value as StaffRole })}>{roles.map(role => <option key={role}>{role}</option>)}</select></label><label>Salario semanal (MXN)<input type="number" min="1" value={draft.weeklySalary} onChange={event => setDraft({ ...draft, weeklySalary: event.target.value })}/></label><label>Entrada habitual<input type="time" value={draft.defaultShiftStart} onChange={event => setDraft({ ...draft, defaultShiftStart: event.target.value })}/></label><label>Salida habitual<input type="time" value={draft.defaultShiftEnd} onChange={event => setDraft({ ...draft, defaultShiftEnd: event.target.value })}/></label><label className="wide">Descanso habitual<select value={draft.defaultRestDay} onChange={event => setDraft({ ...draft, defaultRestDay: Number(event.target.value) })}>{['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><p className="staff-form-note">Crear un empleado no crea automáticamente su cuenta de acceso. {persistence.mode === 'preview' ? 'Vista previa: no se guardará en Sheets.' : 'La información se guardará cuando el servidor confirme.'}</p>{error && <p className="staff-admin-error">{error}</p>}</div><footer><button onClick={() => setDraft(null)}>Cancelar</button><button className="staff-primary" disabled={saving} onClick={saveEmployee}>{draft.id ? 'Guardar cambios' : 'Agregar empleado'}</button></footer></section></div>}
+    {confirmId && (() => { const employee = staff.find(item => item.id === confirmId); if (!employee) return null; return <div className="dialog-backdrop" role="presentation"><section className="staff-admin-dialog" role="dialog" aria-modal="true" aria-label="Gestionar baja"><header><div><span className="staff-overline">CONTROL DE REGISTROS</span><h2>{employee.name}</h2></div><button aria-label="Cerrar" onClick={() => setConfirmId(null)}><X size={18}/></button></header><p className="staff-confirm-text">Dar de baja conserva los horarios, las asistencias y solicitudes históricas. Eliminar permanentemente solo está permitido si no existe historial de asistencia o solicitudes.</p>{error && <p className="staff-admin-error">{error}</p>}<footer><button onClick={() => setConfirmId(null)}>Cancelar</button>{employee.status === 'Inactivo' && <button className="staff-danger" disabled={saving || persistence.mode === 'live'} onClick={() => erase(employee)}><Trash2 size={14}/> Eliminar</button>}<button className="staff-primary" disabled={saving} onClick={() => deactivate(employee)}>{employee.status === 'Activo' ? 'Confirmar baja' : 'Reactivar'}</button></footer></section></div> })()}
   </section>
 }
