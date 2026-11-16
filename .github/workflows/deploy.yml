@@ -29,8 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Test Personal with synthetic data
-        run: npm run test:staff
+      - name: Run Personal and pre-launch safety tests
+        run: npm test
 
       - name: Build
         run: npm run build
