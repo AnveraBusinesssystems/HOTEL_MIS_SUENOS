@@ -12,6 +12,8 @@ import { SettingsView } from './components/SettingsView'
 import { StaffView } from './components/StaffView'
 import { InventoryView } from './components/InventoryView'
 import { hotelService } from './services/hotelService'
+import { staffBackend } from './services/staffIntegration'
+import type { StaffPersistence } from './services/staffIntegration'
 import type { DashboardData, Role } from './types'
 
 type ActivePage = 'Resumen' | 'Indicadores' | 'RMS / Tarifas' | 'Reservas' | 'Operación diaria' | 'Caja' | 'Inventario' | 'Personal' | 'Configuración'
@@ -483,6 +485,30 @@ function App() {
     setCashPurchaseRequestId(requestId)
     setActive('Caja')
   }
+  // The current browser login is a demo, not a server-verified owner identity.
+  // Do not enable live writes until authenticated login is implemented.
+  const staffMode: StaffPersistence['mode'] = 'preview'
+  const staffPersistence: StaffPersistence = {
+    mode: staffMode,
+    load: async (start, end, refresh = false) => {
+      if (staffMode !== 'live') return
+      const snapshot = await staffBackend.load(start, end, refresh)
+      setData(current => current ? {
+        ...current,
+        staff: snapshot.staff, staffSchedules: snapshot.staffSchedules,
+        staffTimeEntries: snapshot.staffTimeEntries, staffRequests: snapshot.staffRequests,
+        userAccounts: snapshot.userAccounts,
+      } : current)
+    },
+    saveEmployee: staffBackend.saveEmployee,
+    changeStatus: staffBackend.changeStatus,
+    saveSchedules: staffBackend.saveSchedules,
+    deleteSchedule: staffBackend.deleteSchedule,
+    createRequest: staffBackend.createRequest,
+    reviewRequest: staffBackend.reviewRequest,
+    punch: staffBackend.punch,
+  }
+
   const updateStaffSchedules = (updater: (rows: DashboardData['staffSchedules']) => DashboardData['staffSchedules']) => {
     setData(current => current ? { ...current, staffSchedules: updater(current.staffSchedules) } : current)
   }
@@ -599,7 +625,7 @@ function App() {
         onNotify={setToast}
       />}
       {active === 'Personal' && <StaffView
-        role={role} staff={data.staff} accounts={data.userAccounts} onStaffChange={updateStaff} onAccountsChange={updateUserAccounts} schedules={data.staffSchedules}
+        role={role} persistence={staffPersistence} staff={data.staff} accounts={data.userAccounts} onStaffChange={updateStaff} onAccountsChange={updateUserAccounts} schedules={data.staffSchedules}
         timeEntries={data.staffTimeEntries} requests={data.staffRequests}
         onSchedulesChange={updateStaffSchedules} onTimeEntriesChange={updateStaffTimeEntries}
         onRequestsChange={updateStaffRequests} onNotify={setToast}
