@@ -42,6 +42,7 @@ const readAggregate = <T,>(action: string, payload: Record<string, unknown>): Pr
     const cleanup = () => {
       if (timer !== undefined) window.clearTimeout(timer)
       script.onerror = null
+      script.onload = null
       script.remove()
       delete callbacks[callback]
     }
@@ -63,6 +64,9 @@ const readAggregate = <T,>(action: string, payload: Record<string, unknown>): Pr
     script.onerror = () => finish(new Error(
       'No se pudo cargar Apps Script. Revisa el acceso del despliegue y publica la versión de Code.gs que incluye lectura GET.'
     ))
+    script.onload = () => {
+      if (!completed) finish(new Error('El despliegue todavía no soporta lectura GET. Copia Code.gs actualizado y publica una versión nueva de Apps Script.'))
+    }
     timer = window.setTimeout(() => finish(new Error(
       'Apps Script no respondió en 30 segundos. Revisa las ejecuciones y vuelve a desplegar Code.gs con el endpoint GET.'
     )), JSONP_TIMEOUT_MS)
