@@ -5,7 +5,7 @@ Este directorio contiene el código que se copiará manualmente al proyecto de A
 ## Instalación manual
 
 1. Crea un proyecto de Apps Script ligado a la cuenta propietaria del hotel.
-2. Crea y copia todos los archivos ejecutables `.gs` desde esta carpeta: `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs`, `RMS.gs`, `Reservations.gs`, `Operation.gs`, `FinanceReaders.gs`, `Cash.gs`, `TourPayments.gs`, `Inventory.gs` y `InventoryPurchases.gs`. No copies los archivos `.md` como scripts.
+2. Crea y copia todos los archivos ejecutables `.gs` desde esta carpeta: `Config.gs`, `Code.gs`, `Utils.gs`, `Summary.gs`, `Indicators.gs`, `RMS.gs`, `Reservations.gs`, `Operation.gs`, `FinanceReaders.gs`, `Cash.gs`, `TourPayments.gs`, `Inventory.gs` y `InventoryPurchases.gs`, `Staff.gs`. No copies los archivos `.md` como scripts.
 3. En **Configuración del proyecto**, activa la visualización del archivo de manifiesto y reemplaza `appsscript.json`.
 4. Implementa como **Aplicación web**, ejecutando como el propietario. Copia la URL que termina en `/exec`.
 5. Antes de activar datos reales en GitHub Pages, completa el módulo de autenticación. No uses la URL pública como si fuera una contraseña.
@@ -48,7 +48,7 @@ La web app todavía no incluye autenticación de servidor. El código puede copi
 - `INDICADORES` y `INDICADORES_HABITACIONES` contienen ADR histórico; no equivale a tarifa publicada. `OPERACION_DIARIA` estima ingresos por noche proporcionalmente.
 - Columnas `RESERVAS!AA:AI` contienen fórmulas y no deben sobrescribirse. `ESTADO_HABITACIONES!B:F` también se considera calculado y de solo lectura.
 - El registro de datos pendientes está en `REGISTRO_DATOS_FALTANTES.md`; detalles por módulo en `*_MAPEO.md`.
-- **Caja** cuenta con lectura, escritura de movimientos independientes, cobros de reservas y tours existentes, apertura, conteo, cierre y anulación controlada. Las compras de inventario y los reembolsos especializados siguen pendientes por depender de otros módulos. **Inventario** ya tiene lectura de productos y existencias, registro de conteos y compras reales conectadas con Caja. Sus solicitudes de compra y el ajuste estadístico de PAR requieren una estructura/fórmula adicional. **Personal y Configuración** siguen pendientes. La presencia de interfaz no significa persistencia real.
+- **Caja** cuenta con lectura, escritura de movimientos independientes, cobros de reservas y tours existentes, apertura, conteo, cierre y anulación controlada. Las compras de inventario y los reembolsos especializados siguen pendientes por depender de otros módulos. **Inventario** ya tiene lectura de productos y existencias, registro de conteos y compras reales conectadas con Caja. Sus solicitudes de compra y el ajuste estadístico de PAR requieren una estructura/fórmula adicional. **Personal** tiene el puente `Staff.gs` preparado, pero permanece bloqueado por autenticación del servidor y sin integración frontend; **Configuración** sigue pendiente. La presencia de interfaz no significa persistencia real.
 - No se han ejecutado pruebas de integración ni se ha desplegado el conjunto actual de archivos.
 
 ## Caja (conexiones nuevas)
@@ -71,3 +71,12 @@ La web app todavía no incluye autenticación de servidor. El código puede copi
 - Los scripts nuevos deben copiarse **junto con** Cash.gs y sus dependencias al mismo proyecto Apps Script.
 - Solicitudes de compra siguen sin fuente persistente; crear/aprobar queda deshabilitado. Los ajustes por conteo negativo pueden modificar el PAR ponderado porque las fórmulas actuales cuentan filas uso.
 - Ver INVENTARIO_MAPEO.md para columnas, advertencias y datos que faltan.
+
+
+## Personal — conexión preparada (no desplegada)
+
+- Copiar también `Staff.gs` junto con los demás archivos. Sus ocho rutas `staff.*` están registradas en `Code.gs`.
+- `HMS_IW` ya contiene `PERSONAL`, `TURNOS_PERSONAL`, `SOLICITUDES_PERSONAL` y `ASISTENCIA_PERSONAL`, con encabezados en la fila 5.
+- El cliente `src/services/staffService.ts` está preparado, **pero la UI no lo invoca**. El servidor rechaza todas las llamadas de Personal mientras no exista `authenticateHmsRequest_` y una identidad verificable.
+- El código no altera los Google Sheets hasta que se copie y habilite manualmente. Las operaciones existentes de otros módulos tampoco se consideran seguras para datos reales hasta que se complete la autorización global.
+- Consulta [PERSONAL_MAPEO.md](PERSONAL_MAPEO.md) para esquema, rutas, validaciones, límites y precauciones.
