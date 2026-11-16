@@ -12,19 +12,24 @@ import { summaryService } from './summaryService'
 
 export const hotelService = {
   isConfigured: summaryService.isConfigured,
+  canReadPrivate: apiClient.canReadPrivate,
   canWrite: apiClient.canWrite,
 
-  async getDashboard(): Promise<DashboardData> {
+  async getDashboardWithStatus(): Promise<{ dashboard: DashboardData; connected: boolean }> {
     const dashboard = emptyDashboard()
-    if (!summaryService.isConfigured) return dashboard
+    if (!summaryService.isConfigured) return { dashboard, connected: false }
 
     try {
       const summary = await summaryService.get()
-      return { ...dashboard, ...summary }
+      return { dashboard: { ...dashboard, ...summary }, connected: true }
     } catch (error) {
       console.warn('No fue posible cargar Resumen; se conserva el estado vacío.', error)
-      return dashboard
+      return { dashboard, connected: false }
     }
+  },
+
+  async getDashboard(): Promise<DashboardData> {
+    return (await this.getDashboardWithStatus()).dashboard
   },
 
   purchaseInventory(input: Parameters<typeof inventoryService.purchase>[0],purchaseId:string) {return inventoryService.purchase(input,purchaseId)},
