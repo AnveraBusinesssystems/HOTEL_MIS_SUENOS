@@ -138,9 +138,12 @@ function staffMapRequest_(r) {
     reviewedBy:staffText_(r[9])};
 }
 function staffMapAttendance_(r){
+  var elapsed=0;
+  if(r[3] instanceof Date&&r[4] instanceof Date)
+    elapsed=Math.max(0,(r[4].getTime()-r[3].getTime())/3600000-(Number(r[5])||0)/60);
   return {id:staffText_(r[0]),employeeId:staffText_(r[1]),date:staffDate_(r[2]),
     clockIn:staffClock_(r[3]),clockOut:staffClock_(r[4])||undefined,
-    breakMinutes:Number(r[5])||0,hours:Number(r[6])||0};
+    breakMinutes:Number(r[5])||0,hours:Number(r[6])||elapsed};
 }
 function getStaff_(req) {
   var principal=staffAuth_(req,false);
@@ -326,7 +329,7 @@ function punchStaff_(req) {
     var now=staffNow_(),i=idx<0?staffFree_(rows):idx;
     var r=rows[i].slice();
     if(action==='in'){r[0]=staffNewId_('ASI');r[1]=id;r[2]=staffDateValue_(today);r[3]=now;r[7]='Entrada registrada';r[8]='Web';}
-    else{r[4]=now;r[7]='Turno finalizado';}
+    else{r[4]=now;r[6]=Math.max(0,Math.round(((now.getTime()-r[3].getTime())/3600000-(Number(r[5])||0)/60)*100)/100);r[7]='Turno finalizado';}
     r[10]=principal.id;r[11]=now;rows[i]=r;
     var touched={};touched[i]=true;staffPut_(sh,rows,touched);staffInvalidate_();
     return {entry:staffMapAttendance_(r)};
