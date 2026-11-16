@@ -4,6 +4,7 @@ import type { StaffMember, StaffRole, StaffScheduleEntry, StaffRequest, StaffTim
 import { money } from '../utils'
 
 type Props = {
+  mode: 'planner' | 'team'
   staff: StaffMember[]
   schedules: StaffScheduleEntry[]
   entries: StaffTimeEntry[]
@@ -25,14 +26,13 @@ const hotelToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/C
 const rangeDates = (start: string, size: number) => Array.from({ length: size }, (_, i) => shiftDate(start, i))
 const displayDate = (value: string) => new Intl.DateTimeFormat('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short' }).format(dateUTC(value))
 const periodLabel = (start: string, end: string) => displayDate(start) + ' – ' + displayDate(end)
-const sameSchedule = (a: StaffScheduleEntry, b: StaffScheduleEntry) => a.employeeId === b.employeeId && a.date === b.date
 const isWorking = (employeeId: string, entries: StaffTimeEntry[], today: string) => entries.some(item => item.employeeId === employeeId && item.date === today && !item.clockOut)
 
 type Draft = { id?: string; name: string; role: StaffRole; weeklySalary: string; defaultShiftStart: string; defaultShiftEnd: string; defaultRestDay: number }
 const blankEmployee = (): Draft => ({ name: '', role: 'Recepción', weeklySalary: '', defaultShiftStart: '08:00', defaultShiftEnd: '16:00', defaultRestDay: 0 })
 const asDraft = (employee: StaffMember): Draft => ({ id: employee.id, name: employee.name, role: employee.role, weeklySalary: String(employee.weeklySalary), defaultShiftStart: employee.defaultShiftStart, defaultShiftEnd: employee.defaultShiftEnd, defaultRestDay: employee.defaultRestDay })
 
-export function StaffManagement({ staff, schedules, entries, requests, accounts, onStaffChange, onSchedulesChange, onAccountsChange, onNotify }: Props) {
+export function StaffManagement({ mode, staff, schedules, entries, requests, accounts, onStaffChange, onSchedulesChange, onAccountsChange, onNotify }: Props) {
   const today = hotelToday()
   const [view, setView] = useState<'week' | 'month'>('week')
   const [anchor, setAnchor] = useState(mondayOf(today))
@@ -46,7 +46,6 @@ export function StaffManagement({ staff, schedules, entries, requests, accounts,
   const [bulkDay, setBulkDay] = useState('all')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState('')
-  const [activeMode, setActiveMode] = useState<'planner' | 'team'>('planner')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const activeStaff = staff.filter(employee => employee.status === 'Activo')
   const visibleStaff = activeStaff.filter(employee => (!filter || employee.role === filter) && (!search || employee.name.toLowerCase().includes(search.toLowerCase())))
@@ -56,7 +55,7 @@ export function StaffManagement({ staff, schedules, entries, requests, accounts,
     const size = Math.round((dateUTC(periodEnd).getTime() - dateUTC(periodStart).getTime()) / 86400000) + 1
     return rangeDates(periodStart, size)
   }, [periodStart, periodEnd])
-  const visibleDates = view === 'week' ? periodDates : periodDates
+  const visibleDates = periodDates
   const currentShift = (id: string, date: string) => schedules.find(entry => entry.employeeId === id && entry.date === date)
   const rosterCount = visibleStaff.reduce((count, employee) => count + periodDates.filter(date => currentShift(employee.id, date)?.isRest === false).length, 0)
   const uncovered = visibleStaff.filter(employee => !currentShift(employee.id, today) && employee.status === 'Activo').length
@@ -157,12 +156,7 @@ export function StaffManagement({ staff, schedules, entries, requests, accounts,
   }
 
   return <section className="staff-admin-module">
-    <div className="staff-admin-tabs">
-      <button className={activeMode === 'planner' ? 'active' : ''} onClick={() => setActiveMode('planner')}><CalendarDays size={16}/> Planificador</button>
-      <button className={activeMode === 'team' ? 'active' : ''} onClick={() => setActiveMode('team')}><UserRoundPlus size={16}/> Directorio y perfiles</button>
-    </div>
-
-    {activeMode === 'planner' ? <>
+    {mode === 'planner' ? <>
       <div className="staff-admin-toolbar">
         <div><span className="staff-overline">PLANIFICACIÓN DE TURNOS</span><h2>Calendario del equipo</h2><p>Edita turnos individuales o asigna un periodo completo. Los cambios aún son locales.</p></div>
         <div className="staff-admin-actions"><button onClick={populateDefaults}><Plus size={15}/> Completar vacíos</button><button onClick={copyPrevious}><Copy size={15}/> Copiar anterior</button><button className="staff-primary" onClick={() => { setError(''); setBulkOpen(true) }}><CalendarDays size={15}/> Asignar en lote</button></div>
