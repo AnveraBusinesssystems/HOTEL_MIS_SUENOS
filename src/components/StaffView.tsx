@@ -9,9 +9,11 @@ import type {
 import { longDate, money, shortDate } from '../utils'
 import { StaffManagement } from './StaffManagement'
 import type { UserAccount } from '../types'
+import type { StaffPersistence } from '../services/staffIntegration'
 
 type Props = {
   role: Role
+  persistence: StaffPersistence
   staff: StaffMember[]
   accounts: UserAccount[]
   onStaffChange: (updater: (rows: StaffMember[]) => StaffMember[]) => void
@@ -65,7 +67,7 @@ function payrollFor(employee: StaffMember, monday: string, schedules: StaffSched
   return { planned, worked, hours, estimated }
 }
 
-export function StaffView({ role, staff, accounts, schedules, timeEntries, requests, onStaffChange, onAccountsChange, onSchedulesChange, onTimeEntriesChange, onRequestsChange, onNotify }: Props) {
+export function StaffView({ role, persistence, staff, accounts, schedules, timeEntries, requests, onStaffChange, onAccountsChange, onSchedulesChange, onTimeEntriesChange, onRequestsChange, onNotify }: Props) {
   const canManage = managerRoles.includes(role)
   const [section, setSection] = useState<'hoy' | 'horarios' | 'equipo' | 'solicitudes'>('hoy')
   const [weekStart, setWeekStart] = useState(mondayOf(TODAY))
@@ -74,6 +76,7 @@ export function StaffView({ role, staff, accounts, schedules, timeEntries, reque
   const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null)
   const [requestEmployeeId, setRequestEmployeeId] = useState('')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const currentEmployee = canManage ? staff.find(employee => employee.id === selectedEmployeeId) : employeeForRole(staff, role)
   const dates = weekDates(weekStart)
@@ -106,8 +109,8 @@ export function StaffView({ role, staff, accounts, schedules, timeEntries, reque
     setRequestDraft({ type, requestedDate: type === 'Cambio de descanso' ? nextRest?.date ?? TODAY : TODAY, proposedDate: '', reason: '' })
   }
 
-  const saveRequest = () => {
-    if (!requestDraft || !requestEmployeeId) return
+  const saveRequest = async () => {
+    if (!requestDraft || !requestEmployeeId || saving) return
     if (!requestDraft.requestedDate) { setError('Selecciona la fecha solicitada.'); return }
     if (requestDraft.type === 'Cambio de descanso' && !requestDraft.proposedDate) { setError('Selecciona el nuevo día de descanso.'); return }
     if (requestDraft.type === 'Cambio de descanso' && requestDraft.requestedDate === requestDraft.proposedDate) { setError('Los dos días deben ser diferentes.'); return }
@@ -119,65 +122,90 @@ export function StaffView({ role, staff, accounts, schedules, timeEntries, reque
     }
     if (!requestDraft.reason.trim()) { setError('Agrega un motivo breve.'); return }
     const next: StaffRequest = {
-      id: `SOL-${Date.now()}`, employeeId: requestEmployeeId, type: requestDraft.type,
-      requestedDate: requestDraft.requestedDate, proposedDate: requestDraft.proposedDate || undefined,
-      reason: requestDraft.reason.trim(), status: 'Pendiente', createdAt: `${TODAY} ${hotelTime()}`,
+      id: 'SOL-' + crypto.randomUUID(), employeeId: requestEmployeeId,
+      type: requestDraft.type, requestedDate: requestDraft.requestedDate,
+      proposedDate: requestDraft.proposedDate || undefined, reason: requestDraft.reason.trim(),
+      status: 'Pendiente', createdAt: TODAY + ' ' + hotelTime(),
     }
-    onRequestsChange(rows => [next, ...rows])
-    setRequestDraft(null)
-    onNotify('Solicitud enviada a administración')
+    setSaving(true)
+    try {
+      const saved = persistence.mode === 'live' ? await persistence.createRequest(next) : next
+      onRequestsChange(rows => [saved, ...rows])
+      setRequestDraft(null); setError('')
+      onNotify(persistence.mode === 'preview' ? 'Solicitud agregada a la vista previa' : 'Solicitud registrada en Sheets')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se guardó la solicitud') }
+    finally { setSaving(false) }
   }
 
-  const punch = () => {
-    if (!currentEmployee) return
+  const punch = async () => {
+    if (!currentEmployee || saving) return
     const schedule = scheduleFor(schedules, currentEmployee.id, TODAY)
     if (!schedule || schedule.isRest) { onNotify('Hoy no tienes un turno programado'); return }
     const entry = attendanceFor(timeEntries, currentEmployee.id, TODAY)
-    if (!entry) {
-      onTimeEntriesChange(rows => [...rows, { id: `ASIS-${Date.now()}`, employeeId: currentEmployee.id, date: TODAY, clockIn: hotelTime() }])
-      onNotify('Inicio de turno registrado')
-      return
-    }
-    if (!entry.clockOut) {
-      onTimeEntriesChange(rows => rows.map(row => row.id === entry.id ? { ...row, clockOut: hotelTime() } : row))
-      onNotify('Fin de turno registrado')
-      return
-    }
-    onNotify('Tu turno de hoy ya está registrado')
+    if (entry?.clockOut) { onNotify('Tu turno de hoy ya está registrado'); return }
+    const kind = entry ? 'out' : 'in'
+    setSaving(true)
+    try {
+      if (persistence.mode === 'live') {
+        const saved = await persistence.punch(currentEmployee.id, kind)
+        onTimeEntriesChange(rows => [...rows.filter(item => item.id !== saved.id), saved])
+      } else if (!entry) {
+        onTimeEntriesChange(rows => [...rows, { id: 'ASIS-' + crypto.randomUUID(), employeeId: currentEmployee.id, date: TODAY, clockIn: hotelTime() }])
+      } else {
+        onTimeEntriesChange(rows => rows.map(row => row.id === entry.id ? { ...row, clockOut: hotelTime() } : row))
+      }
+      onNotify((kind === 'in' ? 'Entrada' : 'Salida') + (persistence.mode === 'preview' ? ' simulada (sin guardar)' : ' registrada'))
+    } catch (cause) { onNotify(cause instanceof Error ? cause.message : 'Fallo al registrar asistencia') }
+    finally { setSaving(false) }
   }
 
-  const saveSchedule = () => {
-    if (!editSchedule) return
+  const saveSchedule = async () => {
+    if (!editSchedule || saving) return
     if (!editSchedule.isRest && (!editSchedule.shiftStart || !editSchedule.shiftEnd)) { setError('Indica la hora de entrada y salida.'); return }
     if (!editSchedule.isRest && minutes(editSchedule.shiftEnd) <= minutes(editSchedule.shiftStart)) { setError('La salida debe ser posterior a la entrada.'); return }
-    onSchedulesChange(rows => rows.some(row => row.employeeId === editSchedule.employeeId && row.date === editSchedule.date)
-      ? rows.map(row => row.employeeId === editSchedule.employeeId && row.date === editSchedule.date ? editSchedule : row)
-      : [...rows, editSchedule])
-    setEditSchedule(null)
-    onNotify('Horario actualizado')
+    setSaving(true)
+    try {
+      if (persistence.mode === 'live') await persistence.saveSchedules([editSchedule])
+      onSchedulesChange(rows => rows.some(row => row.employeeId === editSchedule.employeeId && row.date === editSchedule.date)
+        ? rows.map(row => row.employeeId === editSchedule.employeeId && row.date === editSchedule.date ? editSchedule : row)
+        : [...rows, editSchedule])
+      setEditSchedule(null); setError('')
+      onNotify(persistence.mode === 'preview' ? 'Turno editado en vista previa' : 'Turno guardado en Sheets')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se guardó el turno') }
+    finally { setSaving(false) }
   }
 
-  const reviewRequest = (request: StaffRequest, status: 'Aprobada' | 'Rechazada') => {
-    if (status === 'Aprobada') {
-      if (request.type === 'Cambio de descanso' && request.proposedDate) {
-        const reference = schedules.find(row => row.employeeId === request.employeeId && !row.isRest)
-        onSchedulesChange(rows => {
-          const update = (date: string, isRest: boolean) => {
-            const found = rows.some(row => row.employeeId === request.employeeId && row.date === date)
-            const next: StaffScheduleEntry = { employeeId: request.employeeId, date, isRest, unpaidLeave: false, shiftStart: isRest ? undefined : reference?.shiftStart ?? '08:00', shiftEnd: isRest ? undefined : reference?.shiftEnd ?? '16:00' }
-            return found ? rows.map(row => row.employeeId === request.employeeId && row.date === date ? next : row) : [...rows, next]
-          }
-          return update(request.proposedDate!, true).map(row => row.employeeId === request.employeeId && row.date === request.requestedDate ? { ...row, isRest: false, unpaidLeave: false, shiftStart: reference?.shiftStart ?? '08:00', shiftEnd: reference?.shiftEnd ?? '16:00' } : row)
-        })
+  const reviewRequest = async (request: StaffRequest, status: 'Aprobada' | 'Rechazada') => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const confirmed = persistence.mode === 'live' ? await persistence.reviewRequest(request, status) : { ...request, status, reviewedBy: role }
+      if (persistence.mode === 'preview' && status === 'Aprobada') {
+        if (request.type === 'Cambio de descanso' && request.proposedDate) {
+          const currentWork = scheduleFor(schedules, request.employeeId, request.proposedDate)
+          if (!currentWork || currentWork.isRest) throw new Error('Ya no hay un turno válido para cambiar de descanso.')
+          const newWork = { ...currentWork, date: request.requestedDate, unpaidLeave: false }
+          const newRest: StaffScheduleEntry = { employeeId: request.employeeId, date: request.proposedDate, isRest: true, unpaidLeave: false }
+          onSchedulesChange(rows => {
+            const changed = rows.filter(row => !(row.employeeId === request.employeeId && (row.date === request.requestedDate || row.date === request.proposedDate)))
+            return [...changed, newWork, newRest]
+          })
+        } else if (request.type === 'Día libre sin goce') {
+          onSchedulesChange(rows => rows.some(row => row.employeeId === request.employeeId && row.date === request.requestedDate)
+            ? rows.map(row => row.employeeId === request.employeeId && row.date === request.requestedDate ? { ...row, isRest: true, unpaidLeave: true, shiftStart: undefined, shiftEnd: undefined } : row)
+            : [...rows, { employeeId: request.employeeId, date: request.requestedDate, isRest: true, unpaidLeave: true }])
+        }
       }
-      if (request.type === 'Día libre sin goce') {
-        onSchedulesChange(rows => rows.some(row => row.employeeId === request.employeeId && row.date === request.requestedDate)
-          ? rows.map(row => row.employeeId === request.employeeId && row.date === request.requestedDate ? { ...row, isRest: true, unpaidLeave: true, shiftStart: undefined, shiftEnd: undefined } : row)
-          : [...rows, { employeeId: request.employeeId, date: request.requestedDate, isRest: true, unpaidLeave: true }])
+      // Server updates schedules during approval; fetch the authoritative range.
+      if (persistence.mode === 'live' && status === 'Aprobada') {
+        const monday = mondayOf(request.requestedDate)
+        const end = moveDays(monday, 13)
+        await persistence.load(monday, end, true)
       }
-    }
-    onRequestsChange(rows => rows.map(row => row.id === request.id ? { ...row, status, reviewedBy: role } : row))
-    onNotify(`Solicitud ${status.toLowerCase()}`)
+      onRequestsChange(rows => rows.map(row => row.id === request.id ? confirmed : row))
+      onNotify('Solicitud ' + status.toLowerCase() + (persistence.mode === 'preview' ? ' en vista previa' : ' en Sheets'))
+    } catch (cause) { onNotify(cause instanceof Error ? cause.message : 'No fue posible revisar la solicitud') }
+    finally { setSaving(false) }
   }
 
   if (!canManage && !currentEmployee) return <section className="page"><div className="page-heading"><div><p className="eyebrow">PERSONAL</p><h1>Mi horario</h1><p>Tu rol todavía no está vinculado con un empleado.</p></div></div><div className="access-note">La vinculación individual se configurará cuando conectemos usuarios y personal.</div></section>
@@ -185,10 +213,11 @@ export function StaffView({ role, staff, accounts, schedules, timeEntries, reque
   return <section className="page staff-page">
     <section className="page-heading staff-heading"><div><p className="eyebrow">PERSONAL Y ASISTENCIA</p><h1>{!canManage ? 'Mi semana' : section === 'hoy' ? 'Equipo y asistencia' : section === 'horarios' ? 'Planificación de horarios' : section === 'equipo' ? 'Gestión de empleados' : 'Solicitudes del equipo'}</h1><p>{canManage ? 'Administra turnos, asistencia, empleados y solicitudes desde un solo lugar.' : 'Consulta tus turnos, registra tu asistencia y solicita cambios.'}</p></div>{(!canManage || section === 'hoy') && <WeekPicker monday={weekStart} sunday={weekEnd} onPrevious={() => updateWeek(-1)} onNext={() => updateWeek(1)} onToday={() => setWeekStart(mondayOf(TODAY))}/>}</section>
 
+    <p className="staff-connection-note" role="status">{persistence.mode === 'preview' ? 'Vista previa · Los cambios NO se guardan en Google Sheets. El acceso real del propietario todavía no está configurado.' : 'Conectado · Los cambios se confirman desde Google Sheets.'}</p>
     {canManage && <nav className="staff-section-nav" aria-label="Áreas de Personal">
       {([['hoy', 'Hoy'], ['horarios', 'Horarios'], ['equipo', 'Equipo'], ['solicitudes', 'Solicitudes']] as const).map(([key, name]) => <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>{name}{key === 'solicitudes' && pendingRequests.length > 0 ? <span>{pendingRequests.length}</span> : null}</button>)}
     </nav>}
-    {canManage && (section === 'horarios' || section === 'equipo') && <StaffManagement mode={section === 'horarios' ? 'planner' : 'team'} staff={staff} schedules={schedules} entries={timeEntries} requests={requests} accounts={accounts} onStaffChange={onStaffChange} onAccountsChange={onAccountsChange} onSchedulesChange={onSchedulesChange} onNotify={onNotify}/>}
+    {canManage && (section === 'horarios' || section === 'equipo') && <StaffManagement persistence={persistence} mode={section === 'horarios' ? 'planner' : 'team'} staff={staff} schedules={schedules} entries={timeEntries} requests={requests} accounts={accounts} onStaffChange={onStaffChange} onAccountsChange={onAccountsChange} onSchedulesChange={onSchedulesChange} onNotify={onNotify}/>}
     {canManage && section === 'hoy' && <>
       <section className="staff-summary">
         <article><span><Users size={14}/>Personal activo</span><strong>{staff.length ? activeStaff.length : '—'}</strong><small>{staff.length ? `${todayScheduled.length} programados hoy` : 'Sin datos'}</small></article>
@@ -211,7 +240,7 @@ export function StaffView({ role, staff, accounts, schedules, timeEntries, reque
     {canManage && section === 'solicitudes' && <>
       <section className="panel staff-requests-panel"><header><div><span>SOLICITUDES DEL PERSONAL</span><h2>{pendingRequests.length ? `${pendingRequests.length} por revisar` : 'Sin pendientes'}</h2></div><button onClick={() => openRequest('Día libre sin goce', selectedEmployeeId)}><Plus size={14}/>Crear solicitud</button></header><div className="staff-request-list">{requests.map(request => {
         const employee = staff.find(item => item.id === request.employeeId)
-        return <article key={request.id} className={request.status.toLowerCase()}><div><span>{request.type}</span><b>{employee?.name ?? request.employeeId}</b><small>{request.type === 'Cambio de descanso' ? `${shortDate(request.requestedDate)} → ${shortDate(request.proposedDate ?? '')}` : shortDate(request.requestedDate)} · {request.reason}</small></div><strong>{request.status}</strong>{request.status === 'Pendiente' && <div className="request-actions"><button onClick={() => reviewRequest(request, 'Rechazada')}>Rechazar</button><button onClick={() => reviewRequest(request, 'Aprobada')}>Aprobar</button></div>}</article>
+        return <article key={request.id} className={request.status.toLowerCase()}><div><span>{request.type}</span><b>{employee?.name ?? request.employeeId}</b><small>{request.type === 'Cambio de descanso' ? `${shortDate(request.requestedDate)} → ${shortDate(request.proposedDate ?? '')}` : shortDate(request.requestedDate)} · {request.reason}</small></div><strong>{request.status}</strong>{request.status === 'Pendiente' && <div className="request-actions"><button disabled={saving} onClick={() => reviewRequest(request, 'Rechazada')}>Rechazar</button><button disabled={saving} onClick={() => reviewRequest(request, 'Aprobada')}>Aprobar</button></div>}</article>
       })}</div></section>
     </>}
     {!canManage && currentEmployee && <EmployeePortal
