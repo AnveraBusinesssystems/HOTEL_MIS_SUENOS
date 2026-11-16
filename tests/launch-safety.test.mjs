@@ -11,12 +11,15 @@ const personal = file('google-apps-script/Staff.gs')
 const workflow = file('.github/workflows/deploy.yml')
 const integration = file('src/services/staffIntegration.ts')
 
-test('client refuses every private API action while using public demo identity', () => {
+test('client permits aggregate live reads but protects private reads and all writes', () => {
   assert.match(client, /const serverAuthenticated = false/)
-  assert.match(client, /if \(!serverAuthenticated\)\s*\{\s*throw new Error/)
-  assert.match(client, /isConfigured: Boolean\(appsScriptUrl\) && serverAuthenticated/)
+  assert.match(client, /aggregateReadActions = new Set\(\['summary.get', 'indicators.get', 'rms.get'\]\)/)
+  assert.match(client, /if \(!serverAuthenticated && !aggregateReadActions.has\(action\)\)/)
+  assert.match(client, /canWrite: serverAuthenticated/)
+  assert.match(client, /canReadPrivate: serverAuthenticated/)
   assert.match(app, /const staffMode: StaffPersistence\['mode'\] = 'preview'/)
   assert.match(app, /system-demo-banner/)
+  assert.match(app, /DATOS AGREGADOS EN VIVO/)
 })
 
 test('all staffService actions match Google Apps Script router actions', () => {
