@@ -491,12 +491,18 @@ function App() {
   const staffPersistence: StaffPersistence = {
     mode: staffMode,
     load: async (start, end, refresh = false) => {
-      if (staffMode !== 'live') return
       const snapshot = await staffBackend.load(start, end, refresh)
+      const combine = <T,>(original: T[], incoming: T[], key: (row: T) => string, date: (row: T) => string): T[] => {
+        const outside = original.filter(row => date(row) < start || date(row) > end)
+        const all = [...outside, ...incoming]
+        return [...new Map(all.map(row => [key(row), row])).values()]
+      }
       setData(current => current ? {
         ...current,
-        staff: snapshot.staff, staffSchedules: snapshot.staffSchedules,
-        staffTimeEntries: snapshot.staffTimeEntries, staffRequests: snapshot.staffRequests,
+        staff: snapshot.staff,
+        staffSchedules: combine(current.staffSchedules, snapshot.staffSchedules, row => row.employeeId + ':' + row.date, row => row.date),
+        staffTimeEntries: combine(current.staffTimeEntries, snapshot.staffTimeEntries, row => row.id, row => row.date),
+        staffRequests: combine(current.staffRequests.filter(row => row.status !== 'Pendiente'), snapshot.staffRequests, row => row.id, row => row.requestedDate),
         userAccounts: snapshot.userAccounts,
       } : current)
     },
