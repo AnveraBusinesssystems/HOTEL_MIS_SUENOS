@@ -37,7 +37,6 @@ type MoneyAction = { type: 'Cobrar' | 'Liquidar' | 'Comisión'; tour: TourBookin
 
 const methods: CashPaymentMethod[] = ['Efectivo', 'Tarjeta', 'Transferencia']
 const tourTypes = ['Tres Islas', 'Bioluminiscencia', 'Tiburón ballena', 'Pesca', 'Cabo Catoche', 'Transporte marítimo', 'Otro']
-const providers = ['Holbox Tours', 'VIP Holbox', 'Tours El Chino', 'Otro proveedor']
 const hotelDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cancun', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const hotelTime = () => new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Cancun', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())
 const TODAY = hotelDate()
@@ -52,7 +51,7 @@ const receptionShare = (tour: TourBooking) => commission(tour) * .6
 const activeReservation = (reservation: Reservation) => !['Cancelada', 'No show'].includes(reservation.status)
 
 const freshDraft = (date: string): TourDraft => ({
-  reservationId: '', guestName: '', tourType: 'Tres Islas', provider: 'Holbox Tours',
+  reservationId: '', guestName: '', tourType: 'Tres Islas', provider: '',
   serviceDate: date, serviceTime: '09:00', people: '2', salePrice: '', providerAmount: '', notes: '',
 })
 
@@ -102,6 +101,7 @@ export function ToursView({
     const providerAmount = Number(draft.providerAmount)
     const people = Number(draft.people)
     if (!draft.guestName.trim()) { setError('Selecciona una reserva o escribe el nombre del cliente.'); return }
+    if (!draft.provider.trim()) { setError('Indica el proveedor real del tour.'); return }
     if (!draft.serviceDate || !draft.serviceTime) { setError('Indica la fecha y hora del tour.'); return }
     if (!Number.isFinite(people) || people < 1) { setError('Indica una cantidad válida de personas.'); return }
     if (!Number.isFinite(salePrice) || salePrice <= 0 || !Number.isFinite(providerAmount) || providerAmount < 0) { setError('Revisa el precio de venta y el monto del proveedor.'); return }
@@ -194,7 +194,7 @@ export function ToursView({
           <div><span>{item.overdue && <AlertTriangle size={12}/>} {item.type} · {shortDate(item.tour.serviceDate)}</span><b>{item.tour.guestName}</b><small>{item.tour.tourType} · {item.tour.provider}</small></div>
           <strong>{money(item.amount)}</strong>
           <button disabled={!toursWriteConnected || saving || (item.type !== 'Cobro' && !canSettle)} onClick={() => openAction(item.type === 'Cobro' ? 'Cobrar' : item.type === 'Proveedor' ? 'Liquidar' : 'Comisión', item.tour)}>{item.label}</button>
-        </section>)}{!pendingItems.length && <div className="tour-all-clear"><CheckCircle2 size={22}/><b>Todo liquidado</b><span>No hay cobros ni pagos pendientes.</span></div>}</div>
+        </section>)}{!pendingItems.length && <div className="tour-all-clear"><CheckCircle2 size={22}/><b>{hasTourData ? 'Todo liquidado' : 'Sin tours registrados'}</b><span>{hasTourData ? 'No hay cobros ni pagos pendientes.' : 'No existen registros de tours en la fuente de datos actual.'}</span></div>}</div>
       </aside>
     </div>
 
@@ -204,7 +204,7 @@ export function ToursView({
         <label className="full"><span>Reserva (opcional)</span><select value={draft.reservationId} onChange={event => selectReservation(event.target.value)}><option value="">Cliente externo / sin reserva</option>{reservations.filter(activeReservation).map(reservation => <option key={reservation.id} value={reservation.id}>{reservation.id} · {reservation.guestName}</option>)}</select></label>
         <label className="full"><span>Nombre del huésped o cliente</span><input value={draft.guestName} onChange={event => setDraft({ ...draft, guestName: event.target.value })}/></label>
         <label><span>Tour</span><select value={draft.tourType} onChange={event => setDraft({ ...draft, tourType: event.target.value })}>{tourTypes.map(item => <option key={item}>{item}</option>)}</select></label>
-        <label><span>Proveedor</span><select value={draft.provider} onChange={event => setDraft({ ...draft, provider: event.target.value })}>{providers.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label><span>Proveedor</span><input value={draft.provider} onChange={event => setDraft({ ...draft, provider: event.target.value })} placeholder="Nombre del proveedor real"/></label>
         <label><span>Fecha</span><input type="date" value={draft.serviceDate} onChange={event => setDraft({ ...draft, serviceDate: event.target.value })}/></label>
         <label><span>Hora</span><input type="time" value={draft.serviceTime} onChange={event => setDraft({ ...draft, serviceTime: event.target.value })}/></label>
         <label><span>Personas</span><input type="number" min="1" value={draft.people} onChange={event => setDraft({ ...draft, people: event.target.value })}/></label>
