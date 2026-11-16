@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import '../staff-management.css'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Pencil, Plus, Search, Trash2, UserRoundPlus, UserX, X } from 'lucide-react'
 import type { StaffMember, StaffRole, StaffScheduleEntry, StaffRequest, StaffTimeEntry, UserAccount } from '../types'
 import { money } from '../utils'
