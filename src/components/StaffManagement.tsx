@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import '../staff-management.css'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Pencil, Plus, Search, Trash2, UserRoundPlus, UserX, X } from 'lucide-react'
 import type { StaffMember, StaffRole, StaffScheduleEntry, StaffRequest, StaffTimeEntry, UserAccount } from '../types'
@@ -60,6 +60,12 @@ export function StaffManagement({ mode, persistence, staff, schedules, entries, 
     const size = Math.round((dateUTC(periodEnd).getTime() - dateUTC(periodStart).getTime()) / 86400000) + 1
     return rangeDates(periodStart, size)
   }, [periodStart, periodEnd])
+  useEffect(() => {
+    if (persistence.mode !== 'live') return
+    void persistence.load(periodStart, periodEnd).catch(cause => {
+      onNotify(cause instanceof Error ? cause.message : 'No se cargaron los horarios')
+    })
+  }, [persistence.mode, periodStart, periodEnd])
   const visibleDates = periodDates
   const focusedDate = periodDates.includes(mobileDate) ? mobileDate : periodDates[0]
   const currentShift = (id: string, date: string) => schedules.find(entry => entry.employeeId === id && entry.date === date)
@@ -75,9 +81,8 @@ export function StaffManagement({ mode, persistence, staff, schedules, entries, 
       return [...map.values()]
     })
   }
-  const saveScheduleBatch = async (entries: StaffScheduleEntry[], done: string) => {
-    if (!entries.length) return
-    if (saving) return
+  const saveScheduleBatch = async (entries: StaffScheduleEntry[], done: string): Promise<boolean> => {
+    if (!entries.length || saving) return false
     setSaving(true)
     try {
       if (persistence.mode === 'live') {
@@ -88,9 +93,11 @@ export function StaffManagement({ mode, persistence, staff, schedules, entries, 
       mergeSchedule(entries)
       setError('')
       onNotify(done + (persistence.mode === 'preview' ? ' · vista previa, sin guardar en Sheets' : ' · guardado en Sheets'))
+      return true
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudieron guardar los horarios.')
       onNotify('Los horarios no se guardaron')
+      return false
     } finally { setSaving(false) }
   }
   const applyBulk = async () => {
@@ -105,8 +112,8 @@ export function StaffManagement({ mode, persistence, staff, schedules, entries, 
       changes.push({ employeeId: id, date, isRest: bulkRest, unpaidLeave: false, shiftStart: bulkRest ? undefined : bulkStart, shiftEnd: bulkRest ? undefined : bulkEnd })
     }
     if (!changes.length) { setError('No hay turnos editables en el periodo.'); return }
-    await saveScheduleBatch(changes, changes.length + ' turnos actualizados')
-    if (persistence.mode === 'preview' || !error) setBulkOpen(false)
+    const ok = await saveScheduleBatch(changes, changes.length + ' turnos actualizados')
+    if (ok) setBulkOpen(false)
   }
   const populateDefaults = async () => {
     const changes: StaffScheduleEntry[] = []
