@@ -28,6 +28,6 @@ test('tour form does not default to an invented tour provider', () => {
 })
 
 test('preview access must not be mistaken for a real hotel record', () => {
-  assert.match(app, /ENTORNO DE DEMOSTRACIÓN/)
+  assert.match(app, /DATOS AGREGADOS EN VIVO/)
   assert.match(app, /const staffMode: StaffPersistence\['mode'\] = 'preview'/)
 })
