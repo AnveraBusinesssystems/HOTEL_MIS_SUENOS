@@ -205,7 +205,7 @@ export function OperationsView(props: Props) {
     />}
     {tab === 'Tours' && <ToursView
       role={role} date={selectedDate} tours={tours} reservations={reservations} cashMovements={cashMovements}
-      onToursChange={onToursChange} onCashMovementsChange={onCashMovementsChange} onNotify={onNotify}
+      canWrite={canWrite} onTourPayment={onTourPayment} onTourStatus={onTourStatus} onToursChange={onToursChange} onCashMovementsChange={onCashMovementsChange} onNotify={onNotify}
     />}
     {tab === 'Cierre diario' && <DailyCloseView
       role={role} reservations={reservations} rooms={liveRooms} cashMovements={cashMovements}
