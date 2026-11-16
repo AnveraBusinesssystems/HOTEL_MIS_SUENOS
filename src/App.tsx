@@ -71,6 +71,7 @@ function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [summaryConnection, setSummaryConnection] = useState<'checking' | 'connected' | 'failed' | 'disabled'>('checking')
+  const [summaryError, setSummaryError] = useState('')
   const [indicatorsLoaded, setIndicatorsLoaded] = useState(false)
   const [indicatorsLoading, setIndicatorsLoading] = useState(false)
   const [inventoryLoaded, setInventoryLoaded] = useState(false)
@@ -96,8 +97,9 @@ function App() {
   const load = async () => {
     setLoading(true)
     setSummaryConnection(hotelService.isConfigured ? 'checking' : 'disabled')
-    const { dashboard: next, connected } = await hotelService.getDashboardWithStatus()
+    const { dashboard: next, connected, error } = await hotelService.getDashboardWithStatus()
     setSummaryConnection(connected ? 'connected' : hotelService.isConfigured ? 'failed' : 'disabled')
+    setSummaryError(error || '')
     setData(current => current ? {
       ...next,
       roomPerformance: current.roomPerformance,
@@ -600,7 +602,7 @@ function App() {
         </div>
       </header>
 
-      <div className="system-demo-banner" role="status"><strong>{summaryConnection === 'connected' ? 'DATOS AGREGADOS EN VIVO' : summaryConnection === 'checking' ? 'VERIFICANDO CONEXIÓN' : summaryConnection === 'failed' ? 'ERROR DE CONEXIÓN' : 'MODO SIN CONEXIÓN'}</strong><span>{summaryConnection === 'connected' ? 'Resumen, Indicadores y RMS consultan Google Sheets. Reservas, huéspedes, Caja, Inventario, Personal y todas las escrituras continúan protegidas.' : summaryConnection === 'failed' ? 'El resumen no respondió correctamente. Comprueba que el despliegue de Apps Script esté disponible y configurado; las cifras no se han inventado.' : summaryConnection === 'checking' ? 'Solicitando datos reales de Resumen a Google Apps Script.' : 'El endpoint de Google Apps Script no está disponible.'}</span></div>
+      <div className="system-demo-banner" role="status"><strong>{summaryConnection === 'connected' ? 'DATOS AGREGADOS EN VIVO' : summaryConnection === 'checking' ? 'VERIFICANDO CONEXIÓN' : summaryConnection === 'failed' ? 'ERROR DE CONEXIÓN' : 'MODO SIN CONEXIÓN'}</strong><span>{summaryConnection === 'connected' ? 'Resumen, Indicadores y RMS consultan Google Sheets. Reservas, huéspedes, Caja, Inventario, Personal y todas las escrituras continúan protegidas.' : summaryConnection === 'failed' ? 'El resumen no respondió correctamente. ' + (summaryError || 'Comprueba que el despliegue de Apps Script esté disponible y configurado.') : summaryConnection === 'checking' ? 'Solicitando datos reales de Resumen a Google Apps Script.' : 'El endpoint de Google Apps Script no está disponible.'}</span></div>
 
       {active === 'Resumen' && <SummaryView data={data} role={role} onOpenRms={openRms}/>}
       {active === 'Indicadores' && <IndicatorsView data={data} role={role}/>}
