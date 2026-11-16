@@ -93,3 +93,10 @@
 .staff-mobile-employee-list button strong{font-size:11px;color:#456d52}
 .staff-planner-hint{display:none}
 }
+
+/* HMS launch safety: make demo mode impossible to mistake for real data */
+.system-demo-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 18px;background:#fff4dd;border-bottom:1px solid #dec69c;color:#725329;font-size:12px;line-height:1.5}
+.system-demo-banner strong{font-size:10px;letter-spacing:.07em;white-space:nowrap}
+.system-demo-banner span{flex:1;min-width:200px}
+.staff-connection-note{display:flex;align-items:center;gap:7px;padding:11px 13px;background:#fff4dd;color:#76562d;border:1px solid #e7d3a9;border-radius:8px;font-size:11px;line-height:1.5}
+@media(max-width:760px){.system-demo-banner{padding:10px 13px;gap:4px}.system-demo-banner strong{width:100%}.system-demo-banner span{min-width:0;font-size:11px}}
